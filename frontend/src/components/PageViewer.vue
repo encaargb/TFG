@@ -5,47 +5,75 @@
       <button @click="prevPage" :disabled="currentPage <= 1">← Anterior</button>
       <span>Página {{ currentPage }}</span>
       <button @click="nextPage" :disabled="currentPage >= TOTAL_PAGES">Siguiente →</button>
-      <button @click="resetZoom">Restablecer zoom</button>
+      <div class="zoom-control">
+        <button @click="zoomOut">−</button>
+        <input
+          type="range"
+          min="10"
+          max="500"
+          step="5"
+          :value="zoomPercent"
+          @input="onSliderInput"
+        />
+        <button @click="zoomIn">+</button>
+        <span class="zoom-label">{{ zoomPercent }}%</span>
+      </div>
+      <button @click="resetZoom">Reset</button>
     </div>
 
-    <div ref="containerRef" class="canvas-container"></div>
+    <div ref="viewportRef" class="viewport" @scroll="onScroll">
+      <!-- Div invisible que define el área scrolleable -->
+      <div ref="scrollSpacerRef" class="scroll-spacer"></div>
+      <!-- Canvas Konva fijo encima -->
+      <div ref="containerRef" class="canvas-container"></div>
+    </div>
 
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import Konva from 'konva'
 
-// ── Configuración ────────────────────────────────────────
-const TOTAL_PAGES = 15
-const BASE_URL    = 'http://localhost:8000/documents'
-const DOC_ID      = 'doc1'
+const TOTAL_PAGES  = 15
+const BASE_URL     = 'http://localhost:8000/documents'
+const DOC_ID       = 'doc1'
+const SCALE_FACTOR = 1.08
+const MIN_SCALE    = 0.1
+const MAX_SCALE    = 5
 
-// ── Referencias y estado ─────────────────────────────────
-const containerRef = ref<HTMLDivElement | null>(null)
-const currentPage  = ref(1)
+const viewportRef     = ref<HTMLDivElement | null>(null)
+const containerRef    = ref<HTMLDivElement | null>(null)
+const scrollSpacerRef = ref<HTMLDivElement | null>(null)
+const currentPage     = ref(1)
+const currentScale    = ref(1)
 
-let stage      : Konva.Stage
-let imageLayer : Konva.Layer
-let konvaImage : Konva.Image
+const zoomPercent = computed(() => Math.round(currentScale.value * 100))
 
-// ── Inicializar Konva al montar el componente ────────────
+let stage           : Konva.Stage
+let imageLayer      : Konva.Layer
+let annotationLayer : Konva.Layer
+let konvaImage      : Konva.Image
+let imgNaturalWidth  = 0
+let imgNaturalHeight = 0
+
 onMounted(() => {
   const container = containerRef.value!
+  const viewport  = viewportRef.value!
 
   stage = new Konva.Stage({
-    container: container,
-    width:     container.clientWidth,
-    height:    container.clientHeight,
-    draggable: true,
+    container,
+    width:  viewport.clientWidth,
+    height: viewport.clientHeight,
   })
 
-  imageLayer = new Konva.Layer()
+  imageLayer      = new Konva.Layer()
+  annotationLayer = new Konva.Layer()
   stage.add(imageLayer)
+  stage.add(annotationLayer)
 
-  window.addEventListener('resize', onResize)
   stage.on('wheel', onWheel)
+  window.addEventListener('resize', onResize)
 
   loadPage()
 })
@@ -55,11 +83,10 @@ onUnmounted(() => {
   stage.destroy()
 })
 
-// ── Redimensionar ────────────────────────────────────────
 function onResize() {
-  const container = containerRef.value!
-  stage.width(container.clientWidth)
-  stage.height(container.clientHeight)
+  const viewport = viewportRef.value!
+  stage.width(viewport.clientWidth)
+  stage.height(viewport.clientHeight)
 }
 
 // ── Carga de imagen ──────────────────────────────────────
@@ -70,61 +97,88 @@ function loadPage() {
     .then(res => res.blob())
     .then(blob => {
       const objectUrl = URL.createObjectURL(blob)
-      const imageObj = new window.Image()
-      imageObj.src = objectUrl
+      const imageObj  = new window.Image()
+      imageObj.src    = objectUrl
       imageObj.onload = () => {
         if (konvaImage) konvaImage.destroy()
 
+        imgNaturalWidth  = imageObj.width
+        imgNaturalHeight = imageObj.height
+
         konvaImage = new Konva.Image({ image: imageObj, x: 0, y: 0 })
-
-        const scaleX = stage.width()  / imageObj.width
-        const scaleY = stage.height() / imageObj.height
-        const scale  = Math.min(scaleX, scaleY)
-        konvaImage.setAttrs({ scaleX: scale, scaleY: scale })
-
         imageLayer.add(konvaImage)
-        imageLayer.draw()
+        URL.revokeObjectURL(objectUrl)
         resetZoom()
-
-        URL.revokeObjectURL(objectUrl) // libera memoria
       }
     })
 }
 
 watch(currentPage, loadPage)
 
-// ── Zoom con rueda del ratón ─────────────────────────────
-const SCALE_FACTOR = 1.08
-const MIN_SCALE    = 0.1
-const MAX_SCALE    = 10
-
-function onWheel(e: Konva.KonvaEventObject<WheelEvent>) {
-  e.evt.preventDefault()
-
-  const oldScale = stage.scaleX()
-  const pointer  = stage.getPointerPosition()!
-
-  const newScale = e.evt.deltaY < 0
-    ? Math.min(oldScale * SCALE_FACTOR, MAX_SCALE)
-    : Math.max(oldScale / SCALE_FACTOR, MIN_SCALE)
-
-  // Mantiene el punto bajo el cursor fijo al hacer zoom
-  const mousePointTo = {
-    x: (pointer.x - stage.x()) / oldScale,
-    y: (pointer.y - stage.y()) / oldScale,
-  }
-
-  stage.scale({ x: newScale, y: newScale })
-  stage.position({
-    x: pointer.x - mousePointTo.x * newScale,
-    y: pointer.y - mousePointTo.y * newScale,
-  })
+// ── Escala ───────────────────────────────────────────────
+function fitScale() {
+  const viewport = viewportRef.value!
+  return viewport.clientWidth / imgNaturalWidth
 }
 
-// ── Reset zoom ───────────────────────────────────────────
+function applyScale(newScale: number) {
+  newScale = Math.min(Math.max(newScale, MIN_SCALE), MAX_SCALE)
+  currentScale.value = newScale
+
+  // Actualizar el spacer para que las barras de scroll reflejen el tamaño real
+  const scaledW = Math.round(imgNaturalWidth  * newScale)
+  const scaledH = Math.round(imgNaturalHeight * newScale)
+  if (scrollSpacerRef.value) {
+    scrollSpacerRef.value.style.width  = `${scaledW}px`
+    scrollSpacerRef.value.style.height = `${scaledH}px`
+  }
+
+  // Mover el contenido del stage según la posición del scroll
+  syncStageToScroll()
+}
+
+// ── Sincronizar stage con scroll ─────────────────────────
+function syncStageToScroll() {
+  const viewport = viewportRef.value!
+  stage.position({
+    x: -viewport.scrollLeft,
+    y: -viewport.scrollTop,
+  })
+  konvaImage.setAttrs({
+    scaleX: currentScale.value,
+    scaleY: currentScale.value,
+  })
+  imageLayer.draw()
+}
+
+function onScroll() {
+  syncStageToScroll()
+}
+
+// ── Zoom con rueda del ratón ─────────────────────────────
+function onWheel(e: Konva.KonvaEventObject<WheelEvent>) {
+  e.evt.preventDefault()
+  const newScale = e.evt.deltaY < 0
+    ? Math.min(currentScale.value * SCALE_FACTOR, MAX_SCALE)
+    : Math.max(currentScale.value / SCALE_FACTOR, MIN_SCALE)
+  applyScale(newScale)
+}
+
+// ── Slider ───────────────────────────────────────────────
+function onSliderInput(e: Event) {
+  const newScale = Number((e.target as HTMLInputElement).value) / 100
+  applyScale(newScale)
+}
+
+function zoomIn()  { applyScale(currentScale.value * SCALE_FACTOR) }
+function zoomOut() { applyScale(currentScale.value / SCALE_FACTOR) }
+
 function resetZoom() {
-  stage.scale({ x: 1, y: 1 })
-  stage.position({ x: 0, y: 0 })
+  const scale   = fitScale()
+  const viewport = viewportRef.value!
+  viewport.scrollLeft = 0
+  viewport.scrollTop  = 0
+  applyScale(scale)
 }
 
 // ── Paginación ───────────────────────────────────────────
@@ -137,6 +191,7 @@ function nextPage() { if (currentPage.value < TOTAL_PAGES) currentPage.value++ }
   display: flex;
   flex-direction: column;
   height: 100vh;
+  overflow: hidden;
   background: #1a1a1a;
 }
 
@@ -148,6 +203,7 @@ function nextPage() { if (currentPage.value < TOTAL_PAGES) currentPage.value++ }
   background: #2c2c2c;
   color: white;
   border-bottom: 1px solid #444;
+  flex-shrink: 0;
 }
 
 .controls button {
@@ -168,13 +224,48 @@ function nextPage() { if (currentPage.value < TOTAL_PAGES) currentPage.value++ }
   background: #505050;
 }
 
-.canvas-container {
-  flex: 1;
-  overflow: hidden;
-  cursor: grab;
+.zoom-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
-.canvas-container:active {
-  cursor: grabbing;
+.zoom-control input[type="range"] {
+  width: 120px;
+  accent-color: #048A81;
+}
+
+.zoom-label {
+  min-width: 40px;
+  font-size: 13px;
+  color: #ccc;
+}
+
+.viewport {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: #e8e8e8;
+  position: relative;
+}
+
+.scroll-spacer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.canvas-container {
+  position: sticky;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.canvas-container canvas {
+  pointer-events: all;
 }
 </style>
