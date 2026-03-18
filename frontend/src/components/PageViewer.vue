@@ -38,16 +38,13 @@ onMounted(() => {
     container: container,
     width:     container.clientWidth,
     height:    container.clientHeight,
-    draggable: true,   // pan con clic + arrastre
+    draggable: true,
   })
 
   imageLayer = new Konva.Layer()
   stage.add(imageLayer)
 
-  // Ajustar tamaño si se redimensiona la ventana
   window.addEventListener('resize', onResize)
-
-  // Zoom con rueda del ratón
   stage.on('wheel', onWheel)
 
   loadPage()
@@ -69,16 +66,29 @@ function onResize() {
 function loadPage() {
   const url = `${BASE_URL}/${DOC_ID}/page${currentPage.value}.jpg`
 
-  Konva.Image.fromURL(url, (img: Konva.Image) => {
-    // Eliminar imagen anterior si existe
-    if (konvaImage) konvaImage.destroy()
+  fetch(url)
+    .then(res => res.blob())
+    .then(blob => {
+      const objectUrl = URL.createObjectURL(blob)
+      const imageObj = new window.Image()
+      imageObj.src = objectUrl
+      imageObj.onload = () => {
+        if (konvaImage) konvaImage.destroy()
 
-    konvaImage = img
-    konvaImage.setAttrs({ x: 0, y: 0 })
-    imageLayer.add(konvaImage)
-    imageLayer.draw()
-    resetZoom()
-  })
+        konvaImage = new Konva.Image({ image: imageObj, x: 0, y: 0 })
+
+        const scaleX = stage.width()  / imageObj.width
+        const scaleY = stage.height() / imageObj.height
+        const scale  = Math.min(scaleX, scaleY)
+        konvaImage.setAttrs({ scaleX: scale, scaleY: scale })
+
+        imageLayer.add(konvaImage)
+        imageLayer.draw()
+        resetZoom()
+
+        URL.revokeObjectURL(objectUrl) // libera memoria
+      }
+    })
 }
 
 watch(currentPage, loadPage)
