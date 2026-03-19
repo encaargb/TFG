@@ -1,7 +1,13 @@
+<template>
+  <ViewerPage />
+</template>
+
 <script setup>
-import HelloWorld from './components/HelloWorld.vue'
+import ViewerPage from './views/ViewerPage.vue'
 </script>
 
-<template>
-  <HelloWorld />
-</template>
+<style>
+body {
+  margin: 0;
+}
+</style>
