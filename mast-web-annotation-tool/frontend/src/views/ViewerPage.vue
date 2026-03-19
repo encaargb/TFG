@@ -1,12 +1,26 @@
+<script setup>
+import { ref } from 'vue'
+import { documentModel } from '../data/documentModel'
+
+const pages = documentModel.pages
+const activePage = ref(pages[0])
+</script>
+
 <template>
   <div class="viewer-layout">
-    
+
     <div class="sidebar">
-      Pages
+      <img
+        v-for="p in pages"
+        :key="p"
+        :src="p"
+        class="thumb"
+        @click="activePage = p"
+      />
     </div>
 
     <div class="canvas-area">
-      Canvas Viewer
+      <img :src="activePage" class="main-page"/>
     </div>
 
   </div>
@@ -16,24 +30,31 @@
 .viewer-layout {
   display: flex;
   height: 100vh;
-  width: 100vw;
 }
 
 .sidebar {
   width: 220px;
   background: #f3f3f3;
-  border-right: 1px solid #ddd;
+  overflow-y: auto;
   padding: 10px;
-  box-sizing: border-box;
+}
+
+.thumb {
+  width: 100%;
+  margin-bottom: 10px;
+  cursor: pointer;
 }
 
 .canvas-area {
   flex: 1;
-  background: #e6e6e6;
   display: flex;
-  align-items: center;
   justify-content: center;
-  font-size: 20px;
-  color: #555;
+  align-items: center;
+  background: #ddd;
+}
+
+.main-page {
+  max-width: 90%;
+  max-height: 90%;
 }
 </style>
