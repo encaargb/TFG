@@ -410,36 +410,33 @@ watch(activePage, (newPage) => {
 <style scoped>
 /*
   viewer-layout:
-  Main horizontal layout of the application.
+  Main horizontal structure of the application.
 
   display: flex
-  Creates a two-column structure:
-  - left sidebar
-  - right canvas area
+  Creates two side-by-side areas:
+  - sidebar on the left
+  - canvas area on the right
 
-  height: 100vh
-  Makes the viewer take the full browser viewport height.
+  overflow: hidden
+  Prevents the internal layout from creating browser-level overflow.
 */
 .viewer-layout {
   display: flex;
+  width: 100%;
   height: 100vh;
+  overflow: hidden;
 }
 
 /*
   sidebar:
-  Left panel used to display page thumbnails.
+  Fixed-width left panel used to display page thumbnails.
 
-  width:
-  Fixed width so it behaves like a tool sidebar.
-
-  overflow-y: auto
-  Allows scrolling when there are many thumbnails.
-
-  box-sizing: border-box
-  Ensures padding is included in the width calculation.
+  min-width is important because it prevents the sidebar from shrinking
+  when the canvas area becomes visually demanding.
 */
 .sidebar {
   width: 220px;
+  min-width: 220px;
   background: #f3f3f3;
   overflow-y: auto;
   padding: 10px;
@@ -448,16 +445,7 @@ watch(activePage, (newPage) => {
 
 /*
   thumb:
-  General style for page thumbnails.
-
-  width: 100%
-  Makes thumbnails fill the sidebar width.
-
-  cursor: pointer
-  Indicates they are clickable.
-
-  border: 2px solid transparent
-  Reserves border space so adding an active border does not change layout size.
+  General thumbnail styling.
 */
 .thumb {
   width: 100%;
@@ -467,28 +455,20 @@ watch(activePage, (newPage) => {
   box-sizing: border-box;
 }
 
-/*
-  thumb:hover:
-  Adds a hover border to improve interactivity feedback.
-*/
 .thumb:hover {
   border-color: #999;
 }
 
-/*
-  thumb.active:
-  Highlights the currently selected page in the sidebar.
-*/
 .thumb.active {
   border-color: #2c7be5;
 }
 
 /*
   canvas-area:
-  Main right-side area that visually contains the Konva viewer.
+  Right-side workspace that visually contains the Konva canvas.
 
-  display: flex + align-items + justify-content
-  Centers the Konva container horizontally and vertically.
+  overflow: hidden
+  Ensures the canvas area does not spill outside its layout box.
 */
 .canvas-area {
   flex: 1;
@@ -496,18 +476,22 @@ watch(activePage, (newPage) => {
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
 }
 
 /*
   konva-container:
-  HTML container used by Konva to mount the stage.
+  The DOM element where Konva mounts its stage.
 
-  The dimensions should match STAGE_WIDTH and STAGE_HEIGHT in the script.
-  Keeping them aligned avoids visual inconsistencies.
+  width: 100% and height: 100%
+  make the container fill the available right-side viewer area.
+
+  This is only the HTML container size.
+  In the next step, we will make the Konva Stage read this real size too.
 */
 .konva-container {
-  width: 1200px;
-  height: 800px;
+  width: 100%;
+  height: 100%;
   background: #cfcfcf;
 }
 </style>
