@@ -113,19 +113,13 @@ let layer = null
 let konvaImage = null
 
 
-// STAGE_WIDTH and STAGE_HEIGHT:
-// Fixed dimensions of the Konva viewport for this first implementation.
+// stageWidth and stageHeight store the real visible size
+// of the Konva container in the browser.
 //
-// They define the visible interactive area where the page is drawn.
-//
-// A fixed size is used now because:
-// - it keeps the math simple
-// - it avoids introducing responsiveness too early
-// - it is enough for the first functional prototype
-//
-// Later this can be changed to dynamic/responsive sizing.
-const STAGE_WIDTH = 1200
-const STAGE_HEIGHT = 800
+// They are initialized later, after the component is mounted,
+// because only then does the DOM know the real available space.
+let stageWidth = 0
+let stageHeight = 0
 
 
 // createStage():
@@ -136,107 +130,53 @@ const STAGE_HEIGHT = 800
 // - setup logic should be separated from image-loading logic
 // - the function groups all initialization related to the interactive viewport
 function createStage() {
-  // Create the Konva stage.
+  // Read the real visible size of the HTML container.
   //
-  // container:
-  // The real DOM element where Konva will mount its canvas.
+  // clientWidth and clientHeight come from the browser DOM.
+  // They tell us how much space the viewer area actually has.
+  stageWidth = canvasContainer.value.clientWidth
+  stageHeight = canvasContainer.value.clientHeight
+
+  // Create the Konva stage using the real container size.
   //
-  // width / height:
-  // The visible size of the interactive drawing area.
-  //
-  // draggable: true
-  // Makes the whole stage draggable, which gives us pan behavior.
-  // Instead of dragging the image directly, the user drags the whole viewport scene.
+  // This makes the internal canvas match the visible viewer area.
   stage = new Konva.Stage({
     container: canvasContainer.value,
-    width: STAGE_WIDTH,
-    height: STAGE_HEIGHT,
+    width: stageWidth,
+    height: stageHeight,
     draggable: true,
   })
 
-  // Create an empty drawing layer.
+  // Create a drawing layer and add it to the stage.
   layer = new Konva.Layer()
-
-  // Add the layer to the stage.
   stage.add(layer)
 
-  // Register a wheel event handler on the stage.
-  //
-  // This is used to implement zooming with the mouse wheel.
-  // The zoom is centered around the mouse pointer, which is important for good UX.
+  // Register wheel zoom behavior.
   stage.on('wheel', (e) => {
-    // Prevent the browser's default wheel behavior.
-    //
-    // Without this, scrolling the wheel might scroll the whole page instead of zooming the canvas.
     e.evt.preventDefault()
 
-    // scaleBy:
-    // Defines the zoom step.
-    // A value of 1.05 means each wheel step changes the scale by ~5%.
     const scaleBy = 1.05
-
-    // oldScale:
-    // The current zoom level of the stage before applying the new zoom.
-    // Since uniform scaling is used, scaleX and scaleY are the same.
     const oldScale = stage.scaleX()
 
-    // pointer:
-    // Current mouse position relative to the stage.
-    //
-    // This is needed because the zoom should occur around the cursor position,
-    // not around the top-left corner of the stage.
     const pointer = stage.getPointerPosition()
-
-    // Safety check in case pointer is unavailable.
     if (!pointer) return
 
-    // mousePointTo:
-    // Converts the current mouse position from screen coordinates
-    // into logical scene coordinates.
-    //
-    // Why this matters:
-    // When the user zooms, the point under the cursor should remain under the cursor.
-    // To do that, the code must know which logical point in the scene is being targeted.
     const mousePointTo = {
       x: (pointer.x - stage.x()) / oldScale,
       y: (pointer.y - stage.y()) / oldScale,
     }
 
-    // direction:
-    // Determines whether the user is zooming in or out.
-    //
-    // Typical wheel behavior:
-    // - deltaY < 0  -> wheel up   -> zoom in
-    // - deltaY > 0  -> wheel down -> zoom out
     const direction = e.evt.deltaY > 0 ? -1 : 1
-
-    // newScale:
-    // Computes the next zoom level.
-    //
-    // If zooming in:
-    //   multiply by scaleBy
-    //
-    // If zooming out:
-    //   divide by scaleBy
     const newScale = direction > 0 ? oldScale * scaleBy : oldScale / scaleBy
 
-    // Apply the new scale to the stage in both axes.
     stage.scale({ x: newScale, y: newScale })
 
-    // newPos:
-    // Recomputes the stage position so that the logical point under the cursor
-    // remains visually under the cursor after zooming.
-    //
-    // This is what makes zoom behavior feel natural and professional.
     const newPos = {
       x: pointer.x - mousePointTo.x * newScale,
       y: pointer.y - mousePointTo.y * newScale,
     }
 
-    // Apply the corrected stage position.
     stage.position(newPos)
-
-    // Efficient redraw of the stage after transform changes.
     stage.batchDraw()
   })
 }
@@ -275,8 +215,8 @@ function loadActivePage(imageUrl) {
     //
     // Math.min(...) is used to ensure that the image fits both width and height constraints.
     const scale = Math.min(
-      STAGE_WIDTH / imageObj.width,
-      STAGE_HEIGHT / imageObj.height
+      stageWidth / imageObj.width,
+      stageHeight / imageObj.height
     )
 
     // Final rendered width of the image after fit-to-stage scaling.
@@ -295,8 +235,8 @@ function loadActivePage(imageUrl) {
     // width and height:
     // The display size after scaling it to fit the stage.
     konvaImage = new Konva.Image({
-      x: (STAGE_WIDTH - displayWidth) / 2,
-      y: (STAGE_HEIGHT - displayHeight) / 2,
+      x: (stageWidth - displayWidth) / 2,
+      y: (stageHeight - displayHeight) / 2,
       image: imageObj,
       width: displayWidth,
       height: displayHeight,
