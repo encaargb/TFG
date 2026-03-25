@@ -121,6 +121,15 @@ let konvaImage = null
 let stageWidth = 0
 let stageHeight = 0
 
+// fitScale:
+// Base scale that makes the document fit inside the viewport.
+// This represents the logical 100% zoom level.
+let fitScale = 1
+
+// Stage zoom limits relative to the initial fitted view.
+const MIN_STAGE_SCALE = 0.25
+const MAX_STAGE_SCALE = 8.0
+
 
 // createStage():
 // Creates the Konva stage, creates a layer, and attaches wheel zoom behavior.
@@ -155,19 +164,23 @@ function createStage() {
   stage.on('wheel', (e) => {
     e.evt.preventDefault()
 
-    const scaleBy = 1.05
+    const scaleBy = 1.1
     const oldScale = stage.scaleX()
 
     const pointer = stage.getPointerPosition()
     if (!pointer) return
 
+    // Keep zoom centered on the current pointer position. 
     const mousePointTo = {
       x: (pointer.x - stage.x()) / oldScale,
       y: (pointer.y - stage.y()) / oldScale,
     }
 
     const direction = e.evt.deltaY > 0 ? -1 : 1
-    const newScale = direction > 0 ? oldScale * scaleBy : oldScale / scaleBy
+    let newScale = direction > 0 ? oldScale * scaleBy : oldScale / scaleBy
+
+    // Clamp stage zoom relative to the initial fitted view.
+    newScale = Math.max(MIN_STAGE_SCALE, Math.min(MAX_STAGE_SCALE, newScale))
 
     stage.scale({ x: newScale, y: newScale })
 
@@ -210,14 +223,15 @@ function loadActivePage(imageUrl) {
     // When a new page is loaded, the previous page image must be removed first.
     layer.destroyChildren()
 
-    // Compute the scale needed to fit the image inside the stage
-    // while preserving aspect ratio.
-    //
-    // Math.min(...) is used to ensure that the image fits both width and height constraints.
-    const scale = Math.min(
+    // Compute the scale required for the page to fully fit inside the viewer.
+    // This becomes the reference scale for future zoom limits.
+    fitScale = Math.min(
       stageWidth / imageObj.width,
       stageHeight / imageObj.height
     )
+
+    // Initial render at fitted document scale.
+    const scale = fitScale
 
     // Final rendered width of the image after fit-to-stage scaling.
     const displayWidth = imageObj.width * scale
