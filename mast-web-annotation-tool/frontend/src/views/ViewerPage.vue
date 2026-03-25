@@ -194,6 +194,67 @@ function createStage() {
   })
 }
 
+// applyZoom(nextScale):
+// Applies zoom around the center of the visible viewer area.
+function applyZoom(nextScale) {
+  if (!stage) return
+
+  const oldScale = stage.scaleX()
+
+  // Clamp stage zoom relative to the initial fitted view.
+  const clampedScale = Math.max(
+    MIN_STAGE_SCALE,
+    Math.min(MAX_STAGE_SCALE, nextScale)
+  )
+
+  // Do nothing if the scale did not change.
+  if (clampedScale === oldScale) return
+
+  // Use the viewer center as the zoom anchor for button-based zoom.
+  const center = {
+    x: stageWidth / 2,
+    y: stageHeight / 2,
+  }
+
+  const pointTo = {
+    x: (center.x - stage.x()) / oldScale,
+    y: (center.y - stage.y()) / oldScale,
+  }
+
+  stage.scale({ x: clampedScale, y: clampedScale })
+
+  const newPos = {
+    x: center.x - pointTo.x * clampedScale,
+    y: center.y - pointTo.y * clampedScale,
+  }
+
+  stage.position(newPos)
+  stage.batchDraw()
+}
+
+// zoomIn():
+// Increases the current stage zoom.
+function zoomIn() {
+  if (!stage) return
+  applyZoom(stage.scaleX() * 1.2)
+}
+
+// zoomOut():
+// Decreases the current stage zoom.
+function zoomOut() {
+  if (!stage) return
+  applyZoom(stage.scaleX() / 1.2)
+}
+
+// resetView():
+// Restores the initial fitted page view.
+function resetView() {
+  if (!stage) return
+
+  stage.scale({ x: 1, y: 1 })
+  stage.position({ x: 0, y: 0 })
+  stage.batchDraw()
+}
 
 // loadActivePage(imageUrl):
 // Loads the selected page image into the Konva layer.
@@ -356,6 +417,12 @@ watch(activePage, (newPage) => {
 
         Konva then uses this container to mount its internal canvas stage.
       -->
+
+      <div class="viewer-controls">
+        <button class="zoom-button" @click="zoomOut">−</button>
+        <button class="zoom-button" @click="resetView">Reset</button>
+        <button class="zoom-button" @click="zoomIn">+</button>
+      </div>
       <div ref="canvasContainer" class="konva-container"></div>
     </div>
   </div>
@@ -431,6 +498,7 @@ watch(activePage, (newPage) => {
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  position: relative;
 }
 
 /*
@@ -447,5 +515,27 @@ watch(activePage, (newPage) => {
   width: 100%;
   height: 100%;
   background: #cfcfcf;
+}
+
+.viewer-controls {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  gap: 8px;
+  z-index: 10;
+}
+
+.zoom-button {
+  border: 1px solid #bbb;
+  background: white;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.zoom-button:hover {
+  background: #f3f3f3;
 }
 </style>
