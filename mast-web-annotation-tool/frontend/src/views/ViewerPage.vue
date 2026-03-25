@@ -2,235 +2,296 @@
 // Vue Composition API utilities:
 //
 // ref:
-// Creates reactive references tracked by Vue.
+// Creates a reactive value. Vue tracks it and updates the UI when it changes.
 //
 // onMounted:
-// Runs code after the component has been inserted into the DOM.
-//
-// onUnmounted:
-// Runs cleanup logic before the component is removed.
+// Runs code after the component has been mounted in the DOM.
+// This is required because Konva needs a real HTML container element to exist
+// before the canvas stage can be created.
 //
 // watch:
-// Reacts to changes in reactive values.
+// Observes a reactive value and runs code whenever that value changes.
+// Here it is used to react when the selected page changes.
 //
 // nextTick:
-// Waits until Vue finishes the current DOM update cycle.
-import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
+// Waits until Vue has finished updating the DOM.
+// This is useful to ensure that the HTML element referenced by `canvasContainer`
+// really exists before Konva tries to use it.
+import { ref, onMounted, watch, nextTick } from 'vue'
 
 // Konva:
-// 2D canvas library used as the rendering and interaction engine
-// of the document viewer.
+// A JavaScript canvas library for interactive 2D graphics.
+// It provides concepts such as Stage, Layer, Image, Text, Shape, etc.
+// In this project, it is used because a normal HTML <img> is not enough for:
+//
+// - panning
+// - zooming
+// - future annotations
+// - future overlays
+//
+// Konva is the rendering/interaction engine of the viewer.
 import Konva from 'konva'
 
-// Local mock document model.
+// documentModel:
+// A local mock data model that represents the current document.
 // It provides the list of page image URLs.
+//
+// Example mental model:
+// documentModel = {
+//   id: "doc1",
+//   pages: ["/documents/doc1/pages/pg1.jpeg", ...]
+// }
+//
+// It is separated from the UI because data and presentation should not be mixed.
 import { documentModel } from '../data/documentModel'
 
-// All page URLs of the current document.
+
+// pages:
+// A plain array containing the URLs of the pages of the current document.
+// This data comes from the document model.
+//
+// It is used:
+// - in the sidebar to render thumbnails
+// - to initialize the first active page
 const pages = documentModel.pages
 
-// Currently selected page in the sidebar.
+
+// activePage:
+// A reactive Vue variable that stores the page currently selected by the user.
+//
+// `ref(...)` is used because this value changes over time.
+// When the user clicks a thumbnail, `activePage` changes.
+// Then the watcher reloads the selected page into Konva.
 const activePage = ref(pages[0])
 
-// DOM ref to the visible scrollable viewport.
-// This element provides native browser scrollbars.
-const scrollContainer = ref(null)
 
-// DOM ref to the HTML node where Konva mounts the stage.
-const stageContainer = ref(null)
+// canvasContainer:
+// A Vue ref that will point to the HTML <div> where the Konva stage is mounted.
+//
+// In the template there will be:
+// <div ref="canvasContainer" class="konva-container"></div>
+//
+// After the component is mounted, `canvasContainer.value` becomes the real DOM element.
+// Konva needs that DOM element to know where to create its internal canvas.
+const canvasContainer = ref(null)
 
-// Konva root stage.
-// In this experiment, the stage is NOT draggable because
-// navigation is controlled by native scrollbars.
+
+// stage:
+// The main Konva Stage object.
+// The Stage is the root interactive area of the scene.
+//
+// Conceptually:
+// Stage = viewport / canvas root
+//
+// It is responsible for:
+// - containing layers
+// - receiving drag events
+// - receiving wheel events
+// - applying pan and zoom transformations
 let stage = null
 
-// Main Konva layer used to render the current page.
-// Future annotation shapes can also live in this layer
-// or in separate layers above it.
+
+// layer:
+// A Konva Layer object.
+// In Konva, drawable elements are usually placed inside layers, not directly in the stage.
+//
+// Conceptually:
+// Stage
+//   -> Layer
+//       -> Image / Shape / Text / Annotation
+//
+// This separation is useful because:
+// - layers can be redrawn independently
+// - it mirrors how scene graphs are usually organized
 let layer = null
 
-// Reference to the currently displayed Konva.Image.
+
+// konvaImage:
+// Stores the current Konva.Image instance being displayed in the layer.
+//
+// It represents the currently selected document page rendered on the canvas.
 let konvaImage = null
 
-// Real visible viewport size in pixels.
-// These values come from the browser after mount.
-let viewportWidth = 0
-let viewportHeight = 0
 
-// Logical scrollable world size.
+// stageWidth and stageHeight store the real visible size
+// of the Konva container in the browser.
 //
-// This is intentionally much larger than the visible viewport.
-// The browser uses this area to show horizontal and vertical scrollbars.
-const WORLD_WIDTH = 3000
-const WORLD_HEIGHT = 3000
+// They are initialized later, after the component is mounted,
+// because only then does the DOM know the real available space.
+let stageWidth = 0
+let stageHeight = 0
 
-// Extra padding around the visible viewport.
-//
-// This follows the Konva demo approach:
-// the stage itself is a bit larger than the visible window,
-// so movement near the edges feels smoother.
-const PADDING = 200
 
 // createStage():
-// Creates the Konva stage and its base layer.
+// Creates the Konva stage, creates a layer, and attaches wheel zoom behavior.
 //
-// Important architectural idea:
-// - The DOM provides the large scrollable world.
-// - Konva renders only a smaller stage near the visible viewport.
-// - Screen movement is emulated by shifting the stage container
-//   with CSS transform and updating stage coordinates accordingly.
+// Why this function is needed:
+// - the stage should only be created once
+// - setup logic should be separated from image-loading logic
+// - the function groups all initialization related to the interactive viewport
 function createStage() {
-  // Read the real visible size of the viewport.
-  viewportWidth = scrollContainer.value.clientWidth
-  viewportHeight = scrollContainer.value.clientHeight
-
-  // Create the Konva stage.
+  // Read the real visible size of the HTML container.
   //
-  // The stage is slightly larger than the visible viewport because
-  // extra padding helps when scrolling near the edges.
+  // clientWidth and clientHeight come from the browser DOM.
+  // They tell us how much space the viewer area actually has.
+  stageWidth = canvasContainer.value.clientWidth
+  stageHeight = canvasContainer.value.clientHeight
+
+  // Create the Konva stage using the real container size.
+  //
+  // This makes the internal canvas match the visible viewer area.
   stage = new Konva.Stage({
-    container: stageContainer.value,
-    width: viewportWidth + PADDING * 2,
-    height: viewportHeight + PADDING * 2,
-    draggable: false,
+    container: canvasContainer.value,
+    width: stageWidth,
+    height: stageHeight,
+    draggable: true,
   })
 
-  // Create the main drawing layer.
+  // Create a drawing layer and add it to the stage.
   layer = new Konva.Layer()
   stage.add(layer)
-}
 
-// repositionStage():
-// Synchronizes the Konva stage with the native DOM scroll position.
-//
-// How it works:
-// 1. The browser scrollbars move inside the large HTML world.
-// 2. We read scrollLeft and scrollTop from the viewport.
-// 3. We move the stage HTML container with CSS transform.
-// 4. We move Konva content in the opposite direction.
-//
-// This creates the effect of moving through a very large canvas
-// without rendering a giant canvas element.
-function repositionStage() {
-  if (!scrollContainer.value || !stage) return
+  // Register wheel zoom behavior.
+  stage.on('wheel', (e) => {
+    e.evt.preventDefault()
 
-  const dx = scrollContainer.value.scrollLeft - PADDING
-  const dy = scrollContainer.value.scrollTop - PADDING
+    const scaleBy = 1.05
+    const oldScale = stage.scaleX()
 
-  // Move the HTML container of the stage.
-  stage.container().style.transform = `translate(${dx}px, ${dy}px)`
+    const pointer = stage.getPointerPosition()
+    if (!pointer) return
 
-  // Move the Konva scene in the opposite direction so the correct
-  // logical region remains visible.
-  stage.position({
-    x: -dx,
-    y: -dy,
+    const mousePointTo = {
+      x: (pointer.x - stage.x()) / oldScale,
+      y: (pointer.y - stage.y()) / oldScale,
+    }
+
+    const direction = e.evt.deltaY > 0 ? -1 : 1
+    const newScale = direction > 0 ? oldScale * scaleBy : oldScale / scaleBy
+
+    stage.scale({ x: newScale, y: newScale })
+
+    const newPos = {
+      x: pointer.x - mousePointTo.x * newScale,
+      y: pointer.y - mousePointTo.y * newScale,
+    }
+
+    stage.position(newPos)
+    stage.batchDraw()
   })
-
-  stage.batchDraw()
 }
+
 
 // loadActivePage(imageUrl):
-// Loads the selected page image and renders it inside the logical world.
+// Loads the selected page image into the Konva layer.
 //
-// Unlike the previous version of the viewer, the image is now scaled
-// relative to the large scrollable world, not only to the visible viewport.
+// Why this function is needed:
+// - the displayed page changes when the user clicks a thumbnail
+// - image loading is asynchronous
+// - the viewer must clear the old page and draw the new one
+//
+// Parameter:
+// imageUrl -> URL of the image file to render on the canvas
 function loadActivePage(imageUrl) {
+  // Create a plain browser Image object.
+  //
+  // This is not yet a Konva image.
+  // It is a standard HTML image object used to load the image resource.
   const imageObj = new window.Image()
 
+  // Define what should happen when the image finishes loading.
+  //
+  // This is necessary because width and height are only available after the image has loaded.
   imageObj.onload = () => {
-    // Clear previous content before drawing the new page.
+    // Remove any previous children from the layer.
+    //
+    // Why:
+    // The viewer should only show one page at a time in the main canvas.
+    // When a new page is loaded, the previous page image must be removed first.
     layer.destroyChildren()
 
-    // Compute a scale so the image fits inside the logical world
-    // while preserving its aspect ratio.
+    // Compute the scale needed to fit the image inside the stage
+    // while preserving aspect ratio.
+    //
+    // Math.min(...) is used to ensure that the image fits both width and height constraints.
     const scale = Math.min(
-      WORLD_WIDTH / imageObj.width,
-      WORLD_HEIGHT / imageObj.height
+      stageWidth / imageObj.width,
+      stageHeight / imageObj.height
     )
 
+    // Final rendered width of the image after fit-to-stage scaling.
     const displayWidth = imageObj.width * scale
+
+    // Final rendered height of the image after fit-to-stage scaling.
     const displayHeight = imageObj.height * scale
 
-    // Center the page inside the logical world.
+    // Create a Konva.Image object from the loaded browser image.
+    //
+    // x and y center the image inside the stage.
+    //
+    // image:
+    // The source image already loaded in memory.
+    //
+    // width and height:
+    // The display size after scaling it to fit the stage.
     konvaImage = new Konva.Image({
-      x: (WORLD_WIDTH - displayWidth) / 2,
-      y: (WORLD_HEIGHT - displayHeight) / 2,
+      x: (stageWidth - displayWidth) / 2,
+      y: (stageHeight - displayHeight) / 2,
       image: imageObj,
       width: displayWidth,
       height: displayHeight,
     })
 
+    // Add the page image to the drawing layer.
     layer.add(konvaImage)
-    layer.draw()
 
-    // Reset stage transform to a neutral state before setting
-    // the initial scroll position.
+    // Reset pan position when a new page is loaded.
+    //
+    // Why:
+    // It is simpler and clearer for the first prototype.
+    // Each page starts from a clean centered state.
     stage.position({ x: 0, y: 0 })
+
+    // Reset zoom level when a new page is loaded.
     stage.scale({ x: 1, y: 1 })
 
-    // Start near the top-left, offset by padding.
-    //
-    // This ensures the padded stage area behaves correctly
-    // before the user starts scrolling.
-    if (scrollContainer.value) {
-      scrollContainer.value.scrollLeft = PADDING
-      scrollContainer.value.scrollTop = PADDING
-      repositionStage()
-    }
+    // Draw the updated layer so the image becomes visible.
+    layer.draw()
   }
 
-  // Start asynchronous image loading.
+  // Start loading the image from the given URL.
   imageObj.src = imageUrl
 }
 
-// handleResize():
-// Updates the stage size when the browser window changes size.
+
+// onMounted(...):
+// Runs once when the component has been inserted into the DOM.
 //
-// The world size remains fixed, but the visible viewport may change,
-// so the stage dimensions must be recalculated.
-function handleResize() {
-  if (!scrollContainer.value || !stage) return
-
-  viewportWidth = scrollContainer.value.clientWidth
-  viewportHeight = scrollContainer.value.clientHeight
-
-  stage.width(viewportWidth + PADDING * 2)
-  stage.height(viewportHeight + PADDING * 2)
-
-  repositionStage()
-}
-
-// Lifecycle: mount.
-//
-// Steps:
-// 1. Wait until Vue has rendered the DOM.
-// 2. Create the Konva stage.
-// 3. Load the initial page.
-// 4. Register scroll and resize listeners.
+// Why this is necessary:
+// Konva needs a real HTML container element to exist before creating the stage.
+// Therefore, stage creation cannot happen before mount.
 onMounted(async () => {
+  // Wait until Vue finishes the DOM update cycle.
+  // This guarantees that canvasContainer.value points to a real element.
   await nextTick()
 
+  // Initialize the interactive Konva stage and its layer.
   createStage()
+
+  // Load the initial page (the first page of the document) into the viewer.
   loadActivePage(activePage.value)
-
-  scrollContainer.value?.addEventListener('scroll', repositionStage)
-  window.addEventListener('resize', handleResize)
 })
 
-// Lifecycle: unmount.
-//
-// Remove listeners to avoid leaks or duplicated handlers.
-onUnmounted(() => {
-  scrollContainer.value?.removeEventListener('scroll', repositionStage)
-  window.removeEventListener('resize', handleResize)
-})
 
-// React to page changes from the sidebar.
+// watch(activePage, ...):
+// Reacts whenever the selected page changes.
 //
-// When the user clicks a different thumbnail, the new page is loaded
-// into the Konva layer using the same large-world scrolling model.
+// Why this is needed:
+// The sidebar updates `activePage` when a thumbnail is clicked.
+// Konva does not automatically know about Vue state changes.
+// So a watcher is used as the bridge between Vue state and Konva rendering.
 watch(activePage, (newPage) => {
+  // Only load the page if the stage and layer have already been created.
   if (stage && layer) {
     loadActivePage(newPage)
   }
@@ -241,11 +302,26 @@ watch(activePage, (newPage) => {
   <div class="viewer-layout">
     <div class="sidebar">
       <!--
-        Sidebar thumbnail list.
+        Thumbnail list.
 
-        Each thumbnail represents one page of the current document.
-        Clicking a thumbnail updates `activePage`, and the watcher
-        reloads that page in the Konva viewer.
+        v-for:
+        Iterates through all page URLs of the document.
+
+        :key:
+        Gives each item a stable identity for Vue rendering.
+
+        :src:
+        Uses the page URL as the image source.
+
+        class="thumb":
+        Applies general thumbnail styling.
+
+        :class="{ active: activePage === p }":
+        Adds the "active" class to the thumbnail that matches the currently selected page.
+
+        @click="activePage = p":
+        When the user clicks a thumbnail, the selected page changes.
+        This updates Vue state, and the watcher reloads the page in Konva.
       -->
       <img
         v-for="p in pages"
@@ -259,37 +335,30 @@ watch(activePage, (newPage) => {
 
     <div class="canvas-area">
       <!--
-        Visible scrollable viewport.
+        Konva mount container.
 
-        This is the DOM element that provides native browser scrollbars.
-        The user interacts with this viewport to move through the large world.
+        This div is empty from Vue's perspective.
+        Vue only provides the DOM element through ref="canvasContainer".
+
+        Konva then uses this container to mount its internal canvas stage.
       -->
-      <div ref="scrollContainer" class="scroll-container">
-        <!--
-          Large logical world.
-
-          This element is intentionally larger than the viewport.
-          Its purpose is to create the browser scroll range.
-        -->
-        <div class="large-container">
-          <!--
-            Konva mount point.
-
-            Konva creates its internal canvas elements inside this node.
-            This node is moved with CSS transform to emulate screen movement.
-          -->
-          <div ref="stageContainer" class="stage-container"></div>
-        </div>
-      </div>
+      <div ref="canvasContainer" class="konva-container"></div>
     </div>
   </div>
 </template>
 
 <style scoped>
 /*
-  Main horizontal layout:
-  - fixed thumbnail sidebar on the left
-  - viewer workspace on the right
+  viewer-layout:
+  Main horizontal structure of the application.
+
+  display: flex
+  Creates two side-by-side areas:
+  - sidebar on the left
+  - canvas area on the right
+
+  overflow: hidden
+  Prevents the internal layout from creating browser-level overflow.
 */
 .viewer-layout {
   display: flex;
@@ -299,7 +368,11 @@ watch(activePage, (newPage) => {
 }
 
 /*
-  Left sidebar for page thumbnails.
+  sidebar:
+  Fixed-width left panel used to display page thumbnails.
+
+  min-width is important because it prevents the sidebar from shrinking
+  when the canvas area becomes visually demanding.
 */
 .sidebar {
   width: 220px;
@@ -311,7 +384,8 @@ watch(activePage, (newPage) => {
 }
 
 /*
-  Base thumbnail style.
+  thumb:
+  General thumbnail styling.
 */
 .thumb {
   width: 100%;
@@ -321,61 +395,43 @@ watch(activePage, (newPage) => {
   box-sizing: border-box;
 }
 
-/*
-  Hover feedback for thumbnails.
-*/
 .thumb:hover {
   border-color: #999;
 }
 
-/*
-  Visual highlight for the selected page.
-*/
 .thumb.active {
   border-color: #2c7be5;
 }
 
 /*
-  Right-side workspace.
+  canvas-area:
+  Right-side workspace that visually contains the Konva canvas.
+
+  overflow: hidden
+  Ensures the canvas area does not spill outside its layout box.
 */
 .canvas-area {
   flex: 1;
   background: #ddd;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   overflow: hidden;
 }
 
 /*
-  Visible scrollable viewport with native browser scrollbars.
+  konva-container:
+  The DOM element where Konva mounts its stage.
+
+  width: 100% and height: 100%
+  make the container fill the available right-side viewer area.
+
+  This is only the HTML container size.
+  In the next step, we will make the Konva Stage read this real size too.
 */
-.scroll-container {
+.konva-container {
   width: 100%;
   height: 100%;
-  overflow: auto;
-  position: relative;
   background: #cfcfcf;
-}
-
-/*
-  Large logical world.
-
-  The browser uses this size to determine the available scroll range.
-*/
-.large-container {
-  width: 3000px;
-  height: 3000px;
-  position: relative;
-  overflow: hidden;
-}
-
-/*
-  HTML node where Konva mounts its internal canvas.
-
-  It is absolutely positioned so it can be shifted precisely
-  inside the logical world using CSS transform.
-*/
-.stage-container {
-  position: absolute;
-  top: 0;
-  left: 0;
 }
 </style>
