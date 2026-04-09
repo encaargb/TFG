@@ -5,22 +5,48 @@ import { documentModel } from '../data/documentModel'
 const pages = documentModel.pages
 const selectedIndex = ref(0)
 
+const MIN_ZOOM = 0.5
+const MAX_ZOOM = 3
+const ZOOM_STEP = 0.2
+
+const zoomLevel = ref(1)
+
 const selectedPage = computed(() => pages[selectedIndex.value])
+const zoomPercentage = computed(() => Math.round(zoomLevel.value * 100))
+
+function resetZoom() {
+  zoomLevel.value = 1
+}
 
 function goToPreviousPage() {
   if (selectedIndex.value > 0) {
     selectedIndex.value--
+    resetZoom()
   }
 }
 
 function goToNextPage() {
   if (selectedIndex.value < pages.length - 1) {
     selectedIndex.value++
+    resetZoom()
   }
 }
 
 function selectPage(index) {
   selectedIndex.value = index
+  resetZoom()
+}
+
+function zoomIn() {
+  if (zoomLevel.value < MAX_ZOOM) {
+    zoomLevel.value = Math.min(zoomLevel.value + ZOOM_STEP, MAX_ZOOM)
+  }
+}
+
+function zoomOut() {
+  if (zoomLevel.value > MIN_ZOOM) {
+    zoomLevel.value = Math.max(zoomLevel.value - ZOOM_STEP, MIN_ZOOM)
+  }
 }
 </script>
 
@@ -51,9 +77,21 @@ function selectPage(index) {
         >
           Next
         </button>
+
+        <button @click="zoomOut" :disabled="zoomLevel <= MIN_ZOOM">-</button>
+        <button @click="resetZoom">Reset</button>
+        <button @click="zoomIn" :disabled="zoomLevel >= MAX_ZOOM">+</button>
+
+        <span>Zoom: {{ zoomPercentage }}%</span>
       </div>
 
-      <img :src="selectedPage" class="main-image" />
+      <div class="image-wrapper">
+        <img
+          :src="selectedPage"
+          class="main-image"
+          :style="{ transform: `scale(${zoomLevel})` }"
+        />
+      </div>
     </div>
   </div>
 </template>
@@ -76,6 +114,7 @@ function selectPage(index) {
   margin-bottom: 10px;
   cursor: pointer;
   border: 2px solid transparent;
+  box-sizing: border-box;
 }
 
 .thumb.active {
@@ -86,20 +125,30 @@ function selectPage(index) {
   flex: 1;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
   background: #ddd;
-  gap: 16px;
 }
 
 .viewer-controls {
   display: flex;
   align-items: center;
   gap: 12px;
+  padding: 16px;
+  background: #eee;
+  border-bottom: 1px solid #ccc;
+}
+
+.image-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  padding: 20px;
 }
 
 .main-image {
   max-width: 90%;
   max-height: 80%;
+  transform-origin: center center;
 }
 </style>
