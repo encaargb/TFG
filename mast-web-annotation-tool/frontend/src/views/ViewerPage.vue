@@ -1,27 +1,58 @@
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { documentModel } from '../data/documentModel'
 
 const pages = documentModel.pages
-const selectedPage = ref(pages[0])
+const selectedIndex = ref(0)
+
+const selectedPage = computed(() => pages[selectedIndex.value])
+
+function goToPreviousPage() {
+  if (selectedIndex.value > 0) {
+    selectedIndex.value--
+  }
+}
+
+function goToNextPage() {
+  if (selectedIndex.value < pages.length - 1) {
+    selectedIndex.value++
+  }
+}
+
+function selectPage(index) {
+  selectedIndex.value = index
+}
 </script>
 
 <template>
   <div class="layout">
-    <!-- Sidebar -->
     <div class="sidebar">
       <img
-        v-for="p in pages"
+        v-for="(p, index) in pages"
         :key="p"
         :src="p"
         class="thumb"
-        :class="{ active: selectedPage === p }"
-        @click="selectedPage = p"
+        :class="{ active: selectedIndex === index }"
+        @click="selectPage(index)"
       />
     </div>
 
-    <!-- Main viewer -->
     <div class="viewer">
+      <div class="viewer-controls">
+        <button @click="goToPreviousPage" :disabled="selectedIndex === 0">
+          Previous
+        </button>
+
+        <span>Page {{ selectedIndex + 1 }} / {{ pages.length }}</span>
+
+        <button
+          @click="goToNextPage"
+          :disabled="selectedIndex === pages.length - 1"
+        >
+          Next
+        </button>
+      </div>
+
       <img :src="selectedPage" class="main-image" />
     </div>
   </div>
@@ -54,13 +85,21 @@ const selectedPage = ref(pages[0])
 .viewer {
   flex: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   background: #ddd;
+  gap: 16px;
+}
+
+.viewer-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .main-image {
   max-width: 90%;
-  max-height: 90%;
+  max-height: 80%;
 }
 </style>
