@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import Konva from 'konva'
 import { documentModel } from '../data/documentModel'
 
@@ -56,45 +56,64 @@ function zoomOut() {
 const canvasContainer = ref(null)
 
 let stage = null
-let layer = null
-let testRect = null
+let imageLayer = null
+let pageImageNode = null
+
+const STAGE_WIDTH = 1000
+const STAGE_HEIGHT = 700
 
 function updateZoom() {
-  if (!layer) return
+  if (!imageLayer) return
 
-  layer.scale({
+  imageLayer.scale({
     x: zoomLevel.value,
     y: zoomLevel.value
   })
 
-  layer.draw()
+  imageLayer.draw()
+}
+
+function loadSelectedPageInKonva(src) {
+  if (!imageLayer) return
+
+  const img = new window.Image()
+  img.src = src
+
+  img.onload = () => {
+    if (pageImageNode) {
+      pageImageNode.destroy()
+      pageImageNode = null
+    }
+
+    pageImageNode = new Konva.Image({
+      x: 0,
+      y: 0,
+      image: img,
+      width: img.width,
+      height: img.height
+    })
+
+    imageLayer.add(pageImageNode)
+    updateZoom()
+    imageLayer.draw()
+  }
 }
 
 onMounted(() => {
-  const width = 1000
-  const height = 700
-
   stage = new Konva.Stage({
     container: canvasContainer.value,
-    width,
-    height
+    width: STAGE_WIDTH,
+    height: STAGE_HEIGHT
   })
 
-  layer = new Konva.Layer()
-  stage.add(layer)
+  imageLayer = new Konva.Layer()
+  stage.add(imageLayer)
 
-  testRect = new Konva.Rect({
-    x: 100,
-    y: 100,
-    width: 300,
-    height: 200,
-    fill: 'lightblue',
-    stroke: 'blue',
-    strokeWidth: 3
-  })
+  loadSelectedPageInKonva(selectedPage.value)
+})
 
-  layer.add(testRect)
-  layer.draw()
+watch(selectedPage, (newPage) => {
+  loadSelectedPageInKonva(newPage)
 })
 
 onBeforeUnmount(() => {
