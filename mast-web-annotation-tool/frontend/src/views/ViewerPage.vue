@@ -15,6 +15,9 @@ const zoomLevel = ref(1)
 const selectedPage = computed(() => pages[selectedIndex.value])
 const zoomPercentage = computed(() => Math.round(zoomLevel.value * 100))
 
+// 👉 NUEVO
+const mousePos = ref({ x: 0, y: 0 })
+
 function resetZoom() {
   zoomLevel.value = 1
   updateZoom()
@@ -130,6 +133,17 @@ onMounted(() => {
   imageLayer = new Konva.Layer()
   stage.add(imageLayer)
 
+  // 👉 NUEVO: capturar coordenadas del ratón
+  stage.on('mousemove', () => {
+    const pos = stage.getPointerPosition()
+    if (!pos) return
+
+    mousePos.value = {
+      x: Math.round(pos.x),
+      y: Math.round(pos.y)
+    }
+  })
+
   loadSelectedPageInKonva(selectedPage.value)
 })
 
@@ -178,6 +192,11 @@ onBeforeUnmount(() => {
         <button @click="zoomIn" :disabled="zoomLevel >= MAX_ZOOM">+</button>
 
         <span>Zoom: {{ zoomPercentage }}%</span>
+
+        <!-- 👉 NUEVO -->
+        <span class="coords">
+          ({{ mousePos.x }}, {{ mousePos.y }})
+        </span>
       </div>
 
       <div class="canvas-wrapper">
@@ -235,6 +254,12 @@ onBeforeUnmount(() => {
   background: #eee;
   border-bottom: 1px solid #ccc;
   flex-shrink: 0;
+}
+
+/* 👉 opcional visual */
+.coords {
+  font-family: monospace;
+  opacity: 0.7;
 }
 
 .canvas-wrapper {
