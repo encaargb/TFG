@@ -133,14 +133,16 @@ onMounted(() => {
   imageLayer = new Konva.Layer()
   stage.add(imageLayer)
 
-  // 👉 NUEVO: capturar coordenadas del ratón
   stage.on('mousemove', () => {
     const pos = stage.getPointerPosition()
     if (!pos) return
 
+    const docX = pos.x / zoomLevel.value
+    const docY = pos.y / zoomLevel.value
+
     mousePos.value = {
-      x: Math.round(pos.x),
-      y: Math.round(pos.y)
+      x: Math.round(docX),
+      y: Math.round(docY)
     }
   })
 
