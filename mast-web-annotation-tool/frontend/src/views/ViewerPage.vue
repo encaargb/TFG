@@ -1,5 +1,6 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
+import Konva from 'konva'
 import { documentModel } from '../data/documentModel'
 
 const pages = documentModel.pages
@@ -16,6 +17,7 @@ const zoomPercentage = computed(() => Math.round(zoomLevel.value * 100))
 
 function resetZoom() {
   zoomLevel.value = 1
+  updateZoom()
 }
 
 function goToPreviousPage() {
@@ -40,14 +42,67 @@ function selectPage(index) {
 function zoomIn() {
   if (zoomLevel.value < MAX_ZOOM) {
     zoomLevel.value = Math.min(zoomLevel.value + ZOOM_STEP, MAX_ZOOM)
+    updateZoom()
   }
 }
 
 function zoomOut() {
   if (zoomLevel.value > MIN_ZOOM) {
     zoomLevel.value = Math.max(zoomLevel.value - ZOOM_STEP, MIN_ZOOM)
+    updateZoom()
   }
 }
+
+const canvasContainer = ref(null)
+
+let stage = null
+let layer = null
+let testRect = null
+
+function updateZoom() {
+  if (!layer) return
+
+  layer.scale({
+    x: zoomLevel.value,
+    y: zoomLevel.value
+  })
+
+  layer.draw()
+}
+
+onMounted(() => {
+  const width = 1000
+  const height = 700
+
+  stage = new Konva.Stage({
+    container: canvasContainer.value,
+    width,
+    height
+  })
+
+  layer = new Konva.Layer()
+  stage.add(layer)
+
+  testRect = new Konva.Rect({
+    x: 100,
+    y: 100,
+    width: 300,
+    height: 200,
+    fill: 'lightblue',
+    stroke: 'blue',
+    strokeWidth: 3
+  })
+
+  layer.add(testRect)
+  layer.draw()
+})
+
+onBeforeUnmount(() => {
+  if (stage) {
+    stage.destroy()
+    stage = null
+  }
+})
 </script>
 
 <template>
@@ -85,12 +140,8 @@ function zoomOut() {
         <span>Zoom: {{ zoomPercentage }}%</span>
       </div>
 
-      <div class="image-wrapper">
-        <img
-          :src="selectedPage"
-          class="main-image"
-          :style="{ transform: `scale(${zoomLevel})` }"
-        />
+      <div class="canvas-wrapper">
+        <div ref="canvasContainer" class="konva-container"></div>
       </div>
     </div>
   </div>
@@ -137,7 +188,7 @@ function zoomOut() {
   border-bottom: 1px solid #ccc;
 }
 
-.image-wrapper {
+.canvas-wrapper {
   flex: 1;
   display: flex;
   align-items: center;
@@ -146,9 +197,10 @@ function zoomOut() {
   padding: 20px;
 }
 
-.main-image {
-  max-width: 90%;
-  max-height: 80%;
-  transform-origin: center center;
+.konva-container {
+  width: 1000px;
+  height: 700px;
+  background: white;
+  border: 1px solid #999;
 }
 </style>
