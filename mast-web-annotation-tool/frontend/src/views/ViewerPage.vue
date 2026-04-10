@@ -53,28 +53,36 @@ function zoomOut() {
   }
 }
 
+// ---------------- KONVA ----------------
+
 const canvasContainer = ref(null)
 
 let stage = null
 let imageLayer = null
 let pageImageNode = null
 
-const STAGE_WIDTH = 1000
-const STAGE_HEIGHT = 700
+let baseImageWidth = 0
+let baseImageHeight = 0
 
 function updateZoom() {
-  if (!imageLayer) return
+  if (!stage || !pageImageNode) return
 
-  imageLayer.scale({
-    x: zoomLevel.value,
-    y: zoomLevel.value
-  })
+  const visibleWidth = baseImageWidth * zoomLevel.value
+  const visibleHeight = baseImageHeight * zoomLevel.value
+
+  stage.width(visibleWidth)
+  stage.height(visibleHeight)
+
+  pageImageNode.x(0)
+  pageImageNode.y(0)
+  pageImageNode.width(visibleWidth)
+  pageImageNode.height(visibleHeight)
 
   imageLayer.draw()
 }
 
 function loadSelectedPageInKonva(src) {
-  if (!imageLayer) return
+  if (!imageLayer || !stage) return
 
   const img = new window.Image()
   img.src = src
@@ -85,25 +93,38 @@ function loadSelectedPageInKonva(src) {
       pageImageNode = null
     }
 
+    const maxWidth = 1000
+    const maxHeight = 700
+
+    const fitScale = Math.min(
+      maxWidth / img.width,
+      maxHeight / img.height
+    )
+
+    baseImageWidth = img.width * fitScale
+    baseImageHeight = img.height * fitScale
+
+    stage.width(baseImageWidth)
+    stage.height(baseImageHeight)
+
     pageImageNode = new Konva.Image({
       x: 0,
       y: 0,
       image: img,
-      width: img.width,
-      height: img.height
+      width: baseImageWidth,
+      height: baseImageHeight
     })
 
     imageLayer.add(pageImageNode)
     updateZoom()
-    imageLayer.draw()
   }
 }
 
 onMounted(() => {
   stage = new Konva.Stage({
     container: canvasContainer.value,
-    width: STAGE_WIDTH,
-    height: STAGE_HEIGHT
+    width: 1000,
+    height: 700
   })
 
   imageLayer = new Konva.Layer()
@@ -170,13 +191,17 @@ onBeforeUnmount(() => {
 .layout {
   display: flex;
   height: 100vh;
+  overflow: hidden;
 }
 
 .sidebar {
-  width: 200px;
+  width: 220px;
   overflow-y: auto;
+  overflow-x: hidden;
   background: #f3f3f3;
   padding: 10px;
+  box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 .thumb {
@@ -185,6 +210,7 @@ onBeforeUnmount(() => {
   cursor: pointer;
   border: 2px solid transparent;
   box-sizing: border-box;
+  display: block;
 }
 
 .thumb.active {
@@ -196,6 +222,9 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   background: #ddd;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .viewer-controls {
@@ -205,20 +234,21 @@ onBeforeUnmount(() => {
   padding: 16px;
   background: #eee;
   border-bottom: 1px solid #ccc;
+  flex-shrink: 0;
 }
 
 .canvas-wrapper {
   flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   overflow: auto;
   padding: 20px;
+  background: #ddd;
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
 }
 
 .konva-container {
-  width: 1000px;
-  height: 700px;
+  display: inline-block;
   background: white;
   border: 1px solid #999;
 }
