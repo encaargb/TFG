@@ -15,7 +15,6 @@ const zoomLevel = ref(1)
 const selectedPage = computed(() => pages[selectedIndex.value])
 const zoomPercentage = computed(() => Math.round(zoomLevel.value * 100))
 
-// 👉 NUEVO
 const mousePos = ref({ x: 0, y: 0 })
 
 function resetZoom() {
@@ -137,8 +136,11 @@ onMounted(() => {
     const pos = stage.getPointerPosition()
     if (!pos) return
 
-    const docX = pos.x / zoomLevel.value
-    const docY = pos.y / zoomLevel.value
+    const rawX = pos.x / zoomLevel.value
+    const rawY = pos.y / zoomLevel.value
+
+    const docX = Math.max(0, Math.min(baseImageWidth, rawX))
+    const docY = Math.max(0, Math.min(baseImageHeight, rawY))
 
     mousePos.value = {
       x: Math.round(docX),
