@@ -35,7 +35,14 @@ export function getVisibleDimensions(baseWidth, baseHeight, zoomLevel) {
   }
 }
 
-export function getDocumentCoordinates(pointerPosition, zoomLevel, baseWidth, baseHeight) {
+export function getDocumentCoordinates(
+  pointerPosition,
+  zoomLevel,
+  fittedWidth,
+  fittedHeight,
+  originalWidth,
+  originalHeight
+) {
   if (!pointerPosition) {
     return null
   }
@@ -43,8 +50,14 @@ export function getDocumentCoordinates(pointerPosition, zoomLevel, baseWidth, ba
   const rawX = pointerPosition.x / zoomLevel
   const rawY = pointerPosition.y / zoomLevel
 
-  const x = Math.round(Math.max(0, Math.min(baseWidth, rawX)))
-  const y = Math.round(Math.max(0, Math.min(baseHeight, rawY)))
+  const scaleX = originalWidth / fittedWidth
+  const scaleY = originalHeight / fittedHeight
+
+  const originalX = rawX * scaleX
+  const originalY = rawY * scaleY
+
+  const x = Math.round(Math.max(0, Math.min(originalWidth, originalX)))
+  const y = Math.round(Math.max(0, Math.min(originalHeight, originalY)))
 
   return { x, y }
 }

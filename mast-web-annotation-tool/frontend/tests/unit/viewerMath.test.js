@@ -54,20 +54,20 @@ describe('viewerMath', () => {
   })
 
   it('returns null document coordinates when there is no pointer position', () => {
-    expect(getDocumentCoordinates(null, 1, 1000, 500)).toBeNull()
+    expect(getDocumentCoordinates(null, 1, 1000, 500, 2000, 1000)).toBeNull()
   })
 
-  it('converts pointer coordinates back to document coordinates using the current zoom', () => {
-    expect(getDocumentCoordinates({ x: 300, y: 180 }, 1.25, 1000, 500)).toEqual({
-      x: 240,
-      y: 144,
+  it('converts pointer coordinates back to original document coordinates using the current zoom', () => {
+    expect(getDocumentCoordinates({ x: 300, y: 180 }, 1.25, 1000, 500, 2000, 1000)).toEqual({
+      x: 480,
+      y: 288,
     })
   })
 
-  it('clamps document coordinates to the fitted page boundaries', () => {
-    expect(getDocumentCoordinates({ x: -20, y: 900 }, 1, 1000, 500)).toEqual({
+  it('clamps document coordinates to the original page boundaries', () => {
+    expect(getDocumentCoordinates({ x: -20, y: 900 }, 1, 1000, 500, 2000, 1000)).toEqual({
       x: 0,
-      y: 500,
+      y: 1000,
     })
   })
 })

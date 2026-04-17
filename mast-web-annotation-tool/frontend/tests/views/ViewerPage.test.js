@@ -231,7 +231,7 @@ describe('ViewerPage', () => {
     stage.trigger('mousemove')
     await wrapper.vm.$nextTick()
 
-    expect(wrapper.find('.coords').text()).toContain('(250, 125)')
+    expect(wrapper.find('.coords').text()).toContain('(500, 250)')
   })
 
   it('keeps the previous coordinates when Konva returns no pointer position', async () => {
@@ -247,10 +247,10 @@ describe('ViewerPage', () => {
     stage.trigger('mousemove')
     await wrapper.vm.$nextTick()
 
-    expect(wrapper.find('.coords').text()).toContain('(250, 125)')
+    expect(wrapper.find('.coords').text()).toContain('(500, 250)')
   })
 
-  it('converts pointer coordinates using the current zoom level', async () => {
+  it('converts pointer coordinates to original document dimensions using the current zoom level', async () => {
     const wrapper = mount(ViewerPage)
     await flushImageLoad()
 
@@ -262,7 +262,7 @@ describe('ViewerPage', () => {
     stage.trigger('mousemove')
     await wrapper.vm.$nextTick()
 
-    expect(wrapper.find('.coords').text()).toContain('(240, 144)')
+    expect(wrapper.find('.coords').text()).toContain('(480, 288)')
   })
 
   it('cleans up the Konva stage when the component is unmounted', async () => {

@@ -73,6 +73,8 @@ let pageImageNode = null
 
 let baseImageWidth = 0
 let baseImageHeight = 0
+let originalImageWidth = 0
+let originalImageHeight = 0
 
 function updateZoom() {
   if (!stage || !pageImageNode) return
@@ -116,6 +118,8 @@ function loadSelectedPageInKonva(src) {
       maxHeight
     )
 
+    originalImageWidth = img.width
+    originalImageHeight = img.height
     baseImageWidth = fittedDimensions.width
     baseImageHeight = fittedDimensions.height
 
@@ -151,7 +155,9 @@ onMounted(() => {
       pos,
       zoomLevel.value,
       baseImageWidth,
-      baseImageHeight
+      baseImageHeight,
+      originalImageWidth,
+      originalImageHeight
     )
 
     if (!coordinates) return
