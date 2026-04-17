@@ -2,18 +2,26 @@
 import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import Konva from 'konva'
 import { documentModel } from '../data/documentModel'
+import {
+  getDocumentCoordinates,
+  getFittedDimensions,
+  getNextZoom,
+  getPreviousZoom,
+  getVisibleDimensions,
+  getZoomPercentage,
+} from '../utils/viewerMath'
 
 const pages = documentModel.pages
 const selectedIndex = ref(0)
 
-const MIN_ZOOM = 0.5
-const MAX_ZOOM = 3
-const ZOOM_STEP = 0.2
+const MIN_ZOOM = 0.25
+const MAX_ZOOM = 8
+const ZOOM_FACTOR = 1.25
 
 const zoomLevel = ref(1)
 
 const selectedPage = computed(() => pages[selectedIndex.value])
-const zoomPercentage = computed(() => Math.round(zoomLevel.value * 100))
+const zoomPercentage = computed(() => getZoomPercentage(zoomLevel.value))
 
 const mousePos = ref({ x: 0, y: 0 })
 
@@ -43,14 +51,14 @@ function selectPage(index) {
 
 function zoomIn() {
   if (zoomLevel.value < MAX_ZOOM) {
-    zoomLevel.value = Math.min(zoomLevel.value + ZOOM_STEP, MAX_ZOOM)
+    zoomLevel.value = getNextZoom(zoomLevel.value, ZOOM_FACTOR, MAX_ZOOM)
     updateZoom()
   }
 }
 
 function zoomOut() {
   if (zoomLevel.value > MIN_ZOOM) {
-    zoomLevel.value = Math.max(zoomLevel.value - ZOOM_STEP, MIN_ZOOM)
+    zoomLevel.value = getPreviousZoom(zoomLevel.value, ZOOM_FACTOR, MIN_ZOOM)
     updateZoom()
   }
 }
@@ -69,8 +77,11 @@ let baseImageHeight = 0
 function updateZoom() {
   if (!stage || !pageImageNode) return
 
-  const visibleWidth = baseImageWidth * zoomLevel.value
-  const visibleHeight = baseImageHeight * zoomLevel.value
+  const { width: visibleWidth, height: visibleHeight } = getVisibleDimensions(
+    baseImageWidth,
+    baseImageHeight,
+    zoomLevel.value
+  )
 
   stage.width(visibleWidth)
   stage.height(visibleHeight)
@@ -98,13 +109,15 @@ function loadSelectedPageInKonva(src) {
     const maxWidth = 1000
     const maxHeight = 700
 
-    const fitScale = Math.min(
-      maxWidth / img.width,
-      maxHeight / img.height
+    const fittedDimensions = getFittedDimensions(
+      img.width,
+      img.height,
+      maxWidth,
+      maxHeight
     )
 
-    baseImageWidth = img.width * fitScale
-    baseImageHeight = img.height * fitScale
+    baseImageWidth = fittedDimensions.width
+    baseImageHeight = fittedDimensions.height
 
     stage.width(baseImageWidth)
     stage.height(baseImageHeight)
@@ -134,18 +147,16 @@ onMounted(() => {
 
   stage.on('mousemove', () => {
     const pos = stage.getPointerPosition()
-    if (!pos) return
+    const coordinates = getDocumentCoordinates(
+      pos,
+      zoomLevel.value,
+      baseImageWidth,
+      baseImageHeight
+    )
 
-    const rawX = pos.x / zoomLevel.value
-    const rawY = pos.y / zoomLevel.value
+    if (!coordinates) return
 
-    const docX = Math.max(0, Math.min(baseImageWidth, rawX))
-    const docY = Math.max(0, Math.min(baseImageHeight, rawY))
-
-    mousePos.value = {
-      x: Math.round(docX),
-      y: Math.round(docY)
-    }
+    mousePos.value = coordinates
   })
 
   loadSelectedPageInKonva(selectedPage.value)
@@ -197,7 +208,7 @@ onBeforeUnmount(() => {
 
         <span>Zoom: {{ zoomPercentage }}%</span>
 
-        <!-- 👉 NUEVO -->
+        <!-- Mouse coordinates -->
         <span class="coords">
           ({{ mousePos.x }}, {{ mousePos.y }})
         </span>
@@ -260,7 +271,7 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
 }
 
-/* 👉 opcional visual */
+/* Optional visual styling */
 .coords {
   font-family: monospace;
   opacity: 0.7;
