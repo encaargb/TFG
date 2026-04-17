@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "vitest"
+    "test": "vitest",
+    "test:verbose": "vitest --run --reporter=verbose"
   },
   "dependencies": {
     "konva": "^10.2.3",
