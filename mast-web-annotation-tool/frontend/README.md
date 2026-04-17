@@ -1,5 +1,71 @@
-# Vue 3 + Vite
+# Frontend
 
-This template should help get you started developing with Vue 3 in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+This frontend is a Vue 3 and Vite application for visual document viewing. At its current stage, the project is a frontend-only viewer that renders document pages, allows page navigation, supports zooming, and displays mouse coordinates over the document.
 
-Learn more about IDE Support for Vue in the [Vue Docs Scaling up Guide](https://vuejs.org/guide/scaling-up/tooling.html#ide-support).
+## Requirements
+
+To run this project, you only need:
+
+- Node.js
+- npm
+
+No backend service, database, or additional runtime is required.
+
+## Installation
+
+Install the dependencies from the frontend directory:
+
+```bash
+npm install
+```
+
+## Run the Application
+
+Start the development server:
+
+```bash
+npm run dev
+```
+
+Build the application for production:
+
+```bash
+npm run build
+```
+
+Preview the production build locally:
+
+```bash
+npm run preview
+```
+
+## Run the Tests
+
+Run the default test suite:
+
+```bash
+npm test
+```
+
+Run the tests with verbose output:
+
+```bash
+npm run test:verbose
+```
+
+Generate the HTML test report and launch the Vitest UI:
+
+```bash
+npm run test:html:open
+```
+
+## Current Scope
+
+The application currently includes:
+
+- page rendering from static document images
+- page navigation through buttons and thumbnails
+- zoom controls with bounded zoom levels
+- document-space mouse coordinate display
+- unit tests for viewer math utilities
+- component tests for the main viewer behavior
