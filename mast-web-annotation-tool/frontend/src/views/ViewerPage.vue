@@ -16,7 +16,7 @@ const selectedIndex = ref(0)
 
 const MIN_ZOOM = 0.25
 const MAX_ZOOM = 8
-const ZOOM_FACTOR = 1.25
+const ZOOM_STEP = 0.25
 
 const zoomLevel = ref(1)
 
@@ -51,14 +51,14 @@ function selectPage(index) {
 
 function zoomIn() {
   if (zoomLevel.value < MAX_ZOOM) {
-    zoomLevel.value = getNextZoom(zoomLevel.value, ZOOM_FACTOR, MAX_ZOOM)
+    zoomLevel.value = getNextZoom(zoomLevel.value, ZOOM_STEP, MAX_ZOOM)
     updateZoom()
   }
 }
 
 function zoomOut() {
   if (zoomLevel.value > MIN_ZOOM) {
-    zoomLevel.value = getPreviousZoom(zoomLevel.value, ZOOM_FACTOR, MIN_ZOOM)
+    zoomLevel.value = getPreviousZoom(zoomLevel.value, ZOOM_STEP, MIN_ZOOM)
     updateZoom()
   }
 }

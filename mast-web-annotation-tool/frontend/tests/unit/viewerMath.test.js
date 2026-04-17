@@ -15,16 +15,16 @@ describe('viewerMath', () => {
     expect(getZoomPercentage(0.5)).toBe(50)
   })
 
-  it('increases zoom by the configured factor without exceeding the maximum', () => {
-    expect(getNextZoom(1, 1.25, 8)).toBe(1.25)
-    expect(getNextZoom(6.5, 1.25, 8)).toBe(8)
-    expect(getNextZoom(8, 1.25, 8)).toBe(8)
+  it('increases zoom by the configured step without exceeding the maximum', () => {
+    expect(getNextZoom(1, 0.25, 8)).toBe(1.25)
+    expect(getNextZoom(7.9, 0.25, 8)).toBe(8)
+    expect(getNextZoom(8, 0.25, 8)).toBe(8)
   })
 
-  it('decreases zoom by the configured factor without going below the minimum', () => {
-    expect(getPreviousZoom(1, 1.25, 0.25)).toBe(0.8)
-    expect(getPreviousZoom(0.3, 1.25, 0.25)).toBe(0.25)
-    expect(getPreviousZoom(0.25, 1.25, 0.25)).toBe(0.25)
+  it('decreases zoom by the configured step without going below the minimum', () => {
+    expect(getPreviousZoom(1, 0.25, 0.25)).toBe(0.75)
+    expect(getPreviousZoom(0.3, 0.25, 0.25)).toBe(0.25)
+    expect(getPreviousZoom(0.25, 0.25, 0.25)).toBe(0.25)
   })
 
   it('fits an image into the viewer area while preserving aspect ratio', () => {

@@ -2,20 +2,20 @@ export function getZoomPercentage(zoomLevel) {
   return Math.round(zoomLevel * 100)
 }
 
-export function getNextZoom(currentZoom, factor, maxZoom) {
+export function getNextZoom(currentZoom, step, maxZoom) {
   if (currentZoom >= maxZoom) {
     return currentZoom
   }
 
-  return Math.min(currentZoom * factor, maxZoom)
+  return Math.min(currentZoom + step, maxZoom)
 }
 
-export function getPreviousZoom(currentZoom, factor, minZoom) {
+export function getPreviousZoom(currentZoom, step, minZoom) {
   if (currentZoom <= minZoom) {
     return currentZoom
   }
 
-  return Math.max(currentZoom / factor, minZoom)
+  return Math.max(currentZoom - step, minZoom)
 }
 
 export function getFittedDimensions(imageWidth, imageHeight, maxWidth, maxHeight) {

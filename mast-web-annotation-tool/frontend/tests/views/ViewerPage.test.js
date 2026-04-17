@@ -133,7 +133,7 @@ describe('ViewerPage', () => {
     expect(getButton(wrapper, 'Next').element.disabled).toBe(true)
   })
 
-  it('increases and decreases zoom using the configured factor', async () => {
+  it('increases and decreases zoom using the configured step', async () => {
     const wrapper = mount(ViewerPage)
     await flushImageLoad()
 
@@ -185,7 +185,7 @@ describe('ViewerPage', () => {
     const wrapper = mount(ViewerPage)
     await flushImageLoad()
 
-    for (let i = 0; i < 20; i += 1) {
+    for (let i = 0; i < 30; i += 1) {
       await getButton(wrapper, '+').trigger('click')
     }
 
