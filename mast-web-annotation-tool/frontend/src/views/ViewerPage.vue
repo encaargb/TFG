@@ -342,7 +342,6 @@ function commitDraftRectangleRegion() {
     regionSequence += 1
     regions.value.push(draftRegion)
     selectedRegionId.value = draftRegion.id
-    activeTool.value = 'select'
   }
 
   renderRegions()

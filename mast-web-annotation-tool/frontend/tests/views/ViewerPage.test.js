@@ -133,7 +133,7 @@ describe('ViewerPage', () => {
       })
     )
     expect(wrapper.text()).toContain('Regions: 1')
-    expect(getButton(wrapper, 'Select').classes()).toContain('btn-primary')
+    expect(getButton(wrapper, 'Rectangle').classes()).toContain('btn-primary')
     expect(rects.at(-1).config).toEqual(
       expect.objectContaining({
         x: 100,
@@ -143,7 +143,7 @@ describe('ViewerPage', () => {
         id: 'region-1',
       })
     )
-    expect(transformer.nodes).toHaveBeenLastCalledWith([rects.at(-1)])
+    expect(transformer.nodes).toHaveBeenLastCalledWith([])
   })
 
   it('does not create a region when the drag area is too small', async () => {
