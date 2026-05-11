@@ -84,6 +84,7 @@ describe('ViewerPage', () => {
 
     expect(getButton(wrapper, 'Select').classes()).toContain('btn-primary')
     expect(getButton(wrapper, 'Rectangle').classes()).toContain('btn-outline-secondary')
+    expect(getButton(wrapper, 'Delete').element.disabled).toBe(true)
   })
 
   it('updates the canvas cursor mode when switching region tools', async () => {
@@ -196,6 +197,55 @@ describe('ViewerPage', () => {
         height: 200,
       })
     )
+  })
+
+  it('deletes the selected region from the toolbar', async () => {
+    const wrapper = mount(ViewerPage)
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    await getButton(wrapper, 'Rectangle').trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousedown')
+
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 150 })
+    stage.trigger('mousemove')
+    stage.trigger('mouseup')
+    await wrapper.vm.$nextTick()
+
+    expect(ProjectDocumentModel.regions).toHaveLength(1)
+    expect(getButton(wrapper, 'Delete').element.disabled).toBe(false)
+
+    await getButton(wrapper, 'Delete').trigger('click')
+
+    expect(ProjectDocumentModel.regions).toHaveLength(0)
+    expect(wrapper.text()).toContain('Regions: 0')
+    expect(getButton(wrapper, 'Delete').element.disabled).toBe(true)
+  })
+
+  it('deletes the selected region with the Delete key', async () => {
+    const wrapper = mount(ViewerPage)
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    await getButton(wrapper, 'Rectangle').trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousedown')
+
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 150 })
+    stage.trigger('mousemove')
+    stage.trigger('mouseup')
+    await wrapper.vm.$nextTick()
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }))
+    await wrapper.vm.$nextTick()
+
+    expect(ProjectDocumentModel.regions).toHaveLength(0)
+    expect(wrapper.text()).toContain('Regions: 0')
   })
 
   it('disables Previous on the first page and enables Next', async () => {

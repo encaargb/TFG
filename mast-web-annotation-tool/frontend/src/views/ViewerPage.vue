@@ -72,6 +72,21 @@ function setActiveTool(tool) {
   }
 }
 
+function deleteSelectedRegion() {
+  if (!selectedRegionId.value) return
+
+  regions.value = regions.value.filter((region) => region.id !== selectedRegionId.value)
+  ProjectDocumentModel.regions = regions.value
+  selectedRegionId.value = null
+  renderRegions()
+}
+
+function handleKeydown(event) {
+  if (event.key !== 'Delete' && event.key !== 'Backspace') return
+
+  deleteSelectedRegion()
+}
+
 function zoomIn() {
   if (zoomLevel.value < MAX_ZOOM) {
     zoomLevel.value = getNextZoom(zoomLevel.value, ZOOM_STEP, MAX_ZOOM)
@@ -409,6 +424,7 @@ onMounted(() => {
   })
   stage.on('mousedown', beginRectangleRegion)
   stage.on('mouseup', commitDraftRectangleRegion)
+  window.addEventListener('keydown', handleKeydown)
 
   loadSelectedPageInKonva(selectedPage.value)
 })
@@ -422,6 +438,8 @@ onBeforeUnmount(() => {
     stage.destroy()
     stage = null
   }
+
+  window.removeEventListener('keydown', handleKeydown)
 
   imageLayer = null
   regionLayer = null
@@ -506,6 +524,15 @@ onBeforeUnmount(() => {
           <span class="badge text-bg-light border">
             Regions: {{ currentPageRegions.length }}
           </span>
+
+          <button
+            type="button"
+            class="btn btn-sm btn-outline-danger"
+            :disabled="!selectedRegionId"
+            @click="deleteSelectedRegion"
+          >
+            Delete
+          </button>
 
           <div class="vr d-none d-md-block"></div>
 
