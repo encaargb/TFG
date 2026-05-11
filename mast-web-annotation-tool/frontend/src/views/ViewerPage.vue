@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import Konva from 'konva'
-import { documentModel } from '../data/documentModel'
+import { ProjectDocumentModel } from '../models/ProjectDocumentModel'
 import {
   getDocumentCoordinates,
   getFittedDimensions,
@@ -11,7 +11,7 @@ import {
   getZoomPercentage,
 } from '../utils/viewerMath'
 
-const pages = documentModel.pages
+const pages = ProjectDocumentModel.pages
 const selectedIndex = ref(0)
 
 const MIN_ZOOM = 0.25
