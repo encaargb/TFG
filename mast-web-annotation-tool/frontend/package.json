@@ -12,6 +12,8 @@
     "test:html:open": "vitest --run --reporter=html --outputFile=./html/index.html && vitest --ui"
   },
   "dependencies": {
+    "@popperjs/core": "^2.11.8",
+    "bootstrap": "^5.3.8",
     "konva": "^10.2.3",
     "vue": "^3.5.30"
   },
