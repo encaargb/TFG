@@ -10,18 +10,32 @@ import {
   getVisibleDimensions,
   getZoomPercentage,
 } from '../utils/viewerMath'
+import {
+  clampRectangleToBounds,
+  createRectangleRegion,
+  isDrawableRegion,
+  toDocumentRectangle,
+  toVisibleRectangle,
+} from '../utils/regionGeometry'
 
 const pages = ProjectDocumentModel.pages
+const regions = ref(ProjectDocumentModel.regions)
 const selectedIndex = ref(0)
 
 const MIN_ZOOM = 0.25
 const MAX_ZOOM = 8
 const ZOOM_STEP = 0.25
+const REGION_COLOR = '#0d6efd'
 
 const zoomLevel = ref(1)
+const activeTool = ref('select')
+const selectedRegionId = ref(null)
 
 const selectedPage = computed(() => pages[selectedIndex.value])
 const zoomPercentage = computed(() => getZoomPercentage(zoomLevel.value))
+const currentPageRegions = computed(() =>
+  regions.value.filter((region) => region.pageIndex === selectedIndex.value)
+)
 
 const mousePos = ref({ x: 0, y: 0 })
 
@@ -46,7 +60,16 @@ function goToNextPage() {
 
 function selectPage(index) {
   selectedIndex.value = index
+  selectedRegionId.value = null
   resetZoom()
+}
+
+function setActiveTool(tool) {
+  activeTool.value = tool
+  if (tool !== 'select') {
+    selectedRegionId.value = null
+    renderRegions()
+  }
 }
 
 function zoomIn() {
@@ -69,12 +92,31 @@ const canvasContainer = ref(null)
 
 let stage = null
 let imageLayer = null
+let regionLayer = null
 let pageImageNode = null
+let transformer = null
+let draftRegionNode = null
+let draftRegionStart = null
+let regionSequence = 0
 
 let baseImageWidth = 0
 let baseImageHeight = 0
 let originalImageWidth = 0
 let originalImageHeight = 0
+
+function getRegionScale() {
+  return {
+    scaleX: baseImageWidth / originalImageWidth,
+    scaleY: baseImageHeight / originalImageHeight,
+  }
+}
+
+function getDocumentBounds() {
+  return {
+    width: originalImageWidth,
+    height: originalImageHeight,
+  }
+}
 
 function updateZoom() {
   if (!stage || !pageImageNode) return
@@ -94,6 +136,201 @@ function updateZoom() {
   pageImageNode.height(visibleHeight)
 
   imageLayer.draw()
+  renderRegions()
+}
+
+function createRegionNode(region) {
+  const { scaleX, scaleY } = getRegionScale()
+  const visibleRegion = toVisibleRectangle(region, scaleX, scaleY, zoomLevel.value)
+
+  const node = new Konva.Rect({
+    ...visibleRegion,
+    id: region.id,
+    draggable: activeTool.value === 'select',
+    fill: `${region.color}26`,
+    stroke: region.color,
+    strokeWidth: selectedRegionId.value === region.id ? 3 : 2,
+  })
+
+  node.on('click tap', () => {
+    if (activeTool.value !== 'select') return
+    selectedRegionId.value = region.id
+    renderRegions()
+  })
+
+  node.on('dragend transformend', () => {
+    const scaleXNode = typeof node.scaleX === 'function' ? node.scaleX() : 1
+    const scaleYNode = typeof node.scaleY === 'function' ? node.scaleY() : 1
+    const visibleRectangle = {
+      x: node.x(),
+      y: node.y(),
+      width: node.width() * scaleXNode,
+      height: node.height() * scaleYNode,
+    }
+    const documentRectangle = clampRectangleToBounds(
+      toDocumentRectangle(visibleRectangle, scaleX, scaleY, zoomLevel.value),
+      getDocumentBounds()
+    )
+
+    Object.assign(region, documentRectangle)
+
+    if (typeof node.scaleX === 'function') node.scaleX(1)
+    if (typeof node.scaleY === 'function') node.scaleY(1)
+
+    renderRegions()
+  })
+
+  return node
+}
+
+function renderRegions() {
+  if (!regionLayer || !baseImageWidth || !baseImageHeight) return
+
+  regionLayer.destroyChildren()
+  transformer = new Konva.Transformer({
+    rotateEnabled: false,
+    keepRatio: false,
+  })
+
+  let selectedNode = null
+
+  currentPageRegions.value.forEach((region) => {
+    const node = createRegionNode(region)
+    regionLayer.add(node)
+
+    if (region.id === selectedRegionId.value) {
+      selectedNode = node
+    }
+  })
+
+  regionLayer.add(transformer)
+
+  if (selectedNode && activeTool.value === 'select') {
+    transformer.nodes([selectedNode])
+  } else {
+    transformer.nodes([])
+  }
+
+  regionLayer.draw()
+}
+
+function beginRectangleRegion() {
+  if (!stage || !regionLayer || !pageImageNode || activeTool.value !== 'rectangle') return
+
+  const pointerPosition = stage.getPointerPosition()
+  const documentStart = getDocumentCoordinates(
+    pointerPosition,
+    zoomLevel.value,
+    baseImageWidth,
+    baseImageHeight,
+    originalImageWidth,
+    originalImageHeight
+  )
+
+  if (!documentStart) return
+
+  selectedRegionId.value = null
+  draftRegionStart = documentStart
+
+  const { scaleX, scaleY } = getRegionScale()
+  const visibleStart = toVisibleRectangle(
+    {
+      x: documentStart.x,
+      y: documentStart.y,
+      width: 0,
+      height: 0,
+    },
+    scaleX,
+    scaleY,
+    zoomLevel.value
+  )
+
+  draftRegionNode = new Konva.Rect({
+    ...visibleStart,
+    fill: `${REGION_COLOR}26`,
+    stroke: REGION_COLOR,
+    strokeWidth: 2,
+    dash: [6, 4],
+  })
+
+  regionLayer.add(draftRegionNode)
+  regionLayer.draw()
+}
+
+function updateDraftRectangleRegion() {
+  if (!stage || !draftRegionNode || !draftRegionStart) return
+
+  const pointerPosition = stage.getPointerPosition()
+  const documentEnd = getDocumentCoordinates(
+    pointerPosition,
+    zoomLevel.value,
+    baseImageWidth,
+    baseImageHeight,
+    originalImageWidth,
+    originalImageHeight
+  )
+
+  if (!documentEnd) return
+
+  const draftRegion = createRectangleRegion({
+    id: 'draft-region',
+    pageIndex: selectedIndex.value,
+    start: draftRegionStart,
+    end: documentEnd,
+    color: REGION_COLOR,
+  })
+  const { scaleX, scaleY } = getRegionScale()
+  const visibleRegion = toVisibleRectangle(draftRegion, scaleX, scaleY, zoomLevel.value)
+
+  draftRegionNode.x(visibleRegion.x)
+  draftRegionNode.y(visibleRegion.y)
+  draftRegionNode.width(visibleRegion.width)
+  draftRegionNode.height(visibleRegion.height)
+  regionLayer.draw()
+}
+
+function commitDraftRectangleRegion() {
+  if (!stage || !draftRegionNode || !draftRegionStart) return
+
+  const pointerPosition = stage.getPointerPosition()
+  const documentEnd = getDocumentCoordinates(
+    pointerPosition,
+    zoomLevel.value,
+    baseImageWidth,
+    baseImageHeight,
+    originalImageWidth,
+    originalImageHeight
+  )
+
+  let draftRegion = null
+
+  if (documentEnd) {
+    const region = createRectangleRegion({
+      id: `region-${regionSequence + 1}`,
+      pageIndex: selectedIndex.value,
+      start: draftRegionStart,
+      end: documentEnd,
+      color: REGION_COLOR,
+    })
+
+    draftRegion = {
+      ...region,
+      ...clampRectangleToBounds(region, getDocumentBounds()),
+    }
+  }
+
+  draftRegionNode.destroy()
+  draftRegionNode = null
+  draftRegionStart = null
+
+  if (draftRegion && isDrawableRegion(draftRegion)) {
+    regionSequence += 1
+    regions.value.push(draftRegion)
+    selectedRegionId.value = draftRegion.id
+    activeTool.value = 'select'
+  }
+
+  renderRegions()
 }
 
 function loadSelectedPageInKonva(src) {
@@ -147,7 +384,9 @@ onMounted(() => {
   })
 
   imageLayer = new Konva.Layer()
+  regionLayer = new Konva.Layer()
   stage.add(imageLayer)
+  stage.add(regionLayer)
 
   stage.on('mousemove', () => {
     const pos = stage.getPointerPosition()
@@ -163,7 +402,13 @@ onMounted(() => {
     if (!coordinates) return
 
     mousePos.value = coordinates
+
+    if (draftRegionNode) {
+      updateDraftRectangleRegion()
+    }
   })
+  stage.on('mousedown', beginRectangleRegion)
+  stage.on('mouseup', commitDraftRectangleRegion)
 
   loadSelectedPageInKonva(selectedPage.value)
 })
@@ -177,6 +422,13 @@ onBeforeUnmount(() => {
     stage.destroy()
     stage = null
   }
+
+  imageLayer = null
+  regionLayer = null
+  pageImageNode = null
+  transformer = null
+  draftRegionNode = null
+  draftRegionStart = null
 })
 </script>
 
@@ -232,6 +484,31 @@ onBeforeUnmount(() => {
 
           <div class="vr d-none d-md-block"></div>
 
+          <div class="btn-group btn-group-sm" role="group" aria-label="Region tools">
+            <button
+              type="button"
+              class="btn"
+              :class="activeTool === 'select' ? 'btn-primary' : 'btn-outline-secondary'"
+              @click="setActiveTool('select')"
+            >
+              Select
+            </button>
+            <button
+              type="button"
+              class="btn"
+              :class="activeTool === 'rectangle' ? 'btn-primary' : 'btn-outline-secondary'"
+              @click="setActiveTool('rectangle')"
+            >
+              Rectangle
+            </button>
+          </div>
+
+          <span class="badge text-bg-light border">
+            Regions: {{ currentPageRegions.length }}
+          </span>
+
+          <div class="vr d-none d-md-block"></div>
+
           <div class="btn-group btn-group-sm" role="group" aria-label="Zoom controls">
             <button
               type="button"
@@ -264,7 +541,10 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <div class="canvas-wrapper flex-grow-1 overflow-auto p-4">
+      <div
+        class="canvas-wrapper flex-grow-1 overflow-auto p-4"
+        :class="`canvas-wrapper--${activeTool}`"
+      >
         <div ref="canvasContainer" class="konva-container shadow-sm"></div>
       </div>
     </main>
@@ -320,6 +600,14 @@ onBeforeUnmount(() => {
   background: #dee2e6;
   min-width: 0;
   min-height: 0;
+}
+
+.canvas-wrapper--select {
+  cursor: default;
+}
+
+.canvas-wrapper--rectangle {
+  cursor: crosshair;
 }
 
 .konva-container {

@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import Konva from 'konva'
+import { ProjectDocumentModel } from '../../src/models/ProjectDocumentModel'
 import ViewerPage from '../../src/views/ViewerPage.vue'
 import {
   getImageInstances,
-  getLatestLayer,
+  getLayerInstances,
   getLatestStage,
+  getRectInstances,
+  getTransformerInstances,
   resetKonvaMocks,
 } from '../setup'
 
@@ -17,10 +20,13 @@ function getButton(wrapper, label) {
 
 describe('ViewerPage', () => {
   beforeEach(() => {
+    ProjectDocumentModel.regions.length = 0
     resetKonvaMocks()
     Konva.Stage.mockClear()
     Konva.Layer.mockClear()
     Konva.Image.mockClear()
+    Konva.Rect.mockClear()
+    Konva.Transformer.mockClear()
   })
 
   it('renders the document thumbnails and highlights the first page by default', async () => {
@@ -33,28 +39,30 @@ describe('ViewerPage', () => {
     expect(thumbnails[0].classes()).toContain('active')
     expect(wrapper.text()).toContain('Page 1 / 15')
     expect(wrapper.text()).toContain('Zoom: 100%')
+    expect(wrapper.text()).toContain('Regions: 0')
   })
 
-  it('creates the Konva stage and layer when the component is mounted', async () => {
+  it('creates the Konva stage and drawing layers when the component is mounted', async () => {
     const wrapper = mount(ViewerPage)
     await flushImageLoad()
 
     const stage = getLatestStage()
-    const layer = getLatestLayer()
+    const layers = getLayerInstances()
 
     expect(Konva.Stage).toHaveBeenCalledTimes(1)
-    expect(Konva.Layer).toHaveBeenCalledTimes(1)
+    expect(Konva.Layer).toHaveBeenCalledTimes(2)
     expect(stage.config.container).toBe(wrapper.find('.konva-container').element)
     expect(stage.config.width).toBe(1000)
     expect(stage.config.height).toBe(700)
-    expect(stage.add).toHaveBeenCalledWith(layer)
+    expect(stage.add).toHaveBeenCalledWith(layers[0])
+    expect(stage.add).toHaveBeenCalledWith(layers[1])
   })
 
   it('loads the selected page image into Konva on mount', async () => {
     mount(ViewerPage)
     await flushImageLoad()
 
-    const layer = getLatestLayer()
+    const layer = getLayerInstances()[0]
     const createdImages = getImageInstances()
 
     expect(Konva.Image).toHaveBeenCalledTimes(1)
@@ -68,6 +76,126 @@ describe('ViewerPage', () => {
     )
     expect(layer.add).toHaveBeenCalledWith(createdImages[0])
     expect(layer.draw).toHaveBeenCalled()
+  })
+
+  it('renders the select and rectangle region tools', async () => {
+    const wrapper = mount(ViewerPage)
+    await flushImageLoad()
+
+    expect(getButton(wrapper, 'Select').classes()).toContain('btn-primary')
+    expect(getButton(wrapper, 'Rectangle').classes()).toContain('btn-outline-secondary')
+  })
+
+  it('updates the canvas cursor mode when switching region tools', async () => {
+    const wrapper = mount(ViewerPage)
+    await flushImageLoad()
+
+    const canvasWrapper = wrapper.find('.canvas-wrapper')
+
+    expect(canvasWrapper.classes()).toContain('canvas-wrapper--select')
+
+    await getButton(wrapper, 'Rectangle').trigger('click')
+
+    expect(canvasWrapper.classes()).toContain('canvas-wrapper--rectangle')
+  })
+
+  it('creates a rectangular region by dragging on the document', async () => {
+    const wrapper = mount(ViewerPage)
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    await getButton(wrapper, 'Rectangle').trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousedown')
+
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 150 })
+    stage.trigger('mousemove')
+    stage.trigger('mouseup')
+    await wrapper.vm.$nextTick()
+
+    const regions = ProjectDocumentModel.regions
+    const rects = getRectInstances()
+    const transformer = getTransformerInstances().at(-1)
+
+    expect(regions).toHaveLength(1)
+    expect(regions[0]).toEqual(
+      expect.objectContaining({
+        id: 'region-1',
+        pageIndex: 0,
+        type: 'rectangle',
+        x: 200,
+        y: 100,
+        width: 300,
+        height: 200,
+      })
+    )
+    expect(wrapper.text()).toContain('Regions: 1')
+    expect(getButton(wrapper, 'Select').classes()).toContain('btn-primary')
+    expect(rects.at(-1).config).toEqual(
+      expect.objectContaining({
+        x: 100,
+        y: 50,
+        width: 150,
+        height: 100,
+        id: 'region-1',
+      })
+    )
+    expect(transformer.nodes).toHaveBeenLastCalledWith([rects.at(-1)])
+  })
+
+  it('does not create a region when the drag area is too small', async () => {
+    const wrapper = mount(ViewerPage)
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    await getButton(wrapper, 'Rectangle').trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousedown')
+
+    stage.getPointerPosition.mockReturnValue({ x: 101, y: 51 })
+    stage.trigger('mousemove')
+    stage.trigger('mouseup')
+    await wrapper.vm.$nextTick()
+
+    expect(ProjectDocumentModel.regions).toHaveLength(0)
+    expect(wrapper.text()).toContain('Regions: 0')
+  })
+
+  it('keeps moved regions inside the document boundaries', async () => {
+    const wrapper = mount(ViewerPage)
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    await getButton(wrapper, 'Rectangle').trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousedown')
+
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 150 })
+    stage.trigger('mousemove')
+    stage.trigger('mouseup')
+    await wrapper.vm.$nextTick()
+
+    const regionNode = getRectInstances().at(-1)
+
+    regionNode.x(-20)
+    regionNode.y(9999)
+    regionNode.trigger('dragend')
+    await wrapper.vm.$nextTick()
+
+    expect(ProjectDocumentModel.regions[0]).toEqual(
+      expect.objectContaining({
+        x: 0,
+        y: 800,
+        width: 300,
+        height: 200,
+      })
+    )
   })
 
   it('disables Previous on the first page and enables Next', async () => {
