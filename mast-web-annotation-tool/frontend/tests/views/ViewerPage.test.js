@@ -87,6 +87,41 @@ describe('ViewerPage', () => {
     expect(getButton(wrapper, 'Delete').element.disabled).toBe(true)
   })
 
+  it('renders a bottom status bar with document state', async () => {
+    const wrapper = mount(ViewerPage)
+    await flushImageLoad()
+
+    const statusBar = wrapper.find('.status-bar')
+
+    expect(statusBar.exists()).toBe(true)
+    expect(statusBar.text()).toContain('Page 1 / 15')
+    expect(statusBar.text()).toContain('Zoom 100%')
+    expect(statusBar.text()).toContain('Tool select')
+    expect(statusBar.text()).toContain('Regions 0')
+    expect(statusBar.text()).toContain('X 0 · Y 0')
+  })
+
+  it('updates the bottom status bar when viewer state changes', async () => {
+    const wrapper = mount(ViewerPage)
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const statusBar = wrapper.find('.status-bar')
+
+    await getButton(wrapper, 'Rectangle').trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 125 })
+    stage.trigger('mousemove')
+    await wrapper.vm.$nextTick()
+
+    await getButton(wrapper, 'Next').trigger('click')
+    await flushImageLoad()
+
+    expect(statusBar.text()).toContain('Page 2 / 15')
+    expect(statusBar.text()).toContain('Tool rectangle')
+    expect(statusBar.text()).toContain('X 500 · Y 250')
+  })
+
   it('updates the canvas cursor mode when switching region tools', async () => {
     const wrapper = mount(ViewerPage)
     await flushImageLoad()
