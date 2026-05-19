@@ -180,6 +180,47 @@ function updateZoom() {
   renderRegions()
 }
 
+function getVisibleBounds() {
+  return getVisibleDimensions(baseImageWidth, baseImageHeight, zoomLevel.value)
+}
+
+function clampVisibleRectangle(rectangle) {
+  const bounds = getVisibleBounds()
+  const width = Math.min(Math.max(0, rectangle.width), bounds.width)
+  const height = Math.min(Math.max(0, rectangle.height), bounds.height)
+  const maxX = Math.max(0, bounds.width - width)
+  const maxY = Math.max(0, bounds.height - height)
+
+  return {
+    x: Math.max(0, Math.min(maxX, rectangle.x)),
+    y: Math.max(0, Math.min(maxY, rectangle.y)),
+    width,
+    height,
+  }
+}
+
+function getNodeVisibleRectangle(node) {
+  const scaleXNode = typeof node.scaleX === 'function' ? node.scaleX() : 1
+  const scaleYNode = typeof node.scaleY === 'function' ? node.scaleY() : 1
+
+  return {
+    x: node.x(),
+    y: node.y(),
+    width: node.width() * scaleXNode,
+    height: node.height() * scaleYNode,
+  }
+}
+
+function applyVisibleRectangleToNode(node, rectangle) {
+  node.x(rectangle.x)
+  node.y(rectangle.y)
+  node.width(rectangle.width)
+  node.height(rectangle.height)
+
+  if (typeof node.scaleX === 'function') node.scaleX(1)
+  if (typeof node.scaleY === 'function') node.scaleY(1)
+}
+
 // Creates the interactive Konva rectangle for an existing stored region.
 function createRegionNode(region) {
   const { scaleX, scaleY } = getRegionScale()
@@ -192,6 +233,19 @@ function createRegionNode(region) {
     fill: `${region.color}26`,
     stroke: region.color,
     strokeWidth: selectedRegionId.value === region.id ? 3 : 2,
+    dragBoundFunc: (position) => {
+      const clamped = clampVisibleRectangle({
+        x: position.x,
+        y: position.y,
+        width: node.width(),
+        height: node.height(),
+      })
+
+      return {
+        x: clamped.x,
+        y: clamped.y,
+      }
+    },
   })
 
   node.on('click tap', () => {
@@ -200,17 +254,17 @@ function createRegionNode(region) {
     renderRegions()
   })
 
+  node.on('dragmove transform', () => {
+    applyVisibleRectangleToNode(node, clampVisibleRectangle(getNodeVisibleRectangle(node)))
+    regionLayer.draw()
+  })
+
   node.on('dragend transformend', () => {
     // Konva transforms can leave scale values on the node. The visible size is
     // converted back into document coordinates and the node scale is reset.
-    const scaleXNode = typeof node.scaleX === 'function' ? node.scaleX() : 1
-    const scaleYNode = typeof node.scaleY === 'function' ? node.scaleY() : 1
-    const visibleRectangle = {
-      x: node.x(),
-      y: node.y(),
-      width: node.width() * scaleXNode,
-      height: node.height() * scaleYNode,
-    }
+    const visibleRectangle = clampVisibleRectangle(getNodeVisibleRectangle(node))
+    applyVisibleRectangleToNode(node, visibleRectangle)
+
     const documentRectangle = clampRectangleToBounds(
       toDocumentRectangle(visibleRectangle, scaleX, scaleY, zoomLevel.value),
       getDocumentBounds()
@@ -237,6 +291,7 @@ function renderRegions() {
   transformer = new Konva.Transformer({
     rotateEnabled: false,
     keepRatio: false,
+    boundBoxFunc: (oldBox, newBox) => clampVisibleRectangle(newBox),
   })
 
   let selectedNode = null

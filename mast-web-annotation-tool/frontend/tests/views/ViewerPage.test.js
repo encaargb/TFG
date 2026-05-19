@@ -199,6 +199,62 @@ describe('ViewerPage', () => {
     )
   })
 
+  it('visually stops dragged regions at the document boundaries before dropping', async () => {
+    const wrapper = mount(ViewerPage)
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    await getButton(wrapper, 'Rectangle').trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousedown')
+
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 150 })
+    stage.trigger('mousemove')
+    stage.trigger('mouseup')
+    await wrapper.vm.$nextTick()
+
+    const regionNode = getRectInstances().at(-1)
+
+    regionNode.x(-20)
+    regionNode.y(9999)
+    regionNode.trigger('dragmove')
+
+    expect(regionNode.x).toHaveBeenLastCalledWith(0)
+    expect(regionNode.y).toHaveBeenLastCalledWith(400)
+  })
+
+  it('limits transformed regions to the visible document area', async () => {
+    const wrapper = mount(ViewerPage)
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    await getButton(wrapper, 'Rectangle').trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousedown')
+
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 150 })
+    stage.trigger('mousemove')
+    stage.trigger('mouseup')
+    await wrapper.vm.$nextTick()
+
+    const transformer = getTransformerInstances().at(-1)
+    const clampedBox = transformer.config.boundBoxFunc(
+      { x: 100, y: 50, width: 150, height: 100 },
+      { x: -50, y: 600, width: 1200, height: 800 }
+    )
+
+    expect(clampedBox).toEqual({
+      x: 0,
+      y: 0,
+      width: 1000,
+      height: 500,
+    })
+  })
+
   it('deletes the selected region from the toolbar', async () => {
     const wrapper = mount(ViewerPage)
     await flushImageLoad()
