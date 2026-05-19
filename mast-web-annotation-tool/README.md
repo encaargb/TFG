@@ -2,6 +2,14 @@
 
 Vue/Vite frontend with a small Node.js mock backend for TFG demonstrations.
 
+## Public Demo
+
+The application is deployed at:
+
+```text
+https://tfg-u4as.onrender.com/
+```
+
 ## Run The Full Mock Application
 
 Install frontend dependencies once:
@@ -51,11 +59,11 @@ frontend/dist
 
 ## Deployment Notes
 
-For a public demo, deploy the frontend and backend as two services:
+The current public demo is deployed on Render using the Dockerfile in this repository.
 
-- Frontend: Netlify or Vercel, using `frontend` as the project directory, `npm run build` as the build command, and `dist` as the publish/output directory.
-- Backend mock: Render, Railway, Fly.io, or another Node host, using `backend-mock` as the project directory and `npm start` as the start command.
-- Frontend environment variable: `VITE_API_BASE_URL=https://your-backend-url`.
+```text
+https://tfg-u4as.onrender.com/
+```
 
 The mock backend stores regions in memory. Restarting it resets the annotations.
 

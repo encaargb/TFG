@@ -2,6 +2,14 @@
 
 This project can be run as a single Docker container. The image builds the Vue frontend and serves it from the mock backend, so the application is available from one URL.
 
+## Public Demo
+
+The deployed demo is available at:
+
+```text
+https://tfg-u4as.onrender.com/
+```
+
 ## Requirements
 
 Install and open Docker Desktop:
@@ -82,4 +90,3 @@ http://localhost:3001/documents/doc1/pages/pg1.jpeg
 ## Important Limitation
 
 The backend is a mock service. Region annotations are stored in memory, so they are reset when the container stops.
-
