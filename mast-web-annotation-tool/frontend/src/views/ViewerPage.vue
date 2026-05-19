@@ -2,6 +2,7 @@
 import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import Konva from 'konva'
 import { ProjectDocumentModel } from '../models/ProjectDocumentModel'
+import { fetchProjectDocument, saveProjectRegions } from '../services/documentApi'
 import {
   getDocumentCoordinates,
   getFittedDimensions,
@@ -18,7 +19,8 @@ import {
   toVisibleRectangle,
 } from '../utils/regionGeometry'
 
-const pages = ProjectDocumentModel.pages
+const documentId = ref(ProjectDocumentModel.id)
+const pages = ref(ProjectDocumentModel.pages)
 const regions = ref(ProjectDocumentModel.regions)
 const selectedIndex = ref(0)
 
@@ -31,7 +33,7 @@ const zoomLevel = ref(1)
 const activeTool = ref('select')
 const selectedRegionId = ref(null)
 
-const selectedPage = computed(() => pages[selectedIndex.value])
+const selectedPage = computed(() => pages.value[selectedIndex.value])
 const zoomPercentage = computed(() => getZoomPercentage(zoomLevel.value))
 const currentPageRegions = computed(() =>
   regions.value.filter((region) => region.pageIndex === selectedIndex.value)
@@ -39,6 +41,8 @@ const currentPageRegions = computed(() =>
 
 const mousePos = ref({ x: 0, y: 0 })
 
+// Page changes always return to the default zoom so every page starts from
+// a predictable view state.
 function resetZoom() {
   zoomLevel.value = 1
   updateZoom()
@@ -52,7 +56,7 @@ function goToPreviousPage() {
 }
 
 function goToNextPage() {
-  if (selectedIndex.value < pages.length - 1) {
+  if (selectedIndex.value < pages.value.length - 1) {
     selectedIndex.value++
     resetZoom()
   }
@@ -76,9 +80,25 @@ function deleteSelectedRegion() {
   if (!selectedRegionId.value) return
 
   regions.value = regions.value.filter((region) => region.id !== selectedRegionId.value)
-  ProjectDocumentModel.regions = regions.value
+  persistRegions()
   selectedRegionId.value = null
   renderRegions()
+}
+
+// Saves the whole region list. The mock API intentionally stores a full
+// replacement instead of individual region patches.
+function persistRegions() {
+  void saveProjectRegions(documentId.value, regions.value).catch((error) => {
+    console.error(error)
+  })
+}
+
+// Keeps generated region ids increasing after data is loaded from the backend.
+function updateRegionSequence() {
+  regionSequence = regions.value.reduce((highestId, region) => {
+    const match = String(region.id).match(/^region-(\d+)$/)
+    return match ? Math.max(highestId, Number(match[1])) : highestId
+  }, 0)
 }
 
 function handleKeydown(event) {
@@ -104,6 +124,7 @@ function zoomOut() {
 // ---------------- KONVA ----------------
 
 const canvasContainer = ref(null)
+const canvasWrapper = ref(null)
 
 let stage = null
 let imageLayer = null
@@ -113,12 +134,15 @@ let transformer = null
 let draftRegionNode = null
 let draftRegionStart = null
 let regionSequence = 0
+let imageLoadSequence = 0
 
 let baseImageWidth = 0
 let baseImageHeight = 0
 let originalImageWidth = 0
 let originalImageHeight = 0
 
+// Regions are stored in original document coordinates. This scale converts
+// them to the fitted image size used by Konva.
 function getRegionScale() {
   return {
     scaleX: baseImageWidth / originalImageWidth,
@@ -126,6 +150,7 @@ function getRegionScale() {
   }
 }
 
+// Bounds are based on the original page size, not the scaled canvas size.
 function getDocumentBounds() {
   return {
     width: originalImageWidth,
@@ -133,6 +158,7 @@ function getDocumentBounds() {
   }
 }
 
+// Applies the current zoom to the Konva stage, page image, and region overlay.
 function updateZoom() {
   if (!stage || !pageImageNode) return
 
@@ -154,6 +180,7 @@ function updateZoom() {
   renderRegions()
 }
 
+// Creates the interactive Konva rectangle for an existing stored region.
 function createRegionNode(region) {
   const { scaleX, scaleY } = getRegionScale()
   const visibleRegion = toVisibleRectangle(region, scaleX, scaleY, zoomLevel.value)
@@ -174,6 +201,8 @@ function createRegionNode(region) {
   })
 
   node.on('dragend transformend', () => {
+    // Konva transforms can leave scale values on the node. The visible size is
+    // converted back into document coordinates and the node scale is reset.
     const scaleXNode = typeof node.scaleX === 'function' ? node.scaleX() : 1
     const scaleYNode = typeof node.scaleY === 'function' ? node.scaleY() : 1
     const visibleRectangle = {
@@ -188,6 +217,7 @@ function createRegionNode(region) {
     )
 
     Object.assign(region, documentRectangle)
+    persistRegions()
 
     if (typeof node.scaleX === 'function') node.scaleX(1)
     if (typeof node.scaleY === 'function') node.scaleY(1)
@@ -198,6 +228,8 @@ function createRegionNode(region) {
   return node
 }
 
+// Rebuilds the region layer for the current page and attaches the transformer
+// to the selected region when the select tool is active.
 function renderRegions() {
   if (!regionLayer || !baseImageWidth || !baseImageHeight) return
 
@@ -229,6 +261,7 @@ function renderRegions() {
   regionLayer.draw()
 }
 
+// Starts drawing a rectangle region at the current pointer position.
 function beginRectangleRegion() {
   if (!stage || !regionLayer || !pageImageNode || activeTool.value !== 'rectangle') return
 
@@ -272,6 +305,7 @@ function beginRectangleRegion() {
   regionLayer.draw()
 }
 
+// Updates the temporary rectangle while the user is dragging.
 function updateDraftRectangleRegion() {
   if (!stage || !draftRegionNode || !draftRegionStart) return
 
@@ -304,6 +338,7 @@ function updateDraftRectangleRegion() {
   regionLayer.draw()
 }
 
+// Converts the temporary rectangle into a stored region if it is large enough.
 function commitDraftRectangleRegion() {
   if (!stage || !draftRegionNode || !draftRegionStart) return
 
@@ -341,19 +376,27 @@ function commitDraftRectangleRegion() {
   if (draftRegion && isDrawableRegion(draftRegion)) {
     regionSequence += 1
     regions.value.push(draftRegion)
+    persistRegions()
     selectedRegionId.value = draftRegion.id
   }
 
   renderRegions()
 }
 
+// Loads a page image into Konva. The load sequence prevents stale image loads
+// from overwriting the currently selected page after fast navigation.
 function loadSelectedPageInKonva(src) {
   if (!imageLayer || !stage) return
+
+  const loadId = imageLoadSequence + 1
+  imageLoadSequence = loadId
 
   const img = new window.Image()
   img.src = src
 
   img.onload = () => {
+    if (loadId !== imageLoadSequence || !stage || !imageLayer) return
+
     if (pageImageNode) {
       pageImageNode.destroy()
       pageImageNode = null
@@ -387,6 +430,12 @@ function loadSelectedPageInKonva(src) {
 
     imageLayer.add(pageImageNode)
     updateZoom()
+
+    // Reset scroll after changing pages so the next page starts at the top-left.
+    if (canvasWrapper.value) {
+      canvasWrapper.value.scrollTop = 0
+      canvasWrapper.value.scrollLeft = 0
+    }
   }
 }
 
@@ -425,7 +474,27 @@ onMounted(() => {
   stage.on('mouseup', commitDraftRectangleRegion)
   window.addEventListener('keydown', handleKeydown)
 
-  loadSelectedPageInKonva(selectedPage.value)
+  if (selectedPage.value) {
+    loadSelectedPageInKonva(selectedPage.value)
+  }
+
+  fetchProjectDocument()
+    .then((document) => {
+      if (document === ProjectDocumentModel) return
+
+      documentId.value = document.id
+      pages.value = document.pages
+      regions.value = document.regions
+      ProjectDocumentModel.regions = document.regions
+      updateRegionSequence()
+
+      if (selectedPage.value) {
+        loadSelectedPageInKonva(selectedPage.value)
+      }
+    })
+    .catch((error) => {
+      console.error(error)
+    })
 })
 
 watch(selectedPage, (newPage) => {
@@ -568,6 +637,7 @@ onBeforeUnmount(() => {
       </div>
 
       <div
+        ref="canvasWrapper"
         class="canvas-wrapper flex-grow-1 overflow-auto p-4"
         :class="`canvas-wrapper--${activeTool}`"
       >

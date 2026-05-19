@@ -1,15 +1,15 @@
 # Frontend
 
-This frontend is a Vue 3 and Vite application for visual document viewing. At its current stage, the project is a frontend-only viewer that renders document pages, allows page navigation, supports zooming, and displays mouse coordinates over the document.
+This frontend is a Vue 3 and Vite application for visual document annotation. It can run as a static frontend only, or connect to the mock backend in `../backend-mock` to load document metadata and persist regions during the current backend process.
 
 ## Requirements
 
-To run this project, you only need:
+To run the frontend only, you need:
 
 - Node.js
 - npm
 
-No backend service, database, or additional runtime is required.
+To run it with the mock backend, start `../backend-mock` and set `VITE_API_BASE_URL`.
 
 ## Installation
 
@@ -24,6 +24,13 @@ npm install
 Start the development server:
 
 ```bash
+npm run dev
+```
+
+Run the frontend against the mock backend:
+
+```bash
+cp .env.example .env
 npm run dev
 ```
 
@@ -67,5 +74,6 @@ The application currently includes:
 - page navigation through buttons and thumbnails
 - zoom controls with bounded zoom levels
 - document-space mouse coordinate display
+- rectangle region creation, editing, deletion, and mock persistence
 - unit tests for viewer math utilities
 - component tests for the main viewer behavior
