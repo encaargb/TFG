@@ -3,6 +3,7 @@ import {
   clampPolygonToBounds,
   clampRectangleToBounds,
   createPolygonRegion,
+  createPolylineRegion,
   createRectangleRegion,
   flattenPoints,
   isDrawableRegion,
@@ -69,6 +70,34 @@ describe('regionGeometry', () => {
   it('detects whether a polygon has enough vertices to keep', () => {
     expect(isDrawableRegion({ type: 'polygon', points: [{}, {}, {}] })).toBe(true)
     expect(isDrawableRegion({ type: 'polygon', points: [{}, {}] })).toBe(false)
+  })
+
+  it('creates a polyline region from document points', () => {
+    expect(
+      createPolylineRegion({
+        id: 'region-3',
+        pageIndex: 2,
+        points: [
+          { x: 10.2, y: 20.8 },
+          { x: 100.4, y: 30.3 },
+        ],
+      })
+    ).toEqual({
+      id: 'region-3',
+      pageIndex: 2,
+      type: 'polyline',
+      points: [
+        { x: 10, y: 21 },
+        { x: 100, y: 30 },
+      ],
+      color: '#0d6efd',
+      annotations: [],
+    })
+  })
+
+  it('detects whether a polyline has enough vertices to keep', () => {
+    expect(isDrawableRegion({ type: 'polyline', points: [{}, {}] })).toBe(true)
+    expect(isDrawableRegion({ type: 'polyline', points: [{}] })).toBe(false)
   })
 
   it('clamps a rectangle so it stays inside document bounds', () => {

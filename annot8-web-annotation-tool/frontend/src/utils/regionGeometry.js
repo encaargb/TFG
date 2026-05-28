@@ -42,9 +42,32 @@ export function createPolygonRegion({
   }
 }
 
+export function createPolylineRegion({
+  id,
+  pageIndex,
+  points,
+  color = '#0d6efd',
+}) {
+  return {
+    id,
+    pageIndex,
+    type: 'polyline',
+    points: points.map((point) => ({
+      x: Math.round(point.x),
+      y: Math.round(point.y),
+    })),
+    color,
+    annotations: [],
+  }
+}
+
 export function isDrawableRegion(region, minimumSize = 4) {
   if (region.type === 'polygon') {
     return Array.isArray(region.points) && region.points.length >= 3
+  }
+
+  if (region.type === 'polyline') {
+    return Array.isArray(region.points) && region.points.length >= 2
   }
 
   return region.width >= minimumSize && region.height >= minimumSize

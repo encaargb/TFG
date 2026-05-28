@@ -82,13 +82,14 @@ describe('ViewerPage', () => {
     expect(layer.draw).toHaveBeenCalled()
   })
 
-  it('renders the select, rectangle, and polygon region tools', async () => {
+  it('renders the select, rectangle, polygon, and polyline region tools', async () => {
     const wrapper = mount(ViewerPage)
     await flushImageLoad()
 
     expect(getButton(wrapper, 'Select').classes()).toContain('btn-primary')
     expect(getButton(wrapper, 'Rectangle').classes()).toContain('btn-outline-secondary')
     expect(getButton(wrapper, 'Polygon').classes()).toContain('btn-outline-secondary')
+    expect(getButton(wrapper, 'Polyline').classes()).toContain('btn-outline-secondary')
     expect(getButton(wrapper, 'Delete').element.disabled).toBe(true)
   })
 
@@ -142,6 +143,10 @@ describe('ViewerPage', () => {
     await getButton(wrapper, 'Polygon').trigger('click')
 
     expect(canvasWrapper.classes()).toContain('canvas-wrapper--polygon')
+
+    await getButton(wrapper, 'Polyline').trigger('click')
+
+    expect(canvasWrapper.classes()).toContain('canvas-wrapper--polyline')
   })
 
   it('creates a rectangular region by dragging on the document', async () => {
@@ -340,6 +345,113 @@ describe('ViewerPage', () => {
     expect(draftPolygonNode.points).toHaveBeenLastCalledWith([100, 50, 250, 50, 200, 150])
 
     wrapper.unmount()
+  })
+
+  it('creates a polyline region from clicked vertices and Enter', async () => {
+    const wrapper = mount(ViewerPage)
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    await getButton(wrapper, 'Polyline').trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 50 })
+    stage.trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 200, y: 150 })
+    stage.trigger('click')
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+    await wrapper.vm.$nextTick()
+
+    const lines = getLineInstances()
+
+    expect(ProjectDocumentModel.regions).toHaveLength(1)
+    expect(ProjectDocumentModel.regions[0]).toEqual(
+      expect.objectContaining({
+        id: 'region-1',
+        pageIndex: 0,
+        type: 'polyline',
+        points: [
+          { x: 200, y: 100 },
+          { x: 500, y: 100 },
+          { x: 400, y: 300 },
+        ],
+      })
+    )
+    expect(getButton(wrapper, 'Polyline').classes()).toContain('btn-primary')
+    expect(lines.at(-1).config).toEqual(
+      expect.objectContaining({
+        points: [100, 50, 250, 50, 200, 150],
+        closed: false,
+        fill: 'transparent',
+        id: 'region-1',
+      })
+    )
+  })
+
+  it('does not create a polyline region with fewer than two vertices', async () => {
+    const wrapper = mount(ViewerPage)
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    await getButton(wrapper, 'Polyline').trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('click')
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+    await wrapper.vm.$nextTick()
+
+    expect(ProjectDocumentModel.regions).toHaveLength(0)
+    expect(wrapper.text()).toContain('Regions: 0')
+  })
+
+  it('edits polyline vertices with draggable handles in select mode', async () => {
+    const wrapper = mount(ViewerPage)
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    await getButton(wrapper, 'Polyline').trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('click')
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 50 })
+    stage.trigger('click')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+    await wrapper.vm.$nextTick()
+
+    await getButton(wrapper, 'Select').trigger('click')
+
+    const polylineNode = [...getLineInstances()]
+      .reverse()
+      .find((line) => line.config.id === 'region-1')
+    const firstVertexHandle = getCircleInstances()[0]
+
+    expect(getCircleInstances()).toHaveLength(2)
+
+    firstVertexHandle.x(75)
+    firstVertexHandle.y(90)
+    firstVertexHandle.trigger('dragmove')
+
+    expect(polylineNode.points).toHaveBeenLastCalledWith([75, 90, 250, 50])
+
+    firstVertexHandle.trigger('dragend')
+    await wrapper.vm.$nextTick()
+
+    expect(ProjectDocumentModel.regions[0]).toEqual(
+      expect.objectContaining({
+        points: [
+          { x: 150, y: 180 },
+          { x: 500, y: 100 },
+        ],
+      })
+    )
   })
 
   it('keeps moved polygon regions inside the document boundaries', async () => {
