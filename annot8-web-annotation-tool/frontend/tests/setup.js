@@ -5,6 +5,7 @@ const layerInstances = []
 const imageInstances = []
 const rectInstances = []
 const lineInstances = []
+const circleInstances = []
 const transformerInstances = []
 
 function createBaseNodeMock(initialConfig = {}) {
@@ -113,6 +114,13 @@ function createLineNodeMock(config) {
   }
 }
 
+function createCircleNodeMock(config) {
+  return {
+    ...createBaseNodeMock(config),
+    config,
+  }
+}
+
 function createTransformerMock(config) {
   return {
     ...createBaseNodeMock(config),
@@ -152,6 +160,12 @@ vi.mock('konva', () => {
     return line
   })
 
+  const Circle = vi.fn(function Circle(config) {
+    const circle = createCircleNodeMock(config)
+    circleInstances.push(circle)
+    return circle
+  })
+
   const Transformer = vi.fn(function Transformer(config) {
     const transformer = createTransformerMock(config)
     transformerInstances.push(transformer)
@@ -165,6 +179,7 @@ vi.mock('konva', () => {
       Image,
       Rect,
       Line,
+      Circle,
       Transformer,
     },
   }
@@ -196,6 +211,7 @@ export function resetKonvaMocks() {
   imageInstances.length = 0
   rectInstances.length = 0
   lineInstances.length = 0
+  circleInstances.length = 0
   transformerInstances.length = 0
 }
 
@@ -221,6 +237,10 @@ export function getRectInstances() {
 
 export function getLineInstances() {
   return lineInstances
+}
+
+export function getCircleInstances() {
+  return circleInstances
 }
 
 export function getTransformerInstances() {

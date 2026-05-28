@@ -7,6 +7,7 @@ import {
   getImageInstances,
   getLayerInstances,
   getLatestStage,
+  getCircleInstances,
   getLineInstances,
   getRectInstances,
   getTransformerInstances,
@@ -28,6 +29,7 @@ describe('ViewerPage', () => {
     Konva.Image.mockClear()
     Konva.Rect.mockClear()
     Konva.Line.mockClear()
+    Konva.Circle.mockClear()
     Konva.Transformer.mockClear()
   })
 
@@ -306,6 +308,60 @@ describe('ViewerPage', () => {
           { x: 0, y: 800 },
           { x: 300, y: 800 },
           { x: 200, y: 1000 },
+        ],
+      })
+    )
+  })
+
+  it('edits polygon vertices with draggable handles in select mode', async () => {
+    const wrapper = mount(ViewerPage)
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    await getButton(wrapper, 'Polygon').trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('click')
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 50 })
+    stage.trigger('click')
+    stage.getPointerPosition.mockReturnValue({ x: 200, y: 150 })
+    stage.trigger('click')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+    await wrapper.vm.$nextTick()
+
+    await getButton(wrapper, 'Select').trigger('click')
+
+    const polygonNode = getLineInstances().at(-1)
+    const firstVertexHandle = getCircleInstances()[0]
+    const transformer = getTransformerInstances().at(-1)
+
+    expect(getCircleInstances()).toHaveLength(3)
+    expect(firstVertexHandle.config).toEqual(
+      expect.objectContaining({
+        x: 100,
+        y: 50,
+        radius: 5,
+        draggable: true,
+      })
+    )
+    expect(transformer.nodes).toHaveBeenLastCalledWith([])
+
+    firstVertexHandle.x(75)
+    firstVertexHandle.y(90)
+    firstVertexHandle.trigger('dragmove')
+
+    expect(polygonNode.points).toHaveBeenLastCalledWith([75, 90, 250, 50, 200, 150])
+
+    firstVertexHandle.trigger('dragend')
+    await wrapper.vm.$nextTick()
+
+    expect(ProjectDocumentModel.regions[0]).toEqual(
+      expect.objectContaining({
+        points: [
+          { x: 150, y: 180 },
+          { x: 500, y: 100 },
+          { x: 400, y: 300 },
         ],
       })
     )

@@ -80,6 +80,12 @@ function setActiveTool(tool) {
   }
 
   activeTool.value = tool
+
+  if (tool === 'select') {
+    renderRegions()
+    return
+  }
+
   if (tool !== 'select') {
     selectedRegionId.value = null
     renderRegions()
@@ -369,6 +375,68 @@ function createPolygonRegionNode(region) {
   return node
 }
 
+function createPolygonVertexHandles(region, polygonNode) {
+  const { scaleX, scaleY } = getRegionScale()
+  const visiblePoints = toVisiblePoints(region.points, scaleX, scaleY, zoomLevel.value)
+  const editedVisiblePoints = visiblePoints.map((point) => ({ ...point }))
+
+  return visiblePoints.map((point, index) => {
+    const handle = new Konva.Circle({
+      x: point.x,
+      y: point.y,
+      radius: 5,
+      draggable: true,
+      fill: '#ffffff',
+      stroke: region.color,
+      strokeWidth: 2,
+      hitStrokeWidth: 12,
+      dragBoundFunc: (position) => {
+        const bounds = getVisibleBounds()
+
+        return {
+          x: Math.max(0, Math.min(bounds.width, position.x)),
+          y: Math.max(0, Math.min(bounds.height, position.y)),
+        }
+      },
+    })
+
+    handle.on('click tap', () => {
+      if (activeTool.value !== 'select') return
+      selectedRegionId.value = region.id
+      renderRegions()
+    })
+
+    handle.on('dragmove', () => {
+      const bounds = getVisibleBounds()
+      const nextPoint = {
+        x: Math.max(0, Math.min(bounds.width, handle.x())),
+        y: Math.max(0, Math.min(bounds.height, handle.y())),
+      }
+
+      handle.x(nextPoint.x)
+      handle.y(nextPoint.y)
+      editedVisiblePoints[index] = nextPoint
+      polygonNode.points(flattenPoints(editedVisiblePoints))
+      regionLayer.draw()
+    })
+
+    handle.on('dragend', () => {
+      const documentPoints = toDocumentPoints(
+        editedVisiblePoints,
+        scaleX,
+        scaleY,
+        zoomLevel.value
+      )
+
+      Object.assign(region, clampPolygonToBounds({ points: documentPoints }, getDocumentBounds()))
+      persistRegions()
+      renderRegions()
+    })
+
+    return handle
+  })
+}
+
 // Creates the interactive Konva node for an existing stored region.
 function createRegionNode(region) {
   if (region.type === 'polygon') {
@@ -399,11 +467,23 @@ function renderRegions() {
     if (region.id === selectedRegionId.value) {
       selectedNode = node
     }
+
+    if (
+      region.type === 'polygon' &&
+      region.id === selectedRegionId.value &&
+      activeTool.value === 'select'
+    ) {
+      createPolygonVertexHandles(region, node).forEach((handle) => regionLayer.add(handle))
+    }
   })
 
   regionLayer.add(transformer)
 
-  if (selectedNode && activeTool.value === 'select') {
+  if (
+    selectedNode &&
+    activeTool.value === 'select' &&
+    currentPageRegions.value.find((region) => region.id === selectedRegionId.value)?.type !== 'polygon'
+  ) {
     transformer.nodes([selectedNode])
   } else {
     transformer.nodes([])
