@@ -20,6 +20,24 @@ function getButton(wrapper, label) {
   return wrapper.findAll('button').find((button) => button.text() === label)
 }
 
+async function createSelectedRectangle(wrapper) {
+  const stage = getLatestStage()
+
+  await getButton(wrapper, 'Rectangle').trigger('click')
+
+  stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+  stage.trigger('mousedown')
+
+  stage.getPointerPosition.mockReturnValue({ x: 250, y: 150 })
+  stage.trigger('mousemove')
+  stage.trigger('mouseup')
+  await wrapper.vm.$nextTick()
+
+  await getButton(wrapper, 'Select').trigger('click')
+
+  return getRectInstances().at(-1)
+}
+
 describe('ViewerPage', () => {
   beforeEach(() => {
     ProjectDocumentModel.regions.length = 0
@@ -782,6 +800,53 @@ describe('ViewerPage', () => {
 
     expect(ProjectDocumentModel.regions).toHaveLength(0)
     expect(wrapper.text()).toContain('Regions: 0')
+  })
+
+  it('clears the current selection when clicking outside any existing region', async () => {
+    const wrapper = mount(ViewerPage)
+    await flushImageLoad()
+
+    await createSelectedRectangle(wrapper)
+
+    const stage = getLatestStage()
+    const transformer = getTransformerInstances().at(-1)
+
+    expect(getButton(wrapper, 'Delete').element.disabled).toBe(false)
+    expect(transformer.nodes).toHaveBeenLastCalledWith([getRectInstances().at(-1)])
+
+    stage.trigger('click', { target: stage })
+    await wrapper.vm.$nextTick()
+
+    expect(getButton(wrapper, 'Delete').element.disabled).toBe(true)
+    expect(getTransformerInstances().at(-1).nodes).toHaveBeenLastCalledWith([])
+  })
+
+  it('keeps the current selection when clicking an existing region', async () => {
+    const wrapper = mount(ViewerPage)
+    await flushImageLoad()
+
+    const selectedRectangle = await createSelectedRectangle(wrapper)
+    const stage = getLatestStage()
+
+    stage.trigger('click', { target: selectedRectangle })
+    await wrapper.vm.$nextTick()
+
+    expect(getButton(wrapper, 'Delete').element.disabled).toBe(false)
+  })
+
+  it('clears the current selection with the Escape key', async () => {
+    const wrapper = mount(ViewerPage)
+    await flushImageLoad()
+
+    await createSelectedRectangle(wrapper)
+
+    expect(getButton(wrapper, 'Delete').element.disabled).toBe(false)
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await wrapper.vm.$nextTick()
+
+    expect(getButton(wrapper, 'Delete').element.disabled).toBe(true)
+    expect(getTransformerInstances().at(-1).nodes).toHaveBeenLastCalledWith([])
   })
 
   it('disables Previous on the first page and enables Next', async () => {

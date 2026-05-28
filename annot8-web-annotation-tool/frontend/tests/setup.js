@@ -79,7 +79,7 @@ function createBaseNodeMock(initialConfig = {}) {
       eventNames.split(' ').forEach((eventName) => handlers.set(eventName, handler))
       return node
     }),
-    trigger: (eventName) => handlers.get(eventName)?.(),
+    trigger: (eventName, event = {}) => handlers.get(eventName)?.(event),
   }
 
   return node
@@ -96,7 +96,7 @@ function createStageMock(config) {
       return stage
     }),
     getPointerPosition: vi.fn(() => ({ x: 0, y: 0 })),
-    trigger: (eventName) => handlers.get(eventName)?.(),
+    trigger: (eventName, event = {}) => handlers.get(eventName)?.(event),
   }
 
   return stage

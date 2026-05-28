@@ -104,6 +104,13 @@ function deleteSelectedRegion() {
   renderRegions()
 }
 
+function clearSelectedRegion() {
+  if (!selectedRegionId.value) return
+
+  selectedRegionId.value = null
+  renderRegions()
+}
+
 // Saves the whole region list. The mock API intentionally stores a full
 // replacement instead of individual region patches.
 function persistRegions() {
@@ -128,6 +135,11 @@ function handleKeydown(event) {
 
   if (['polygon', 'polyline'].includes(activeTool.value) && event.key === 'Escape') {
     cancelDraftPointRegion()
+    return
+  }
+
+  if (event.key === 'Escape') {
+    clearSelectedRegion()
     return
   }
 
@@ -754,6 +766,18 @@ function beginPointRegion() {
   updateDraftPointRegion()
 }
 
+function handleStageClick(event) {
+  beginPointRegion()
+
+  if (activeTool.value !== 'select') return
+
+  const clickTarget = event?.target
+
+  if (clickTarget && clickTarget !== stage && clickTarget !== pageImageNode) return
+
+  clearSelectedRegion()
+}
+
 function cancelDraftPointRegion() {
   if (draftRegionNode) {
     draftRegionNode.destroy()
@@ -885,7 +909,7 @@ onMounted(() => {
     }
   })
   stage.on('mousedown', beginRectangleRegion)
-  stage.on('click', beginPointRegion)
+  stage.on('click', handleStageClick)
   stage.on('mouseup', commitDraftRectangleRegion)
   stage.on('dblclick', commitDraftPointRegion)
   window.addEventListener('keydown', handleKeydown)
