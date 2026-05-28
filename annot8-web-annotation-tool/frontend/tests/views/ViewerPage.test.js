@@ -190,6 +190,7 @@ describe('ViewerPage', () => {
         width: 150,
         height: 100,
         id: 'region-1',
+        strokeScaleEnabled: false,
       })
     )
     expect(transformer.nodes).toHaveBeenLastCalledWith([])
@@ -258,6 +259,7 @@ describe('ViewerPage', () => {
         points: [100, 50, 250, 50, 200, 150],
         closed: true,
         id: 'region-1',
+        strokeScaleEnabled: false,
       })
     )
   })
@@ -389,6 +391,7 @@ describe('ViewerPage', () => {
         closed: false,
         fill: 'transparent',
         id: 'region-1',
+        strokeScaleEnabled: false,
       })
     )
   })
@@ -521,6 +524,7 @@ describe('ViewerPage', () => {
         y: 50,
         radius: 5,
         draggable: true,
+        strokeScaleEnabled: false,
       })
     )
     expect(transformer.nodes).toHaveBeenLastCalledWith([])
@@ -626,12 +630,109 @@ describe('ViewerPage', () => {
       { x: -50, y: 600, width: 1200, height: 800 }
     )
 
+    expect(transformer.config.flipEnabled).toBe(false)
     expect(clampedBox).toEqual({
       x: 0,
       y: 0,
       width: 1000,
       height: 500,
     })
+  })
+
+  it('keeps rectangle resize handles from flipping regions when dragged past the opposite edge', async () => {
+    const wrapper = mount(ViewerPage)
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    await getButton(wrapper, 'Rectangle').trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousedown')
+
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 150 })
+    stage.trigger('mousemove')
+    stage.trigger('mouseup')
+    await wrapper.vm.$nextTick()
+
+    const transformer = getTransformerInstances().at(-1)
+    const clampedBox = transformer.config.boundBoxFunc(
+      { x: 100, y: 50, width: 150, height: 100 },
+      { x: 250, y: 150, width: -120, height: -80 }
+    )
+
+    expect(clampedBox).toEqual({ x: 100, y: 50, width: 150, height: 100 })
+  })
+
+  it('keeps rectangle dimensions synchronized while a transformer resize is in progress', async () => {
+    const wrapper = mount(ViewerPage)
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    await getButton(wrapper, 'Rectangle').trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousedown')
+
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 150 })
+    stage.trigger('mousemove')
+    stage.trigger('mouseup')
+    await wrapper.vm.$nextTick()
+
+    const regionNode = getRectInstances().at(-1)
+
+    regionNode.scaleX(2)
+    regionNode.scaleY(1.5)
+    regionNode.trigger('transform')
+
+    expect(regionNode.width).toHaveBeenLastCalledWith(300)
+    expect(regionNode.height).toHaveBeenLastCalledWith(150)
+    expect(regionNode.scaleX).toHaveBeenLastCalledWith(1)
+    expect(regionNode.scaleY).toHaveBeenLastCalledWith(1)
+    expect(ProjectDocumentModel.regions[0]).toEqual(
+      expect.objectContaining({
+        width: 300,
+        height: 200,
+      })
+    )
+  })
+
+  it('updates a rectangle region when resized with transformer handles', async () => {
+    const wrapper = mount(ViewerPage)
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    await getButton(wrapper, 'Rectangle').trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousedown')
+
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 150 })
+    stage.trigger('mousemove')
+    stage.trigger('mouseup')
+    await wrapper.vm.$nextTick()
+
+    const regionNode = getRectInstances().at(-1)
+
+    regionNode.scaleX(2)
+    regionNode.scaleY(1.5)
+    regionNode.trigger('transformend')
+    await wrapper.vm.$nextTick()
+
+    expect(ProjectDocumentModel.regions[0]).toEqual(
+      expect.objectContaining({
+        x: 200,
+        y: 100,
+        width: 600,
+        height: 300,
+      })
+    )
+    expect(regionNode.width).toHaveBeenLastCalledWith(300)
+    expect(regionNode.height).toHaveBeenLastCalledWith(150)
+    expect(regionNode.scaleX).toHaveBeenLastCalledWith(1)
+    expect(regionNode.scaleY).toHaveBeenLastCalledWith(1)
   })
 
   it('deletes the selected region from the toolbar', async () => {

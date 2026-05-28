@@ -24,6 +24,12 @@ function createBaseNodeMock(initialConfig = {}) {
 
   const node = {
     destroy: vi.fn(),
+    getClientRect: vi.fn(() => ({
+      x: state.x,
+      y: state.y,
+      width: state.width * state.scaleX,
+      height: state.height * state.scaleY,
+    })),
     width: vi.fn((value) => {
       if (value === undefined) return state.width
       state.width = value

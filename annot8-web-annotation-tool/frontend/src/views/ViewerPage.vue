@@ -36,6 +36,7 @@ const MAX_ZOOM = 8
 const ZOOM_STEP = 0.25
 const REGION_COLOR = '#0d6efd'
 const POLYGON_CLOSE_DISTANCE = 8
+const MIN_VISIBLE_REGION_SIZE = 4
 
 const zoomLevel = ref(1)
 const activeTool = ref('select')
@@ -213,18 +214,45 @@ function getVisibleBounds() {
   return getVisibleDimensions(baseImageWidth, baseImageHeight, zoomLevel.value)
 }
 
-function clampVisibleRectangle(rectangle) {
+function normalizeVisibleRectangle(rectangle) {
+  const x = rectangle.width < 0 ? rectangle.x + rectangle.width : rectangle.x
+  const y = rectangle.height < 0 ? rectangle.y + rectangle.height : rectangle.y
+
+  return {
+    x,
+    y,
+    width: Math.abs(rectangle.width),
+    height: Math.abs(rectangle.height),
+  }
+}
+
+function clampVisibleRectangle(rectangle, minimumSize = 0) {
   const bounds = getVisibleBounds()
-  const width = Math.min(Math.max(0, rectangle.width), bounds.width)
-  const height = Math.min(Math.max(0, rectangle.height), bounds.height)
+  const normalizedRectangle = normalizeVisibleRectangle(rectangle)
+  const width = Math.min(Math.max(minimumSize, normalizedRectangle.width), bounds.width)
+  const height = Math.min(Math.max(minimumSize, normalizedRectangle.height), bounds.height)
   const maxX = Math.max(0, bounds.width - width)
   const maxY = Math.max(0, bounds.height - height)
 
   return {
-    x: Math.max(0, Math.min(maxX, rectangle.x)),
-    y: Math.max(0, Math.min(maxY, rectangle.y)),
+    x: Math.max(0, Math.min(maxX, normalizedRectangle.x)),
+    y: Math.max(0, Math.min(maxY, normalizedRectangle.y)),
     width,
     height,
+  }
+}
+
+function clampTransformerBox(oldBox, newBox) {
+  if (
+    newBox.width < MIN_VISIBLE_REGION_SIZE ||
+    newBox.height < MIN_VISIBLE_REGION_SIZE
+  ) {
+    return oldBox
+  }
+
+  return {
+    ...newBox,
+    ...clampVisibleRectangle(newBox, MIN_VISIBLE_REGION_SIZE),
   }
 }
 
@@ -248,6 +276,16 @@ function applyVisibleRectangleToNode(node, rectangle) {
 
   if (typeof node.scaleX === 'function') node.scaleX(1)
   if (typeof node.scaleY === 'function') node.scaleY(1)
+}
+
+function syncTransformedRectangleNode(node) {
+  const visibleRectangle = clampVisibleRectangle(
+    getNodeVisibleRectangle(node),
+    MIN_VISIBLE_REGION_SIZE
+  )
+  applyVisibleRectangleToNode(node, visibleRectangle)
+
+  return visibleRectangle
 }
 
 function getVisiblePolygonBounds(points) {
@@ -283,6 +321,7 @@ function createRectangleRegionNode(region) {
     fill: `${region.color}26`,
     stroke: region.color,
     strokeWidth: selectedRegionId.value === region.id ? 3 : 2,
+    strokeScaleEnabled: false,
     dragBoundFunc: (position) => {
       const clamped = clampVisibleRectangle({
         x: position.x,
@@ -304,16 +343,20 @@ function createRectangleRegionNode(region) {
     renderRegions()
   })
 
-  node.on('dragmove transform', () => {
+  node.on('dragmove', () => {
     applyVisibleRectangleToNode(node, clampVisibleRectangle(getNodeVisibleRectangle(node)))
+    regionLayer.draw()
+  })
+
+  node.on('transform', () => {
+    syncTransformedRectangleNode(node)
     regionLayer.draw()
   })
 
   node.on('dragend transformend', () => {
     // Konva transforms can leave scale values on the node. The visible size is
     // converted back into document coordinates and the node scale is reset.
-    const visibleRectangle = clampVisibleRectangle(getNodeVisibleRectangle(node))
-    applyVisibleRectangleToNode(node, visibleRectangle)
+    const visibleRectangle = syncTransformedRectangleNode(node)
 
     const documentRectangle = clampRectangleToBounds(
       toDocumentRectangle(visibleRectangle, scaleX, scaleY, zoomLevel.value),
@@ -346,6 +389,7 @@ function createPointRegionNode(region) {
     fill: isPolygon ? `${region.color}26` : 'transparent',
     stroke: region.color,
     strokeWidth: selectedRegionId.value === region.id ? 3 : 2,
+    strokeScaleEnabled: false,
     dragBoundFunc: (position) => clampVisiblePolygonDelta(visiblePoints, position),
   })
 
@@ -392,6 +436,7 @@ function createPointRegionVertexHandles(region, pointRegionNode) {
       fill: '#ffffff',
       stroke: region.color,
       strokeWidth: 2,
+      strokeScaleEnabled: false,
       hitStrokeWidth: 12,
       dragBoundFunc: (position) => {
         const bounds = getVisibleBounds()
@@ -457,8 +502,9 @@ function renderRegions() {
   regionLayer.destroyChildren()
   transformer = new Konva.Transformer({
     rotateEnabled: false,
+    flipEnabled: false,
     keepRatio: false,
-    boundBoxFunc: (oldBox, newBox) => clampVisibleRectangle(newBox),
+    boundBoxFunc: (oldBox, newBox) => clampTransformerBox(oldBox, newBox),
   })
 
   let selectedNode = null
@@ -534,6 +580,7 @@ function beginRectangleRegion() {
     fill: `${REGION_COLOR}26`,
     stroke: REGION_COLOR,
     strokeWidth: 2,
+    strokeScaleEnabled: false,
     dash: [6, 4],
   })
 
@@ -698,6 +745,7 @@ function beginPointRegion() {
       fill: activeTool.value === 'polygon' ? `${REGION_COLOR}12` : 'transparent',
       stroke: REGION_COLOR,
       strokeWidth: 2,
+      strokeScaleEnabled: false,
       dash: [6, 4],
     })
     regionLayer.add(draftRegionNode)
