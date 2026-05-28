@@ -34,6 +34,7 @@ const MIN_ZOOM = 0.25
 const MAX_ZOOM = 8
 const ZOOM_STEP = 0.25
 const REGION_COLOR = '#0d6efd'
+const POLYGON_CLOSE_DISTANCE = 8
 
 const zoomLevel = ref(1)
 const activeTool = ref('select')
@@ -573,6 +574,7 @@ function updateDraftPolygonRegion() {
   if (!stage || !draftRegionNode || activeTool.value !== 'polygon') return
 
   const pointerPosition = stage.getPointerPosition()
+  const shouldClosePolygon = isPointerNearFirstPolygonPoint(pointerPosition)
   const documentHoverPoint = getDocumentCoordinates(
     pointerPosition,
     zoomLevel.value,
@@ -583,14 +585,36 @@ function updateDraftPolygonRegion() {
   )
 
   const visiblePoints = toVisiblePoints(
-    documentHoverPoint ? [...draftPolygonPoints, documentHoverPoint] : draftPolygonPoints,
+    documentHoverPoint && !shouldClosePolygon
+      ? [...draftPolygonPoints, documentHoverPoint]
+      : draftPolygonPoints,
     getRegionScale().scaleX,
     getRegionScale().scaleY,
     zoomLevel.value
   )
 
   draftRegionNode.points(flattenPoints(visiblePoints))
+  draftRegionNode.closed(shouldClosePolygon)
+  draftRegionNode.fill(shouldClosePolygon ? `${REGION_COLOR}26` : `${REGION_COLOR}12`)
   regionLayer.draw()
+}
+
+function isPointerNearFirstPolygonPoint(pointerPosition) {
+  if (!pointerPosition || draftPolygonPoints.length < 3) return false
+
+  const { scaleX, scaleY } = getRegionScale()
+  const [firstVisiblePoint] = toVisiblePoints(
+    [draftPolygonPoints[0]],
+    scaleX,
+    scaleY,
+    zoomLevel.value
+  )
+  const distance = Math.hypot(
+    pointerPosition.x - firstVisiblePoint.x,
+    pointerPosition.y - firstVisiblePoint.y
+  )
+
+  return distance <= POLYGON_CLOSE_DISTANCE
 }
 
 // Converts the temporary rectangle into a stored region if it is large enough.
@@ -652,6 +676,11 @@ function beginPolygonRegion() {
   )
 
   if (!documentPoint) return
+
+  if (isPointerNearFirstPolygonPoint(pointerPosition)) {
+    commitDraftPolygonRegion()
+    return
+  }
 
   selectedRegionId.value = null
   draftPolygonPoints.push(clampPointToBounds(documentPoint, getDocumentBounds()))

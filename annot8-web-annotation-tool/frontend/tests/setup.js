@@ -16,6 +16,8 @@ function createBaseNodeMock(initialConfig = {}) {
     width: initialConfig.width ?? 0,
     height: initialConfig.height ?? 0,
     points: initialConfig.points ?? [],
+    closed: initialConfig.closed ?? false,
+    fill: initialConfig.fill,
     scaleX: initialConfig.scaleX ?? 1,
     scaleY: initialConfig.scaleY ?? 1,
   }
@@ -35,6 +37,16 @@ function createBaseNodeMock(initialConfig = {}) {
     points: vi.fn((value) => {
       if (value === undefined) return state.points
       state.points = value
+      return node
+    }),
+    closed: vi.fn((value) => {
+      if (value === undefined) return state.closed
+      state.closed = value
+      return node
+    }),
+    fill: vi.fn((value) => {
+      if (value === undefined) return state.fill
+      state.fill = value
       return node
     }),
     x: vi.fn((value) => {

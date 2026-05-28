@@ -278,6 +278,70 @@ describe('ViewerPage', () => {
     expect(wrapper.text()).toContain('Regions: 0')
   })
 
+  it('closes a polygon when clicking near its first vertex', async () => {
+    const wrapper = mount(ViewerPage)
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    await getButton(wrapper, 'Polygon').trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 50 })
+    stage.trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 200, y: 150 })
+    stage.trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 106, y: 54 })
+    stage.trigger('click')
+    await wrapper.vm.$nextTick()
+
+    expect(ProjectDocumentModel.regions).toHaveLength(1)
+    expect(ProjectDocumentModel.regions[0]).toEqual(
+      expect.objectContaining({
+        type: 'polygon',
+        points: [
+          { x: 200, y: 100 },
+          { x: 500, y: 100 },
+          { x: 400, y: 300 },
+        ],
+      })
+    )
+    expect(wrapper.text()).toContain('Regions: 1')
+  })
+
+  it('visually previews polygon closure near the first vertex', async () => {
+    const wrapper = mount(ViewerPage)
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    await getButton(wrapper, 'Polygon').trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 50 })
+    stage.trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 200, y: 150 })
+    stage.trigger('click')
+
+    const draftPolygonNode = getLineInstances().at(-1)
+
+    stage.getPointerPosition.mockReturnValue({ x: 106, y: 54 })
+    stage.trigger('mousemove')
+
+    expect(draftPolygonNode.closed).toHaveBeenLastCalledWith(true)
+    expect(draftPolygonNode.fill).toHaveBeenLastCalledWith('#0d6efd26')
+    expect(draftPolygonNode.points).toHaveBeenLastCalledWith([100, 50, 250, 50, 200, 150])
+
+    wrapper.unmount()
+  })
+
   it('keeps moved polygon regions inside the document boundaries', async () => {
     const wrapper = mount(ViewerPage)
     await flushImageLoad()
@@ -295,7 +359,9 @@ describe('ViewerPage', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
     await wrapper.vm.$nextTick()
 
-    const regionNode = getLineInstances().at(-1)
+    const regionNode = [...getLineInstances()]
+      .reverse()
+      .find((line) => line.config.id === 'region-1')
 
     regionNode.x(-200)
     regionNode.y(9999)
