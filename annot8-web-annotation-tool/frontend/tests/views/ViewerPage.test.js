@@ -64,6 +64,49 @@ describe('ViewerPage', () => {
     expect(wrapper.text()).toContain('Regions: 0')
   })
 
+  it('collapses and expands the page thumbnail sidebar', async () => {
+    const wrapper = mount(ViewerPage)
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    expect(wrapper.find('.sidebar').classes()).not.toContain('sidebar--collapsed')
+    expect(wrapper.findAll('.thumb')).toHaveLength(15)
+
+    stage.width.mockClear()
+    await wrapper.find('button[aria-label="Hide page thumbnails"]').trigger('click')
+
+    expect(wrapper.find('.sidebar').classes()).toContain('sidebar--collapsed')
+    expect(wrapper.findAll('.thumb')).toHaveLength(0)
+    expect(stage.width).toHaveBeenLastCalledWith(1000)
+
+    await wrapper.find('button[aria-label="Show page thumbnails"]').trigger('click')
+
+    expect(wrapper.find('.sidebar').classes()).not.toContain('sidebar--collapsed')
+    expect(wrapper.findAll('.thumb')).toHaveLength(15)
+  })
+
+  it('keeps the selected page when the thumbnail sidebar is collapsed and expanded', async () => {
+    const wrapper = mount(ViewerPage)
+    await flushImageLoad()
+
+    await wrapper.findAll('.thumb')[4].trigger('click')
+    await flushImageLoad()
+
+    expect(wrapper.text()).toContain('Page 5 / 15')
+
+    await wrapper.find('button[aria-label="Hide page thumbnails"]').trigger('click')
+
+    expect(wrapper.text()).toContain('Page 5 / 15')
+
+    await wrapper.find('button[aria-label="Show page thumbnails"]').trigger('click')
+
+    const thumbnails = wrapper.findAll('.thumb')
+
+    expect(wrapper.text()).toContain('Page 5 / 15')
+    expect(thumbnails[4].classes()).toContain('active')
+  })
+
   it('creates the Konva stage and drawing layers when the component is mounted', async () => {
     const wrapper = mount(ViewerPage)
     await flushImageLoad()
