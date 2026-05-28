@@ -7,6 +7,7 @@ import {
   getImageInstances,
   getLayerInstances,
   getLatestStage,
+  getLineInstances,
   getRectInstances,
   getTransformerInstances,
   resetKonvaMocks,
@@ -26,6 +27,7 @@ describe('ViewerPage', () => {
     Konva.Layer.mockClear()
     Konva.Image.mockClear()
     Konva.Rect.mockClear()
+    Konva.Line.mockClear()
     Konva.Transformer.mockClear()
   })
 
@@ -78,12 +80,13 @@ describe('ViewerPage', () => {
     expect(layer.draw).toHaveBeenCalled()
   })
 
-  it('renders the select and rectangle region tools', async () => {
+  it('renders the select, rectangle, and polygon region tools', async () => {
     const wrapper = mount(ViewerPage)
     await flushImageLoad()
 
     expect(getButton(wrapper, 'Select').classes()).toContain('btn-primary')
     expect(getButton(wrapper, 'Rectangle').classes()).toContain('btn-outline-secondary')
+    expect(getButton(wrapper, 'Polygon').classes()).toContain('btn-outline-secondary')
     expect(getButton(wrapper, 'Delete').element.disabled).toBe(true)
   })
 
@@ -133,6 +136,10 @@ describe('ViewerPage', () => {
     await getButton(wrapper, 'Rectangle').trigger('click')
 
     expect(canvasWrapper.classes()).toContain('canvas-wrapper--rectangle')
+
+    await getButton(wrapper, 'Polygon').trigger('click')
+
+    expect(canvasWrapper.classes()).toContain('canvas-wrapper--polygon')
   })
 
   it('creates a rectangular region by dragging on the document', async () => {
@@ -199,6 +206,109 @@ describe('ViewerPage', () => {
 
     expect(ProjectDocumentModel.regions).toHaveLength(0)
     expect(wrapper.text()).toContain('Regions: 0')
+  })
+
+  it('creates a polygon region from clicked vertices and Enter', async () => {
+    const wrapper = mount(ViewerPage)
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    await getButton(wrapper, 'Polygon').trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 50 })
+    stage.trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 200, y: 150 })
+    stage.trigger('click')
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+    await wrapper.vm.$nextTick()
+
+    const regions = ProjectDocumentModel.regions
+    const lines = getLineInstances()
+
+    expect(regions).toHaveLength(1)
+    expect(regions[0]).toEqual(
+      expect.objectContaining({
+        id: 'region-1',
+        pageIndex: 0,
+        type: 'polygon',
+        points: [
+          { x: 200, y: 100 },
+          { x: 500, y: 100 },
+          { x: 400, y: 300 },
+        ],
+      })
+    )
+    expect(wrapper.text()).toContain('Regions: 1')
+    expect(getButton(wrapper, 'Polygon').classes()).toContain('btn-primary')
+    expect(lines.at(-1).config).toEqual(
+      expect.objectContaining({
+        points: [100, 50, 250, 50, 200, 150],
+        closed: true,
+        id: 'region-1',
+      })
+    )
+  })
+
+  it('does not create a polygon region with fewer than three vertices', async () => {
+    const wrapper = mount(ViewerPage)
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    await getButton(wrapper, 'Polygon').trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 50 })
+    stage.trigger('click')
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+    await wrapper.vm.$nextTick()
+
+    expect(ProjectDocumentModel.regions).toHaveLength(0)
+    expect(wrapper.text()).toContain('Regions: 0')
+  })
+
+  it('keeps moved polygon regions inside the document boundaries', async () => {
+    const wrapper = mount(ViewerPage)
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    await getButton(wrapper, 'Polygon').trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('click')
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 50 })
+    stage.trigger('click')
+    stage.getPointerPosition.mockReturnValue({ x: 200, y: 150 })
+    stage.trigger('click')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+    await wrapper.vm.$nextTick()
+
+    const regionNode = getLineInstances().at(-1)
+
+    regionNode.x(-200)
+    regionNode.y(9999)
+    regionNode.trigger('dragend')
+    await wrapper.vm.$nextTick()
+
+    expect(ProjectDocumentModel.regions[0]).toEqual(
+      expect.objectContaining({
+        points: [
+          { x: 0, y: 800 },
+          { x: 300, y: 800 },
+          { x: 200, y: 1000 },
+        ],
+      })
+    )
   })
 
   it('keeps moved regions inside the document boundaries', async () => {

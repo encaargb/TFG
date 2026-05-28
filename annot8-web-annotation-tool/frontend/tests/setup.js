@@ -4,6 +4,7 @@ const stageInstances = []
 const layerInstances = []
 const imageInstances = []
 const rectInstances = []
+const lineInstances = []
 const transformerInstances = []
 
 function createBaseNodeMock(initialConfig = {}) {
@@ -13,6 +14,7 @@ function createBaseNodeMock(initialConfig = {}) {
     y: initialConfig.y ?? 0,
     width: initialConfig.width ?? 0,
     height: initialConfig.height ?? 0,
+    points: initialConfig.points ?? [],
     scaleX: initialConfig.scaleX ?? 1,
     scaleY: initialConfig.scaleY ?? 1,
   }
@@ -27,6 +29,11 @@ function createBaseNodeMock(initialConfig = {}) {
     height: vi.fn((value) => {
       if (value === undefined) return state.height
       state.height = value
+      return node
+    }),
+    points: vi.fn((value) => {
+      if (value === undefined) return state.points
+      state.points = value
       return node
     }),
     x: vi.fn((value) => {
@@ -99,6 +106,13 @@ function createRectNodeMock(config) {
   }
 }
 
+function createLineNodeMock(config) {
+  return {
+    ...createBaseNodeMock(config),
+    config,
+  }
+}
+
 function createTransformerMock(config) {
   return {
     ...createBaseNodeMock(config),
@@ -132,6 +146,12 @@ vi.mock('konva', () => {
     return rect
   })
 
+  const Line = vi.fn(function Line(config) {
+    const line = createLineNodeMock(config)
+    lineInstances.push(line)
+    return line
+  })
+
   const Transformer = vi.fn(function Transformer(config) {
     const transformer = createTransformerMock(config)
     transformerInstances.push(transformer)
@@ -144,6 +164,7 @@ vi.mock('konva', () => {
       Layer,
       Image,
       Rect,
+      Line,
       Transformer,
     },
   }
@@ -174,6 +195,7 @@ export function resetKonvaMocks() {
   layerInstances.length = 0
   imageInstances.length = 0
   rectInstances.length = 0
+  lineInstances.length = 0
   transformerInstances.length = 0
 }
 
@@ -195,6 +217,10 @@ export function getImageInstances() {
 
 export function getRectInstances() {
   return rectInstances
+}
+
+export function getLineInstances() {
+  return lineInstances
 }
 
 export function getTransformerInstances() {

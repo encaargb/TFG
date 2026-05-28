@@ -23,7 +23,30 @@ export function createRectangleRegion({
   }
 }
 
+export function createPolygonRegion({
+  id,
+  pageIndex,
+  points,
+  color = '#0d6efd',
+}) {
+  return {
+    id,
+    pageIndex,
+    type: 'polygon',
+    points: points.map((point) => ({
+      x: Math.round(point.x),
+      y: Math.round(point.y),
+    })),
+    color,
+    annotations: [],
+  }
+}
+
 export function isDrawableRegion(region, minimumSize = 4) {
+  if (region.type === 'polygon') {
+    return Array.isArray(region.points) && region.points.length >= 3
+  }
+
   return region.width >= minimumSize && region.height >= minimumSize
 }
 
@@ -63,4 +86,54 @@ export function toDocumentRectangle(rectangle, scaleX, scaleY, zoomLevel) {
     width: Math.round(rectangle.width / visibleScaleX),
     height: Math.round(rectangle.height / visibleScaleY),
   }
+}
+
+export function clampPointToBounds(point, bounds) {
+  return {
+    x: Math.round(Math.max(0, Math.min(bounds.width, point.x))),
+    y: Math.round(Math.max(0, Math.min(bounds.height, point.y))),
+  }
+}
+
+export function clampPolygonToBounds(polygon, bounds) {
+  return {
+    points: polygon.points.map((point) => clampPointToBounds(point, bounds)),
+  }
+}
+
+export function toVisiblePoints(points, scaleX, scaleY, zoomLevel) {
+  const visibleScaleX = scaleX * zoomLevel
+  const visibleScaleY = scaleY * zoomLevel
+
+  return points.map((point) => ({
+    x: point.x * visibleScaleX,
+    y: point.y * visibleScaleY,
+  }))
+}
+
+export function toDocumentPoints(points, scaleX, scaleY, zoomLevel) {
+  const visibleScaleX = scaleX * zoomLevel
+  const visibleScaleY = scaleY * zoomLevel
+
+  return points.map((point) => ({
+    x: Math.round(point.x / visibleScaleX),
+    y: Math.round(point.y / visibleScaleY),
+  }))
+}
+
+export function flattenPoints(points) {
+  return points.flatMap((point) => [point.x, point.y])
+}
+
+export function unflattenPoints(points) {
+  const normalizedPoints = []
+
+  for (let index = 0; index < points.length; index += 2) {
+    normalizedPoints.push({
+      x: points[index],
+      y: points[index + 1],
+    })
+  }
+
+  return normalizedPoints
 }

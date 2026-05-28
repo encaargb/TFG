@@ -12,10 +12,16 @@ import {
   getZoomPercentage,
 } from '../utils/viewerMath'
 import {
+  clampPointToBounds,
+  clampPolygonToBounds,
   clampRectangleToBounds,
+  createPolygonRegion,
   createRectangleRegion,
+  flattenPoints,
   isDrawableRegion,
+  toDocumentPoints,
   toDocumentRectangle,
+  toVisiblePoints,
   toVisibleRectangle,
 } from '../utils/regionGeometry'
 
@@ -69,6 +75,10 @@ function selectPage(index) {
 }
 
 function setActiveTool(tool) {
+  if (activeTool.value === 'polygon' && tool !== 'polygon') {
+    cancelDraftPolygonRegion()
+  }
+
   activeTool.value = tool
   if (tool !== 'select') {
     selectedRegionId.value = null
@@ -102,6 +112,16 @@ function updateRegionSequence() {
 }
 
 function handleKeydown(event) {
+  if (activeTool.value === 'polygon' && event.key === 'Enter') {
+    commitDraftPolygonRegion()
+    return
+  }
+
+  if (activeTool.value === 'polygon' && event.key === 'Escape') {
+    cancelDraftPolygonRegion()
+    return
+  }
+
   if (event.key !== 'Delete' && event.key !== 'Backspace') return
 
   deleteSelectedRegion()
@@ -133,6 +153,7 @@ let pageImageNode = null
 let transformer = null
 let draftRegionNode = null
 let draftRegionStart = null
+let draftPolygonPoints = []
 let regionSequence = 0
 let imageLoadSequence = 0
 
@@ -221,8 +242,29 @@ function applyVisibleRectangleToNode(node, rectangle) {
   if (typeof node.scaleY === 'function') node.scaleY(1)
 }
 
-// Creates the interactive Konva rectangle for an existing stored region.
-function createRegionNode(region) {
+function getVisiblePolygonBounds(points) {
+  const xs = points.map((point) => point.x)
+  const ys = points.map((point) => point.y)
+
+  return {
+    minX: Math.min(...xs),
+    minY: Math.min(...ys),
+    maxX: Math.max(...xs),
+    maxY: Math.max(...ys),
+  }
+}
+
+function clampVisiblePolygonDelta(points, delta) {
+  const bounds = getVisibleBounds()
+  const polygonBounds = getVisiblePolygonBounds(points)
+
+  return {
+    x: Math.max(-polygonBounds.minX, Math.min(bounds.width - polygonBounds.maxX, delta.x)),
+    y: Math.max(-polygonBounds.minY, Math.min(bounds.height - polygonBounds.maxY, delta.y)),
+  }
+}
+
+function createRectangleRegionNode(region) {
   const { scaleX, scaleY } = getRegionScale()
   const visibleRegion = toVisibleRectangle(region, scaleX, scaleY, zoomLevel.value)
 
@@ -280,6 +322,60 @@ function createRegionNode(region) {
   })
 
   return node
+}
+
+function createPolygonRegionNode(region) {
+  const { scaleX, scaleY } = getRegionScale()
+  const visiblePoints = toVisiblePoints(region.points, scaleX, scaleY, zoomLevel.value)
+  const flatVisiblePoints = flattenPoints(visiblePoints)
+
+  const node = new Konva.Line({
+    points: flatVisiblePoints,
+    closed: true,
+    id: region.id,
+    draggable: activeTool.value === 'select',
+    fill: `${region.color}26`,
+    stroke: region.color,
+    strokeWidth: selectedRegionId.value === region.id ? 3 : 2,
+    dragBoundFunc: (position) => clampVisiblePolygonDelta(visiblePoints, position),
+  })
+
+  node.on('click tap', () => {
+    if (activeTool.value !== 'select') return
+    selectedRegionId.value = region.id
+    renderRegions()
+  })
+
+  node.on('dragmove', () => {
+    const delta = clampVisiblePolygonDelta(visiblePoints, { x: node.x(), y: node.y() })
+    node.x(delta.x)
+    node.y(delta.y)
+    regionLayer.draw()
+  })
+
+  node.on('dragend', () => {
+    const delta = clampVisiblePolygonDelta(visiblePoints, { x: node.x(), y: node.y() })
+    const movedVisiblePoints = visiblePoints.map((point) => ({
+      x: point.x + delta.x,
+      y: point.y + delta.y,
+    }))
+    const documentPoints = toDocumentPoints(movedVisiblePoints, scaleX, scaleY, zoomLevel.value)
+
+    Object.assign(region, clampPolygonToBounds({ points: documentPoints }, getDocumentBounds()))
+    persistRegions()
+    renderRegions()
+  })
+
+  return node
+}
+
+// Creates the interactive Konva node for an existing stored region.
+function createRegionNode(region) {
+  if (region.type === 'polygon') {
+    return createPolygonRegionNode(region)
+  }
+
+  return createRectangleRegionNode(region)
 }
 
 // Rebuilds the region layer for the current page and attaches the transformer
@@ -393,6 +489,30 @@ function updateDraftRectangleRegion() {
   regionLayer.draw()
 }
 
+function updateDraftPolygonRegion() {
+  if (!stage || !draftRegionNode || activeTool.value !== 'polygon') return
+
+  const pointerPosition = stage.getPointerPosition()
+  const documentHoverPoint = getDocumentCoordinates(
+    pointerPosition,
+    zoomLevel.value,
+    baseImageWidth,
+    baseImageHeight,
+    originalImageWidth,
+    originalImageHeight
+  )
+
+  const visiblePoints = toVisiblePoints(
+    documentHoverPoint ? [...draftPolygonPoints, documentHoverPoint] : draftPolygonPoints,
+    getRegionScale().scaleX,
+    getRegionScale().scaleY,
+    zoomLevel.value
+  )
+
+  draftRegionNode.points(flattenPoints(visiblePoints))
+  regionLayer.draw()
+}
+
 // Converts the temporary rectangle into a stored region if it is large enough.
 function commitDraftRectangleRegion() {
   if (!stage || !draftRegionNode || !draftRegionStart) return
@@ -429,6 +549,77 @@ function commitDraftRectangleRegion() {
   draftRegionStart = null
 
   if (draftRegion && isDrawableRegion(draftRegion)) {
+    regionSequence += 1
+    regions.value.push(draftRegion)
+    persistRegions()
+    selectedRegionId.value = draftRegion.id
+  }
+
+  renderRegions()
+}
+
+function beginPolygonRegion() {
+  if (!stage || !regionLayer || !pageImageNode || activeTool.value !== 'polygon') return
+
+  const pointerPosition = stage.getPointerPosition()
+  const documentPoint = getDocumentCoordinates(
+    pointerPosition,
+    zoomLevel.value,
+    baseImageWidth,
+    baseImageHeight,
+    originalImageWidth,
+    originalImageHeight
+  )
+
+  if (!documentPoint) return
+
+  selectedRegionId.value = null
+  draftPolygonPoints.push(clampPointToBounds(documentPoint, getDocumentBounds()))
+
+  if (!draftRegionNode) {
+    draftRegionNode = new Konva.Line({
+      points: [],
+      closed: false,
+      fill: `${REGION_COLOR}12`,
+      stroke: REGION_COLOR,
+      strokeWidth: 2,
+      dash: [6, 4],
+    })
+    regionLayer.add(draftRegionNode)
+  }
+
+  updateDraftPolygonRegion()
+}
+
+function cancelDraftPolygonRegion() {
+  if (draftRegionNode) {
+    draftRegionNode.destroy()
+  }
+
+  draftRegionNode = null
+  draftPolygonPoints = []
+  renderRegions()
+}
+
+function commitDraftPolygonRegion() {
+  if (!draftRegionNode || activeTool.value !== 'polygon') return
+
+  const region = createPolygonRegion({
+    id: `region-${regionSequence + 1}`,
+    pageIndex: selectedIndex.value,
+    points: draftPolygonPoints,
+    color: REGION_COLOR,
+  })
+  const draftRegion = {
+    ...region,
+    ...clampPolygonToBounds(region, getDocumentBounds()),
+  }
+
+  draftRegionNode.destroy()
+  draftRegionNode = null
+  draftPolygonPoints = []
+
+  if (isDrawableRegion(draftRegion)) {
     regionSequence += 1
     regions.value.push(draftRegion)
     persistRegions()
@@ -522,11 +713,17 @@ onMounted(() => {
     mousePos.value = coordinates
 
     if (draftRegionNode) {
-      updateDraftRectangleRegion()
+      if (activeTool.value === 'polygon') {
+        updateDraftPolygonRegion()
+      } else {
+        updateDraftRectangleRegion()
+      }
     }
   })
   stage.on('mousedown', beginRectangleRegion)
+  stage.on('click', beginPolygonRegion)
   stage.on('mouseup', commitDraftRectangleRegion)
+  stage.on('dblclick', commitDraftPolygonRegion)
   window.addEventListener('keydown', handleKeydown)
 
   if (selectedPage.value) {
@@ -570,6 +767,7 @@ onBeforeUnmount(() => {
   transformer = null
   draftRegionNode = null
   draftRegionStart = null
+  draftPolygonPoints = []
 })
 </script>
 
@@ -641,6 +839,14 @@ onBeforeUnmount(() => {
               @click="setActiveTool('rectangle')"
             >
               Rectangle
+            </button>
+            <button
+              type="button"
+              class="btn"
+              :class="activeTool === 'polygon' ? 'btn-primary' : 'btn-outline-secondary'"
+              @click="setActiveTool('polygon')"
+            >
+              Polygon
             </button>
           </div>
 
@@ -818,6 +1024,10 @@ onBeforeUnmount(() => {
 }
 
 .canvas-wrapper--rectangle {
+  cursor: crosshair;
+}
+
+.canvas-wrapper--polygon {
   cursor: crosshair;
 }
 
