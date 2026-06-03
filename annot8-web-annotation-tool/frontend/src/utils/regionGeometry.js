@@ -5,21 +5,74 @@ export function createRectangleRegion({
   end,
   color = '#0d6efd',
 }) {
-  const x = Math.min(start.x, end.x)
-  const y = Math.min(start.y, end.y)
-  const width = Math.abs(end.x - start.x)
-  const height = Math.abs(end.y - start.y)
+  const rectangle = normalizeRectangleEdges({
+    left: start.x,
+    top: start.y,
+    right: end.x,
+    bottom: end.y,
+  })
 
   return {
     id,
     pageIndex,
     type: 'rectangle',
-    x,
-    y,
-    width,
-    height,
+    ...rectangle,
     color,
     annotations: [],
+  }
+}
+
+export function normalizeRectangleEdges(rectangle) {
+  return {
+    left: Math.min(rectangle.left, rectangle.right),
+    top: Math.min(rectangle.top, rectangle.bottom),
+    right: Math.max(rectangle.left, rectangle.right),
+    bottom: Math.max(rectangle.top, rectangle.bottom),
+  }
+}
+
+export function toEdgeRectangle(rectangle) {
+  if ('left' in rectangle && 'top' in rectangle && 'right' in rectangle && 'bottom' in rectangle) {
+    return normalizeRectangleEdges(rectangle)
+  }
+
+  if (!('x' in rectangle) || !('y' in rectangle)) {
+    return normalizeRectangleEdges({
+      left: 0,
+      top: 0,
+      right: rectangle.width,
+      bottom: rectangle.height,
+    })
+  }
+
+  return normalizeRectangleEdges({
+    left: rectangle.x,
+    top: rectangle.y,
+    right: rectangle.x + rectangle.width,
+    bottom: rectangle.y + rectangle.height,
+  })
+}
+
+export function getRectangleWidth(rectangle) {
+  const edgeRectangle = toEdgeRectangle(rectangle)
+
+  return edgeRectangle.right - edgeRectangle.left
+}
+
+export function getRectangleHeight(rectangle) {
+  const edgeRectangle = toEdgeRectangle(rectangle)
+
+  return edgeRectangle.bottom - edgeRectangle.top
+}
+
+export function toKonvaRectangle(rectangle) {
+  const edgeRectangle = toEdgeRectangle(rectangle)
+
+  return {
+    x: edgeRectangle.left,
+    y: edgeRectangle.top,
+    width: getRectangleWidth(edgeRectangle),
+    height: getRectangleHeight(edgeRectangle),
   }
 }
 
@@ -70,18 +123,19 @@ export function isDrawableRegion(region, minimumSize = 4) {
     return Array.isArray(region.points) && region.points.length >= 2
   }
 
-  return region.width >= minimumSize && region.height >= minimumSize
+  return getRectangleWidth(region) >= minimumSize && getRectangleHeight(region) >= minimumSize
 }
 
 export function clampRectangleToBounds(rectangle, bounds) {
-  const width = Math.min(Math.max(0, rectangle.width), bounds.width)
-  const height = Math.min(Math.max(0, rectangle.height), bounds.height)
+  const konvaRectangle = toKonvaRectangle(rectangle)
+  const width = Math.min(Math.max(0, konvaRectangle.width), bounds.width)
+  const height = Math.min(Math.max(0, konvaRectangle.height), bounds.height)
   const maxX = Math.max(0, bounds.width - width)
   const maxY = Math.max(0, bounds.height - height)
 
   return {
-    x: Math.round(Math.max(0, Math.min(maxX, rectangle.x))),
-    y: Math.round(Math.max(0, Math.min(maxY, rectangle.y))),
+    x: Math.round(Math.max(0, Math.min(maxX, konvaRectangle.x))),
+    y: Math.round(Math.max(0, Math.min(maxY, konvaRectangle.y))),
     width: Math.round(width),
     height: Math.round(height),
   }

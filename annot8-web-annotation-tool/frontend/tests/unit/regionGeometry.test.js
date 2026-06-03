@@ -6,9 +6,14 @@ import {
   createPolylineRegion,
   createRectangleRegion,
   flattenPoints,
+  getRectangleHeight,
+  getRectangleWidth,
   isDrawableRegion,
+  normalizeRectangleEdges,
+  toEdgeRectangle,
   toDocumentPoints,
   toDocumentRectangle,
+  toKonvaRectangle,
   toVisiblePoints,
   toVisibleRectangle,
   unflattenPoints,
@@ -27,12 +32,106 @@ describe('regionGeometry', () => {
       id: 'region-1',
       pageIndex: 2,
       type: 'rectangle',
+      left: 200,
+      top: 100,
+      right: 500,
+      bottom: 300,
+      color: '#0d6efd',
+      annotations: [],
+    })
+  })
+
+  it('creates rectangle edge coordinates regardless of drag direction', () => {
+    expect(
+      createRectangleRegion({
+        id: 'region-1',
+        pageIndex: 0,
+        start: { x: 100, y: 50 },
+        end: { x: 250, y: 150 },
+      })
+    ).toEqual(
+      expect.objectContaining({
+        left: 100,
+        top: 50,
+        right: 250,
+        bottom: 150,
+      })
+    )
+
+    expect(
+      createRectangleRegion({
+        id: 'region-2',
+        pageIndex: 0,
+        start: { x: 250, y: 150 },
+        end: { x: 100, y: 50 },
+      })
+    ).toEqual(
+      expect.objectContaining({
+        left: 100,
+        top: 50,
+        right: 250,
+        bottom: 150,
+      })
+    )
+  })
+
+  it('normalizes rectangle edge coordinates', () => {
+    expect(
+      normalizeRectangleEdges({
+        left: 500,
+        top: 300,
+        right: 200,
+        bottom: 100,
+      })
+    ).toEqual({
+      left: 200,
+      top: 100,
+      right: 500,
+      bottom: 300,
+    })
+  })
+
+  it('converts legacy rectangle geometry to edge coordinates', () => {
+    expect(
+      toEdgeRectangle({
+        x: 200,
+        y: 100,
+        width: 300,
+        height: 200,
+      })
+    ).toEqual({
+      left: 200,
+      top: 100,
+      right: 500,
+      bottom: 300,
+    })
+  })
+
+  it('computes rectangle width and height from edge coordinates', () => {
+    const rectangle = {
+      left: 200,
+      top: 100,
+      right: 500,
+      bottom: 300,
+    }
+
+    expect(getRectangleWidth(rectangle)).toBe(300)
+    expect(getRectangleHeight(rectangle)).toBe(200)
+  })
+
+  it('converts edge rectangle coordinates to Konva geometry', () => {
+    expect(
+      toKonvaRectangle({
+        left: 200,
+        top: 100,
+        right: 500,
+        bottom: 300,
+      })
+    ).toEqual({
       x: 200,
       y: 100,
       width: 300,
       height: 200,
-      color: '#0d6efd',
-      annotations: [],
     })
   })
 
@@ -40,6 +139,8 @@ describe('regionGeometry', () => {
     expect(isDrawableRegion({ width: 4, height: 4 })).toBe(true)
     expect(isDrawableRegion({ width: 3, height: 10 })).toBe(false)
     expect(isDrawableRegion({ width: 10, height: 3 })).toBe(false)
+    expect(isDrawableRegion({ left: 10, top: 20, right: 14, bottom: 24 })).toBe(true)
+    expect(isDrawableRegion({ left: 10, top: 20, right: 13, bottom: 24 })).toBe(false)
   })
 
   it('creates a polygon region from document points', () => {
@@ -104,6 +205,20 @@ describe('regionGeometry', () => {
     expect(
       clampRectangleToBounds(
         { x: -20, y: 950, width: 300, height: 200 },
+        { width: 2000, height: 1000 }
+      )
+    ).toEqual({
+      x: 0,
+      y: 800,
+      width: 300,
+      height: 200,
+    })
+  })
+
+  it('clamps edge rectangle coordinates to legacy geometry while canvas migration is pending', () => {
+    expect(
+      clampRectangleToBounds(
+        { left: -20, top: 950, right: 280, bottom: 1150 },
         { width: 2000, height: 1000 }
       )
     ).toEqual({
