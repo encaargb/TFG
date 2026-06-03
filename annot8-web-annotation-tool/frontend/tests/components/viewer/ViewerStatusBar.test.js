@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import ViewerStatusBar from '../../../src/components/viewer/ViewerStatusBar.vue'
 
@@ -47,5 +47,16 @@ describe('ViewerStatusBar', () => {
     expect(wrapper.text()).toContain('Tool rectangle')
     expect(wrapper.text()).toContain('Regions 0')
     expect(wrapper.text()).toContain('X 12 · Y 34')
+  })
+
+  it('warns when activeTool is outside the supported viewer tools', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    mountStatusBar({ activeTool: 'freehand' })
+
+    expect(warnSpy.mock.calls[0][0]).toContain(
+      'Invalid prop: custom validator check failed for prop "activeTool"'
+    )
+    warnSpy.mockRestore()
   })
 })

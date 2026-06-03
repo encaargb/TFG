@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import ViewerToolbar from '../../../src/components/viewer/ViewerToolbar.vue'
 
@@ -126,5 +126,16 @@ describe('ViewerToolbar', () => {
     expect(wrapper.emitted('zoom-out')).toEqual([[]])
     expect(wrapper.emitted('reset-zoom')).toEqual([[]])
     expect(wrapper.emitted('zoom-in')).toEqual([[]])
+  })
+
+  it('warns when activeTool is outside the supported viewer tools', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    mountToolbar({ activeTool: 'freehand' })
+
+    expect(warnSpy.mock.calls[0][0]).toContain(
+      'Invalid prop: custom validator check failed for prop "activeTool"'
+    )
+    warnSpy.mockRestore()
   })
 })

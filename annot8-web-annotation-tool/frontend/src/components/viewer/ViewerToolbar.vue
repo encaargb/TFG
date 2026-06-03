@@ -5,18 +5,22 @@ defineProps({
   selectedIndex: {
     type: Number,
     required: true,
+    validator: (value) => Number.isFinite(value) && value >= 0,
   },
   totalPages: {
     type: Number,
     required: true,
+    validator: (value) => Number.isFinite(value) && value > 0,
   },
   activeTool: {
     type: String,
     required: true,
+    validator: (value) => ['select', 'rectangle', 'polygon', 'polyline'].includes(value),
   },
   regionCount: {
     type: Number,
     required: true,
+    validator: (value) => Number.isFinite(value) && value >= 0,
   },
   hasSelectedRegion: {
     type: Boolean,
@@ -25,18 +29,22 @@ defineProps({
   zoomLevel: {
     type: Number,
     required: true,
+    validator: (value) => Number.isFinite(value) && value > 0,
   },
   minZoom: {
     type: Number,
     required: true,
+    validator: (value) => Number.isFinite(value) && value > 0,
   },
   maxZoom: {
     type: Number,
     required: true,
+    validator: (value) => Number.isFinite(value) && value > 0,
   },
   zoomPercentage: {
     type: Number,
     required: true,
+    validator: (value) => Number.isFinite(value) && value > 0,
   },
   mousePos: {
     type: Object,

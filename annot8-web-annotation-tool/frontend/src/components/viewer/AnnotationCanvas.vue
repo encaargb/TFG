@@ -29,6 +29,7 @@ const props = defineProps({
   pageIndex: {
     type: Number,
     required: true,
+    validator: (value) => Number.isFinite(value) && value >= 0,
   },
   regions: {
     type: Array,
@@ -41,10 +42,12 @@ const props = defineProps({
   activeTool: {
     type: String,
     required: true,
+    validator: (value) => ['select', 'rectangle', 'polygon', 'polyline'].includes(value),
   },
   zoomLevel: {
     type: Number,
     required: true,
+    validator: (value) => Number.isFinite(value) && value > 0,
   },
   nextRegionId: {
     type: String,

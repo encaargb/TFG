@@ -9,6 +9,7 @@ defineProps({
   selectedIndex: {
     type: Number,
     required: true,
+    validator: (value) => Number.isFinite(value) && value >= 0,
   },
   collapsed: {
     type: Boolean,

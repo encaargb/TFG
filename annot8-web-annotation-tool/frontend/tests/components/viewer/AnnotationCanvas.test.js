@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import Konva from 'konva'
 import AnnotationCanvas from '../../../src/components/viewer/AnnotationCanvas.vue'
@@ -836,5 +836,16 @@ describe('AnnotationCanvas', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace' }))
 
     expect(wrapper.emitted('delete-selected-region')).toEqual([[]])
+  })
+
+  it('warns when activeTool is outside the supported viewer tools', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    mountCanvas({ activeTool: 'freehand' })
+
+    expect(warnSpy.mock.calls[0][0]).toContain(
+      'Invalid prop: custom validator check failed for prop "activeTool"'
+    )
+    warnSpy.mockRestore()
   })
 })
