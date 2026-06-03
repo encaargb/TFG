@@ -2,6 +2,7 @@
 import { computed, nextTick, ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import Konva from 'konva'
 import PageSidebar from '../components/viewer/PageSidebar.vue'
+import ViewerStatusBar from '../components/viewer/ViewerStatusBar.vue'
 import ViewerToolbar from '../components/viewer/ViewerToolbar.vue'
 import { ProjectDocumentModel } from '../models/ProjectDocumentModel'
 import { fetchProjectDocument, saveProjectRegions } from '../services/documentApi'
@@ -1006,26 +1007,14 @@ onBeforeUnmount(() => {
       >
         <div ref="canvasContainer" class="konva-container shadow-sm"></div>
       </div>
-
-      <footer class="status-bar px-3">
-        <div class="d-flex align-items-center status-bar-items">
-          <span class="status-item">
-            Page {{ selectedIndex + 1 }} / {{ pages.length }}
-          </span>
-          <span class="status-item">
-            Zoom {{ zoomPercentage }}%
-          </span>
-          <span class="status-item">
-            Tool {{ activeTool }}
-          </span>
-          <span class="status-item">
-            Regions {{ currentPageRegions.length }}
-          </span>
-          <span class="status-item status-coords ms-md-auto">
-            X {{ mousePos.x }} · Y {{ mousePos.y }}
-          </span>
-        </div>
-      </footer>
+      <ViewerStatusBar
+        :selected-index="selectedIndex"
+        :total-pages="pages.length"
+        :zoom-percentage="zoomPercentage"
+        :active-tool="activeTool"
+        :region-count="currentPageRegions.length"
+        :mouse-pos="mousePos"
+      />
     </main>
   </div>
 </template>
@@ -1039,45 +1028,6 @@ onBeforeUnmount(() => {
 .viewer {
   min-width: 0;
   min-height: 0;
-}
-
-.status-bar {
-  position: fixed;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 1030;
-  flex-shrink: 0;
-  min-height: 24px;
-  background: #e9ecef;
-  border-top: 1px solid #adb5bd;
-  color: #495057;
-  font-family: Consolas, 'Courier New', monospace;
-  font-size: 0.72rem;
-  line-height: 23px;
-}
-
-.status-bar-items {
-  min-height: 23px;
-}
-
-.status-item {
-  padding: 0 0.75rem;
-  white-space: nowrap;
-}
-
-.status-item:first-child {
-  padding-left: 0;
-}
-
-.status-item:last-child {
-  border-right: 0;
-  padding-right: 0;
-}
-
-.status-coords {
-  color: #212529;
-  text-align: right;
 }
 
 .canvas-wrapper {
