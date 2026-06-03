@@ -29,4 +29,23 @@ describe('ViewerStatusBar', () => {
     expect(statusBar.text()).toContain('Regions 4')
     expect(statusBar.text()).toContain('X 320 · Y 180')
   })
+
+  it('updates displayed status from prop changes', async () => {
+    const wrapper = mountStatusBar()
+
+    await wrapper.setProps({
+      selectedIndex: 0,
+      totalPages: 2,
+      zoomPercentage: 75,
+      activeTool: 'rectangle',
+      regionCount: 0,
+      mousePos: { x: 12, y: 34 },
+    })
+
+    expect(wrapper.text()).toContain('Page 1 / 2')
+    expect(wrapper.text()).toContain('Zoom 75%')
+    expect(wrapper.text()).toContain('Tool rectangle')
+    expect(wrapper.text()).toContain('Regions 0')
+    expect(wrapper.text()).toContain('X 12 · Y 34')
+  })
 })

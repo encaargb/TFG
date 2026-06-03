@@ -73,6 +73,12 @@ describe('ViewerToolbar', () => {
     expectButtonDisabled(wrapper, '+')
   })
 
+  it('keeps delete enabled when a region is selected', () => {
+    const wrapper = mountToolbar({ hasSelectedRegion: true })
+
+    expectButtonDisabled(wrapper, 'Delete', false)
+  })
+
   it('marks the active annotation tool', () => {
     const wrapper = mountToolbar({ activeTool: 'polygon' })
 
@@ -82,28 +88,40 @@ describe('ViewerToolbar', () => {
     expectToolButtonPressed(wrapper, 'Polyline', false)
   })
 
-  it('emits toolbar action events', async () => {
+  it('emits navigation events', async () => {
     const wrapper = mountToolbar()
 
     await getButton(wrapper, 'Previous').trigger('click')
     await getButton(wrapper, 'Next').trigger('click')
+
+    expect(wrapper.emitted('previous-page')).toEqual([[]])
+    expect(wrapper.emitted('next-page')).toEqual([[]])
+  })
+
+  it('emits tool selection events with each annotation tool', async () => {
+    const wrapper = mountToolbar()
+
     await getButton(wrapper, 'Rectangle').trigger('click')
     await getButton(wrapper, 'Polygon').trigger('click')
     await getButton(wrapper, 'Polyline').trigger('click')
     await getButton(wrapper, 'Select').trigger('click')
-    await getButton(wrapper, 'Delete').trigger('click')
-    await getButton(wrapper, '-').trigger('click')
-    await getButton(wrapper, 'Reset').trigger('click')
-    await getButton(wrapper, '+').trigger('click')
 
-    expect(wrapper.emitted('previous-page')).toEqual([[]])
-    expect(wrapper.emitted('next-page')).toEqual([[]])
     expect(wrapper.emitted('set-active-tool')).toEqual([
       ['rectangle'],
       ['polygon'],
       ['polyline'],
       ['select'],
     ])
+  })
+
+  it('emits delete and zoom events', async () => {
+    const wrapper = mountToolbar()
+
+    await getButton(wrapper, 'Delete').trigger('click')
+    await getButton(wrapper, '-').trigger('click')
+    await getButton(wrapper, 'Reset').trigger('click')
+    await getButton(wrapper, '+').trigger('click')
+
     expect(wrapper.emitted('delete-selected-region')).toEqual([[]])
     expect(wrapper.emitted('zoom-out')).toEqual([[]])
     expect(wrapper.emitted('reset-zoom')).toEqual([[]])

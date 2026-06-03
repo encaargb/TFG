@@ -53,6 +53,17 @@ describe('PageSidebar', () => {
     expect(wrapper.emitted('select-page')).toEqual([[2]])
   })
 
+  it('emits a sidebar toggle event from the expanded state', async () => {
+    const wrapper = mountSidebar()
+
+    expect(wrapper.find('.sidebar').classes()).not.toContain('sidebar--collapsed')
+    expect(wrapper.find('button[aria-label="Hide page thumbnails"]').exists()).toBe(true)
+
+    await wrapper.find('button[aria-label="Hide page thumbnails"]').trigger('click')
+
+    expect(wrapper.emitted('toggle-sidebar')).toEqual([[]])
+  })
+
   it('emits a sidebar toggle event and hides thumbnails when collapsed', async () => {
     const wrapper = mountSidebar({ collapsed: true })
 
