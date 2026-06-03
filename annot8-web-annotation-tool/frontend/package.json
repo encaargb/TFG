@@ -12,7 +12,6 @@
     "test:html:open": "vitest --run --reporter=html --outputFile=./html/index.html && vitest --ui"
   },
   "dependencies": {
-    "@popperjs/core": "^2.11.8",
     "bootstrap": "^5.3.8",
     "bootstrap-vue-next": "^0.45.4",
     "konva": "^10.2.3",
