@@ -311,6 +311,26 @@ describe('AnnotationCanvas', () => {
     })
   })
 
+  it('hides and restores the transformer while dragging a selected rectangle', async () => {
+    mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [rectangleRegion()],
+    })
+    await flushImageLoad()
+
+    const rectangle = getRectInstances().find((rect) => rect.config.id === 'region-1')
+    const transformer = getTransformerInstances().at(-1)
+
+    rectangle.trigger('dragstart')
+
+    expect(transformer.visible).toHaveBeenLastCalledWith(false)
+
+    rectangle.trigger('dragend')
+
+    expect(transformer.visible).toHaveBeenLastCalledWith(true)
+    expect(transformer.forceUpdate).toHaveBeenCalledTimes(1)
+  })
+
   it('visually clamps dragged rectangles inside the visible document bounds', async () => {
     mountCanvas({
       selectedRegionId: 'region-1',
@@ -847,6 +867,29 @@ describe('AnnotationCanvas', () => {
     )
   })
 
+  it('hides and restores selected polygon vertex handles while dragging the whole region', async () => {
+    mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [polygonRegion()],
+    })
+    await flushImageLoad()
+
+    const polygon = getLineInstances().find((line) => line.config.id === 'region-1')
+    const vertexHandles = getCircleInstances().slice(-3)
+
+    polygon.trigger('dragstart')
+
+    vertexHandles.forEach((handle) => {
+      expect(handle.visible).toHaveBeenLastCalledWith(false)
+    })
+
+    polygon.trigger('dragend')
+
+    vertexHandles.forEach((handle) => {
+      expect(handle.visible).toHaveBeenLastCalledWith(true)
+    })
+  })
+
   it('emits a polyline region after multiple clicks and Enter', async () => {
     const wrapper = mountCanvas({ activeTool: 'polyline' })
     await flushImageLoad()
@@ -945,6 +988,29 @@ describe('AnnotationCanvas', () => {
         strokeScaleEnabled: false,
       })
     )
+  })
+
+  it('hides and restores selected polyline vertex handles while dragging the whole region', async () => {
+    mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [polylineRegion()],
+    })
+    await flushImageLoad()
+
+    const polyline = getLineInstances().find((line) => line.config.id === 'region-1')
+    const vertexHandles = getCircleInstances().slice(-2)
+
+    polyline.trigger('dragstart')
+
+    vertexHandles.forEach((handle) => {
+      expect(handle.visible).toHaveBeenLastCalledWith(false)
+    })
+
+    polyline.trigger('dragend')
+
+    vertexHandles.forEach((handle) => {
+      expect(handle.visible).toHaveBeenLastCalledWith(true)
+    })
   })
 
   it('emits updated polyline points after vertex editing', async () => {

@@ -84,6 +84,7 @@ let transformer = null
 let draftRegionNode = null
 let draftRegionStart = null
 let draftPointRegionPoints = []
+let vertexHandles = []
 let imageLoadSequence = 0
 
 let baseImageWidth = 0
@@ -192,6 +193,25 @@ function applyVisibleRectangleToNode(node, rectangle) {
 
   if (typeof node.scaleX === 'function') node.scaleX(1)
   if (typeof node.scaleY === 'function') node.scaleY(1)
+}
+
+function setNodeVisibility(nodes, isVisible) {
+  nodes.forEach((node) => {
+    if (typeof node.visible === 'function') {
+      node.visible(isVisible)
+    }
+  })
+}
+
+function hideActiveEditHandles() {
+  setNodeVisibility([transformer, ...vertexHandles].filter(Boolean), false)
+  regionLayer?.draw()
+}
+
+function showActiveEditHandles() {
+  setNodeVisibility([transformer, ...vertexHandles].filter(Boolean), true)
+  transformer?.forceUpdate?.()
+  regionLayer?.draw()
 }
 
 function syncTransformedRectangleNode(node) {
@@ -355,6 +375,12 @@ function createRectangleRegionNode(region) {
     regionLayer.draw()
   })
 
+  node.on('dragstart', () => {
+    if (props.selectedRegionId === region.id) {
+      hideActiveEditHandles()
+    }
+  })
+
   node.on('transform', () => {
     syncResizedRectangleNode(node, region, scaleX, scaleY)
     regionLayer.draw()
@@ -377,6 +403,10 @@ function createRectangleRegionNode(region) {
 
     if (typeof node.scaleX === 'function') node.scaleX(1)
     if (typeof node.scaleY === 'function') node.scaleY(1)
+
+    if (props.selectedRegionId === region.id) {
+      showActiveEditHandles()
+    }
   })
 
   return node
@@ -412,6 +442,12 @@ function createPointRegionNode(region) {
     regionLayer.draw()
   })
 
+  node.on('dragstart', () => {
+    if (props.selectedRegionId === region.id) {
+      hideActiveEditHandles()
+    }
+  })
+
   node.on('dragend', () => {
     const delta = clampVisiblePolygonDelta(visiblePoints, { x: node.x(), y: node.y() })
     const movedVisiblePoints = visiblePoints.map((point) => ({
@@ -424,6 +460,10 @@ function createPointRegionNode(region) {
       id: region.id,
       changes: clampPolygonToBounds({ points: documentPoints }, getDocumentBounds()),
     })
+
+    if (props.selectedRegionId === region.id) {
+      showActiveEditHandles()
+    }
   })
 
   return node
@@ -504,6 +544,7 @@ function renderRegions() {
   if (!regionLayer || !baseImageWidth || !baseImageHeight) return
 
   regionLayer.destroyChildren()
+  vertexHandles = []
   transformer = new Konva.Transformer({
     rotateEnabled: false,
     flipEnabled: false,
@@ -526,7 +567,8 @@ function renderRegions() {
       region.id === props.selectedRegionId &&
       props.activeTool === 'select'
     ) {
-      createPointRegionVertexHandles(region, node).forEach((handle) => regionLayer.add(handle))
+      vertexHandles = createPointRegionVertexHandles(region, node)
+      vertexHandles.forEach((handle) => regionLayer.add(handle))
     }
   })
 
@@ -954,6 +996,7 @@ onBeforeUnmount(() => {
   draftRegionNode = null
   draftRegionStart = null
   draftPointRegionPoints = []
+  vertexHandles = []
 })
 
 defineExpose({

@@ -20,6 +20,7 @@ function createBaseNodeMock(initialConfig = {}) {
     fill: initialConfig.fill,
     scaleX: initialConfig.scaleX ?? 1,
     scaleY: initialConfig.scaleY ?? 1,
+    visible: initialConfig.visible ?? true,
   }
 
   const node = {
@@ -73,6 +74,11 @@ function createBaseNodeMock(initialConfig = {}) {
     scaleY: vi.fn((value) => {
       if (value === undefined) return state.scaleY
       state.scaleY = value
+      return node
+    }),
+    visible: vi.fn((value) => {
+      if (value === undefined) return state.visible
+      state.visible = value
       return node
     }),
     on: vi.fn((eventNames, handler) => {
@@ -144,6 +150,7 @@ function createTransformerMock(config) {
     ...createBaseNodeMock(config),
     config,
     nodes: vi.fn().mockReturnThis(),
+    forceUpdate: vi.fn(),
   }
 }
 
