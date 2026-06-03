@@ -735,7 +735,6 @@ function loadSelectedPageInKonva(src) {
   imageLoadSequence = loadId
 
   const img = new window.Image()
-  img.src = src
 
   img.onload = () => {
     if (loadId !== imageLoadSequence || !stage || !imageLayer) return
@@ -769,6 +768,9 @@ function loadSelectedPageInKonva(src) {
     canvasWrapper.value.scrollTop = 0
     canvasWrapper.value.scrollLeft = 0
   }
+
+  img.src = src
+
 }
 
 function handleMouseMove() {
