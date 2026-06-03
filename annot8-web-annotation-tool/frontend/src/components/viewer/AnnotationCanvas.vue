@@ -106,6 +106,20 @@ function getDocumentBounds() {
   }
 }
 
+function getClampedDocumentPointer() {
+  const pointerPosition = stage?.getPointerPosition()
+  const documentPoint = getDocumentCoordinates(
+    pointerPosition,
+    props.zoomLevel,
+    baseImageWidth,
+    baseImageHeight,
+    originalImageWidth,
+    originalImageHeight
+  )
+
+  return documentPoint ? clampPointToBounds(documentPoint, getDocumentBounds()) : null
+}
+
 function updateZoom() {
   if (!stage || !pageImageNode) return
 
@@ -599,15 +613,7 @@ function renderRegions() {
 function beginRectangleRegion() {
   if (!stage || !regionLayer || !pageImageNode || props.activeTool !== 'rectangle') return
 
-  const pointerPosition = stage.getPointerPosition()
-  const documentStart = getDocumentCoordinates(
-    pointerPosition,
-    props.zoomLevel,
-    baseImageWidth,
-    baseImageHeight,
-    originalImageWidth,
-    originalImageHeight
-  )
+  const documentStart = getClampedDocumentPointer()
 
   if (!documentStart) return
 
@@ -643,15 +649,7 @@ function beginRectangleRegion() {
 function updateDraftRectangleRegion() {
   if (!stage || !draftRegionNode || !draftRegionStart) return
 
-  const pointerPosition = stage.getPointerPosition()
-  const documentEnd = getDocumentCoordinates(
-    pointerPosition,
-    props.zoomLevel,
-    baseImageWidth,
-    baseImageHeight,
-    originalImageWidth,
-    originalImageHeight
-  )
+  const documentEnd = getClampedDocumentPointer()
 
   if (!documentEnd) return
 
@@ -678,14 +676,7 @@ function updateDraftPointRegion() {
   const pointerPosition = stage.getPointerPosition()
   const shouldClosePolygon =
     props.activeTool === 'polygon' && isPointerNearFirstPolygonPoint(pointerPosition)
-  const documentHoverPoint = getDocumentCoordinates(
-    pointerPosition,
-    props.zoomLevel,
-    baseImageWidth,
-    baseImageHeight,
-    originalImageWidth,
-    originalImageHeight
-  )
+  const documentHoverPoint = getClampedDocumentPointer()
 
   const visiblePoints = toVisiblePoints(
     documentHoverPoint && !shouldClosePolygon
@@ -723,15 +714,7 @@ function isPointerNearFirstPolygonPoint(pointerPosition) {
 function commitDraftRectangleRegion() {
   if (!stage || !draftRegionNode || !draftRegionStart) return
 
-  const pointerPosition = stage.getPointerPosition()
-  const documentEnd = getDocumentCoordinates(
-    pointerPosition,
-    props.zoomLevel,
-    baseImageWidth,
-    baseImageHeight,
-    originalImageWidth,
-    originalImageHeight
-  )
+  const documentEnd = getClampedDocumentPointer()
 
   let draftRegion = null
 
@@ -778,14 +761,7 @@ function beginPointRegion() {
   if (!['polygon', 'polyline'].includes(props.activeTool)) return
 
   const pointerPosition = stage.getPointerPosition()
-  const documentPoint = getDocumentCoordinates(
-    pointerPosition,
-    props.zoomLevel,
-    baseImageWidth,
-    baseImageHeight,
-    originalImageWidth,
-    originalImageHeight
-  )
+  const documentPoint = getClampedDocumentPointer()
 
   if (!documentPoint) return
 

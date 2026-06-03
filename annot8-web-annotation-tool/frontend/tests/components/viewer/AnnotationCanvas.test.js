@@ -285,6 +285,87 @@ describe('AnnotationCanvas', () => {
     expect(wrapper.emitted('add-region')[0][0]).not.toHaveProperty('height')
   })
 
+  it('keeps the live rectangle draft inside the right and bottom page bounds', async () => {
+    mountCanvas({ activeTool: 'rectangle' })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousedown')
+
+    const draftRectangle = getRectInstances().at(-1)
+
+    stage.getPointerPosition.mockReturnValue({ x: 9999, y: 9999 })
+    stage.trigger('mousemove')
+
+    expect(draftRectangle.x).toHaveBeenLastCalledWith(100)
+    expect(draftRectangle.y).toHaveBeenLastCalledWith(50)
+    expect(draftRectangle.width).toHaveBeenLastCalledWith(900)
+    expect(draftRectangle.height).toHaveBeenLastCalledWith(450)
+  })
+
+  it('keeps the live rectangle draft inside the left and top page bounds', async () => {
+    mountCanvas({ activeTool: 'rectangle' })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 150 })
+    stage.trigger('mousedown')
+
+    const draftRectangle = getRectInstances().at(-1)
+
+    stage.getPointerPosition.mockReturnValue({ x: -100, y: -80 })
+    stage.trigger('mousemove')
+
+    expect(draftRectangle.x).toHaveBeenLastCalledWith(0)
+    expect(draftRectangle.y).toHaveBeenLastCalledWith(0)
+    expect(draftRectangle.width).toHaveBeenLastCalledWith(250)
+    expect(draftRectangle.height).toHaveBeenLastCalledWith(150)
+  })
+
+  it('emits a clamped rectangle when mouseup happens outside the page bounds', async () => {
+    const wrapper = mountCanvas({ activeTool: 'rectangle' })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousedown')
+
+    stage.getPointerPosition.mockReturnValue({ x: 9999, y: 9999 })
+    stage.trigger('mousemove')
+    stage.trigger('mouseup')
+
+    expect(wrapper.emitted('add-region')[0][0]).toEqual(
+      expect.objectContaining({
+        left: 200,
+        top: 100,
+        right: 2000,
+        bottom: 1000,
+      })
+    )
+  })
+
+  it('does not create out-of-bounds rectangle coordinates after fast pointer movement', async () => {
+    const wrapper = mountCanvas({ activeTool: 'rectangle' })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousedown')
+
+    stage.getPointerPosition.mockReturnValue({ x: 10000, y: 10000 })
+    stage.trigger('mouseup')
+
+    expect(wrapper.emitted('add-region')[0][0]).toEqual(
+      expect.objectContaining({
+        left: 200,
+        top: 100,
+        right: 2000,
+        bottom: 1000,
+      })
+    )
+  })
+
   it('does not emit a rectangle when the drag area is too small', async () => {
     const wrapper = mountCanvas({ activeTool: 'rectangle' })
     await flushImageLoad()
@@ -821,6 +902,23 @@ describe('AnnotationCanvas', () => {
       })
     )
     expect(wrapper.emitted('select-region')).toEqual([['region-1']])
+  })
+
+  it('clamps the point-region draft preview inside page bounds', async () => {
+    mountCanvas({ activeTool: 'polygon' })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('click')
+
+    const draftPolygon = getLineInstances().at(-1)
+
+    stage.getPointerPosition.mockReturnValue({ x: 9999, y: 9999 })
+    stage.trigger('mousemove')
+
+    expect(draftPolygon.points).toHaveBeenLastCalledWith([100, 50, 1000, 500])
   })
 
   it('does not add a duplicate polygon point when finishing with double click', async () => {
