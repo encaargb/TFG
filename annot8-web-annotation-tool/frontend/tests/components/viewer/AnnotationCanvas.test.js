@@ -301,6 +301,30 @@ describe('AnnotationCanvas', () => {
     expect(wrapper.emitted('select-region')).toBeUndefined()
   })
 
+  it('cancels an active rectangle draft with Escape', async () => {
+    const wrapper = mountCanvas({ activeTool: 'rectangle' })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousedown')
+
+    const draftRectangle = getRectInstances().at(-1)
+
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 150 })
+    stage.trigger('mousemove')
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+
+    expect(draftRectangle.destroy).toHaveBeenCalledTimes(1)
+    expect(wrapper.emitted('add-region')).toBeUndefined()
+
+    stage.trigger('mouseup')
+
+    expect(wrapper.emitted('add-region')).toBeUndefined()
+    expect(wrapper.emitted('select-region')).toBeUndefined()
+  })
+
   it('emits the selected rectangle id when clicking an existing rectangle', async () => {
     const wrapper = mountCanvas({
       selectedRegionId: null,

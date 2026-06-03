@@ -762,6 +762,17 @@ function commitDraftRectangleRegion() {
   }
 }
 
+function cancelDraftRectangleRegion() {
+  if (!draftRegionNode || !draftRegionStart) return false
+
+  draftRegionNode.destroy()
+  draftRegionNode = null
+  draftRegionStart = null
+  regionLayer?.draw()
+
+  return true
+}
+
 function beginPointRegion() {
   if (!stage || !regionLayer || !pageImageNode) return
   if (!['polygon', 'polyline'].includes(props.activeTool)) return
@@ -864,6 +875,14 @@ function handleKeydown(event) {
 
   if (['polygon', 'polyline'].includes(props.activeTool) && event.key === 'Escape') {
     cancelDraftPointRegion()
+    return
+  }
+
+  if (
+    props.activeTool === 'rectangle' &&
+    event.key === 'Escape' &&
+    cancelDraftRectangleRegion()
+  ) {
     return
   }
 
