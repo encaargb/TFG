@@ -1,5 +1,7 @@
 <template>
-  <ViewerPage />
+  <BApp>
+    <ViewerPage />
+  </BApp>
 </template>
 
 <script setup>
