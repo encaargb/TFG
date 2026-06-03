@@ -239,6 +239,23 @@ function toVisibleRectangleGeometry(region, scaleX, scaleY, zoomLevel) {
   }
 }
 
+function getTransformedRectangleEdges(originalRegion, transformedRectangle) {
+  const originalRectangle = toEdgeRectangle(originalRegion)
+  const nextRectangle = toEdgeRectangle(transformedRectangle)
+  const anchor = transformer?.getActiveAnchor?.()
+
+  if (!anchor) {
+    return nextRectangle
+  }
+
+  return {
+    left: anchor.includes('left') ? nextRectangle.left : originalRectangle.left,
+    top: anchor.includes('top') ? nextRectangle.top : originalRectangle.top,
+    right: anchor.includes('right') ? nextRectangle.right : originalRectangle.right,
+    bottom: anchor.includes('bottom') ? nextRectangle.bottom : originalRectangle.bottom,
+  }
+}
+
 function createRectangleRegionNode(region) {
   const { scaleX, scaleY } = getRegionScale()
   const visibleRegion = toVisibleRectangleGeometry(region, scaleX, scaleY, props.zoomLevel)
@@ -284,7 +301,8 @@ function createRectangleRegionNode(region) {
   node.on('dragend transformend', () => {
     const visibleRectangle = syncTransformedRectangleNode(node)
 
-    const documentRectangle = toEdgeRectangle(
+    const documentRectangle = getTransformedRectangleEdges(
+      region,
       clampRectangleToBounds(
         toDocumentRectangle(visibleRectangle, scaleX, scaleY, props.zoomLevel),
         getDocumentBounds()

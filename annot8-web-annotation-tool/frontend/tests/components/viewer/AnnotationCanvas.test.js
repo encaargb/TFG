@@ -58,6 +58,20 @@ function legacyRectangleRegion(overrides = {}) {
   }
 }
 
+async function mountSelectedRectangleCanvas() {
+  const wrapper = mountCanvas({
+    selectedRegionId: 'region-1',
+    regions: [rectangleRegion()],
+  })
+  await flushImageLoad()
+
+  return {
+    wrapper,
+    rectangle: [...getRectInstances()].reverse().find((rect) => rect.config.id === 'region-1'),
+    transformer: getTransformerInstances().at(-1),
+  }
+}
+
 function polygonRegion(overrides = {}) {
   return {
     id: 'region-1',
@@ -418,6 +432,120 @@ describe('AnnotationCanvas', () => {
       y: 0,
       width: 1000,
       height: 500,
+    })
+  })
+
+  it('keeps the left edge fixed when resizing the right edge beyond document bounds', async () => {
+    const { wrapper, rectangle, transformer } = await mountSelectedRectangleCanvas()
+    transformer.getActiveAnchor = vi.fn(() => 'middle-right')
+
+    rectangle.width(1200)
+    rectangle.trigger('transformend')
+
+    expect(wrapper.emitted('update-region')[0][0]).toEqual({
+      id: 'region-1',
+      changes: {
+        left: 200,
+        top: 100,
+        right: 2000,
+        bottom: 300,
+      },
+    })
+  })
+
+  it('keeps the right edge fixed when resizing the left edge beyond document bounds', async () => {
+    const { wrapper, rectangle, transformer } = await mountSelectedRectangleCanvas()
+    transformer.getActiveAnchor = vi.fn(() => 'middle-left')
+
+    rectangle.x(-50)
+    rectangle.width(300)
+    rectangle.trigger('transformend')
+
+    expect(wrapper.emitted('update-region')[0][0]).toEqual({
+      id: 'region-1',
+      changes: {
+        left: 0,
+        top: 100,
+        right: 500,
+        bottom: 300,
+      },
+    })
+  })
+
+  it('keeps the top edge fixed when resizing the bottom edge beyond document bounds', async () => {
+    const { wrapper, rectangle, transformer } = await mountSelectedRectangleCanvas()
+    transformer.getActiveAnchor = vi.fn(() => 'bottom-center')
+
+    rectangle.height(1000)
+    rectangle.trigger('transformend')
+
+    expect(wrapper.emitted('update-region')[0][0]).toEqual({
+      id: 'region-1',
+      changes: {
+        left: 200,
+        top: 100,
+        right: 500,
+        bottom: 1000,
+      },
+    })
+  })
+
+  it('keeps the bottom edge fixed when resizing the top edge beyond document bounds', async () => {
+    const { wrapper, rectangle, transformer } = await mountSelectedRectangleCanvas()
+    transformer.getActiveAnchor = vi.fn(() => 'top-center')
+
+    rectangle.y(-80)
+    rectangle.height(230)
+    rectangle.trigger('transformend')
+
+    expect(wrapper.emitted('update-region')[0][0]).toEqual({
+      id: 'region-1',
+      changes: {
+        left: 200,
+        top: 0,
+        right: 500,
+        bottom: 300,
+      },
+    })
+  })
+
+  it('keeps the opposite corner fixed when resizing a corner beyond document bounds', async () => {
+    const { wrapper, rectangle, transformer } = await mountSelectedRectangleCanvas()
+    transformer.getActiveAnchor = vi.fn(() => 'bottom-right')
+
+    rectangle.width(1200)
+    rectangle.height(800)
+    rectangle.trigger('transformend')
+
+    expect(wrapper.emitted('update-region')[0][0]).toEqual({
+      id: 'region-1',
+      changes: {
+        left: 200,
+        top: 100,
+        right: 2000,
+        bottom: 1000,
+      },
+    })
+
+    wrapper.unmount()
+
+    const secondCanvas = await mountSelectedRectangleCanvas()
+    secondCanvas.transformer.getActiveAnchor = vi.fn(() => 'top-left')
+
+    secondCanvas.rectangle.x(-100)
+    secondCanvas.rectangle.y(-60)
+    secondCanvas.rectangle.width(300)
+    secondCanvas.rectangle.height(220)
+    secondCanvas.rectangle.trigger('transformend')
+
+    expect(secondCanvas.wrapper.emitted('update-region')[0][0]).toEqual({
+      id: 'region-1',
+      changes: {
+        left: 0,
+        top: 0,
+        right: 500,
+        bottom: 300,
+      },
     })
   })
 
