@@ -35,6 +35,20 @@ function rectangleRegion(overrides = {}) {
     id: 'region-1',
     pageIndex: 0,
     type: 'rectangle',
+    left: 200,
+    top: 100,
+    right: 500,
+    bottom: 300,
+    color: '#0d6efd',
+    ...overrides,
+  }
+}
+
+function legacyRectangleRegion(overrides = {}) {
+  return {
+    id: 'region-1',
+    pageIndex: 0,
+    type: 'rectangle',
     x: 200,
     y: 100,
     width: 300,
@@ -130,6 +144,30 @@ describe('AnnotationCanvas', () => {
     expect(transformer.nodes).toHaveBeenLastCalledWith([rectangle])
   })
 
+  it('renders legacy rectangle regions and attaches the transformer to the selected rectangle', async () => {
+    mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [legacyRectangleRegion()],
+    })
+    await flushImageLoad()
+
+    const rectangle = getRectInstances().find((rect) => rect.config.id === 'region-1')
+    const transformer = getTransformerInstances().at(-1)
+
+    expect(rectangle.config).toEqual(
+      expect.objectContaining({
+        id: 'region-1',
+        x: 100,
+        y: 50,
+        width: 150,
+        height: 100,
+        strokeWidth: 3,
+        draggable: true,
+      })
+    )
+    expect(transformer.nodes).toHaveBeenLastCalledWith([rectangle])
+  })
+
   it('emits mouse coordinates in document space', async () => {
     const wrapper = mountCanvas()
     await flushImageLoad()
@@ -161,12 +199,16 @@ describe('AnnotationCanvas', () => {
         id: 'region-1',
         pageIndex: 0,
         type: 'rectangle',
-        x: 200,
-        y: 100,
-        width: 300,
-        height: 200,
+        left: 200,
+        top: 100,
+        right: 500,
+        bottom: 300,
       })
     )
+    expect(wrapper.emitted('add-region')[0][0]).not.toHaveProperty('x')
+    expect(wrapper.emitted('add-region')[0][0]).not.toHaveProperty('y')
+    expect(wrapper.emitted('add-region')[0][0]).not.toHaveProperty('width')
+    expect(wrapper.emitted('add-region')[0][0]).not.toHaveProperty('height')
     expect(wrapper.emitted('select-region')).toEqual([['region-1']])
   })
 
@@ -187,12 +229,16 @@ describe('AnnotationCanvas', () => {
         id: 'region-1',
         pageIndex: 0,
         type: 'rectangle',
-        x: 200,
-        y: 100,
-        width: 300,
-        height: 200,
+        left: 200,
+        top: 100,
+        right: 500,
+        bottom: 300,
       })
     )
+    expect(wrapper.emitted('add-region')[0][0]).not.toHaveProperty('x')
+    expect(wrapper.emitted('add-region')[0][0]).not.toHaveProperty('y')
+    expect(wrapper.emitted('add-region')[0][0]).not.toHaveProperty('width')
+    expect(wrapper.emitted('add-region')[0][0]).not.toHaveProperty('height')
   })
 
   it('does not emit a rectangle when the drag area is too small', async () => {
@@ -243,10 +289,10 @@ describe('AnnotationCanvas', () => {
     expect(wrapper.emitted('update-region')[0][0]).toEqual({
       id: 'region-1',
       changes: {
-        x: 240,
-        y: 160,
-        width: 300,
-        height: 200,
+        left: 240,
+        top: 160,
+        right: 540,
+        bottom: 360,
       },
     })
   })
@@ -284,10 +330,10 @@ describe('AnnotationCanvas', () => {
     expect(wrapper.emitted('update-region')[0][0]).toEqual({
       id: 'region-1',
       changes: {
-        x: 0,
-        y: 800,
-        width: 300,
-        height: 200,
+        left: 0,
+        top: 800,
+        right: 300,
+        bottom: 1000,
       },
     })
   })
@@ -327,10 +373,10 @@ describe('AnnotationCanvas', () => {
     expect(wrapper.emitted('update-region')[0][0]).toEqual({
       id: 'region-1',
       changes: {
-        x: 200,
-        y: 100,
-        width: 600,
-        height: 300,
+        left: 200,
+        top: 100,
+        right: 800,
+        bottom: 400,
       },
     })
     expect(rectangle.scaleX).toHaveBeenLastCalledWith(1)
