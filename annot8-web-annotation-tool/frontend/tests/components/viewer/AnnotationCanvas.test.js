@@ -435,6 +435,88 @@ describe('AnnotationCanvas', () => {
     })
   })
 
+  it('keeps the visual left edge fixed while resizing the right edge beyond bounds', async () => {
+    const { rectangle, transformer } = await mountSelectedRectangleCanvas()
+    transformer.getActiveAnchor = vi.fn(() => 'middle-right')
+
+    rectangle.width(1200)
+    rectangle.trigger('transform')
+
+    expect(rectangle.x).toHaveBeenLastCalledWith(100)
+    expect(rectangle.y).toHaveBeenLastCalledWith(50)
+    expect(rectangle.width).toHaveBeenLastCalledWith(900)
+    expect(rectangle.height).toHaveBeenLastCalledWith(100)
+  })
+
+  it('keeps the visual right edge fixed while resizing the left edge beyond bounds', async () => {
+    const { rectangle, transformer } = await mountSelectedRectangleCanvas()
+    transformer.getActiveAnchor = vi.fn(() => 'middle-left')
+
+    rectangle.x(-50)
+    rectangle.width(300)
+    rectangle.trigger('transform')
+
+    expect(rectangle.x).toHaveBeenLastCalledWith(0)
+    expect(rectangle.y).toHaveBeenLastCalledWith(50)
+    expect(rectangle.width).toHaveBeenLastCalledWith(250)
+    expect(rectangle.height).toHaveBeenLastCalledWith(100)
+  })
+
+  it('keeps the visual top edge fixed while resizing the bottom edge beyond bounds', async () => {
+    const { rectangle, transformer } = await mountSelectedRectangleCanvas()
+    transformer.getActiveAnchor = vi.fn(() => 'bottom-center')
+
+    rectangle.height(1000)
+    rectangle.trigger('transform')
+
+    expect(rectangle.x).toHaveBeenLastCalledWith(100)
+    expect(rectangle.y).toHaveBeenLastCalledWith(50)
+    expect(rectangle.width).toHaveBeenLastCalledWith(150)
+    expect(rectangle.height).toHaveBeenLastCalledWith(450)
+  })
+
+  it('keeps the visual bottom edge fixed while resizing the top edge beyond bounds', async () => {
+    const { rectangle, transformer } = await mountSelectedRectangleCanvas()
+    transformer.getActiveAnchor = vi.fn(() => 'top-center')
+
+    rectangle.y(-80)
+    rectangle.height(230)
+    rectangle.trigger('transform')
+
+    expect(rectangle.x).toHaveBeenLastCalledWith(100)
+    expect(rectangle.y).toHaveBeenLastCalledWith(0)
+    expect(rectangle.width).toHaveBeenLastCalledWith(150)
+    expect(rectangle.height).toHaveBeenLastCalledWith(150)
+  })
+
+  it('keeps the opposite visual corner fixed while resizing a corner beyond bounds', async () => {
+    const { rectangle, transformer } = await mountSelectedRectangleCanvas()
+    transformer.getActiveAnchor = vi.fn(() => 'bottom-right')
+
+    rectangle.width(1200)
+    rectangle.height(800)
+    rectangle.trigger('transform')
+
+    expect(rectangle.x).toHaveBeenLastCalledWith(100)
+    expect(rectangle.y).toHaveBeenLastCalledWith(50)
+    expect(rectangle.width).toHaveBeenLastCalledWith(900)
+    expect(rectangle.height).toHaveBeenLastCalledWith(450)
+
+    const secondCanvas = await mountSelectedRectangleCanvas()
+    secondCanvas.transformer.getActiveAnchor = vi.fn(() => 'top-left')
+
+    secondCanvas.rectangle.x(-100)
+    secondCanvas.rectangle.y(-60)
+    secondCanvas.rectangle.width(300)
+    secondCanvas.rectangle.height(220)
+    secondCanvas.rectangle.trigger('transform')
+
+    expect(secondCanvas.rectangle.x).toHaveBeenLastCalledWith(0)
+    expect(secondCanvas.rectangle.y).toHaveBeenLastCalledWith(0)
+    expect(secondCanvas.rectangle.width).toHaveBeenLastCalledWith(250)
+    expect(secondCanvas.rectangle.height).toHaveBeenLastCalledWith(150)
+  })
+
   it('keeps the left edge fixed when resizing the right edge beyond document bounds', async () => {
     const { wrapper, rectangle, transformer } = await mountSelectedRectangleCanvas()
     transformer.getActiveAnchor = vi.fn(() => 'middle-right')

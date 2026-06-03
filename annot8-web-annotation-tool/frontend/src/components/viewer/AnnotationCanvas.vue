@@ -204,6 +204,68 @@ function syncTransformedRectangleNode(node) {
   return visibleRectangle
 }
 
+function clampValue(value, minimum, maximum) {
+  return Math.max(minimum, Math.min(maximum, value))
+}
+
+function getAnchorAwareVisibleRectangle(originalRectangle, transformedRectangle) {
+  const anchor = transformer?.getActiveAnchor?.()
+
+  if (!anchor) {
+    return clampVisibleRectangle(transformedRectangle, MIN_VISIBLE_REGION_SIZE)
+  }
+
+  const bounds = getVisibleBounds()
+  const original = normalizeVisibleRectangle(originalRectangle)
+  const transformed = normalizeVisibleRectangle(transformedRectangle)
+
+  let left = original.x
+  let top = original.y
+  let right = original.x + original.width
+  let bottom = original.y + original.height
+
+  if (anchor.includes('left')) {
+    left = clampValue(transformed.x, 0, right - MIN_VISIBLE_REGION_SIZE)
+  }
+
+  if (anchor.includes('right')) {
+    right = clampValue(
+      transformed.x + transformed.width,
+      left + MIN_VISIBLE_REGION_SIZE,
+      bounds.width
+    )
+  }
+
+  if (anchor.includes('top')) {
+    top = clampValue(transformed.y, 0, bottom - MIN_VISIBLE_REGION_SIZE)
+  }
+
+  if (anchor.includes('bottom')) {
+    bottom = clampValue(
+      transformed.y + transformed.height,
+      top + MIN_VISIBLE_REGION_SIZE,
+      bounds.height
+    )
+  }
+
+  return {
+    x: left,
+    y: top,
+    width: right - left,
+    height: bottom - top,
+  }
+}
+
+function syncResizedRectangleNode(node, region, scaleX, scaleY) {
+  const visibleRectangle = getAnchorAwareVisibleRectangle(
+    toVisibleRectangleGeometry(region, scaleX, scaleY, props.zoomLevel),
+    getNodeVisibleRectangle(node)
+  )
+  applyVisibleRectangleToNode(node, visibleRectangle)
+
+  return visibleRectangle
+}
+
 function getVisiblePolygonBounds(points) {
   const xs = points.map((point) => point.x)
   const ys = points.map((point) => point.y)
@@ -294,12 +356,14 @@ function createRectangleRegionNode(region) {
   })
 
   node.on('transform', () => {
-    syncTransformedRectangleNode(node)
+    syncResizedRectangleNode(node, region, scaleX, scaleY)
     regionLayer.draw()
   })
 
   node.on('dragend transformend', () => {
-    const visibleRectangle = syncTransformedRectangleNode(node)
+    const visibleRectangle = transformer?.getActiveAnchor?.()
+      ? syncResizedRectangleNode(node, region, scaleX, scaleY)
+      : syncTransformedRectangleNode(node)
 
     const documentRectangle = getTransformedRectangleEdges(
       region,
