@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import ViewerPage from '../../src/views/ViewerPage.vue'
 import { ProjectDocumentModel } from '../../src/models/ProjectDocumentModel'
+import * as documentApi from '../../src/services/documentApi'
 
 const updateZoomSpy = vi.fn()
+let saveProjectRegionsSpy
 
 const PageSidebarStub = {
   name: 'PageSidebar',
@@ -169,6 +171,9 @@ describe('ViewerPage', () => {
     )
     ProjectDocumentModel.regions = []
     updateZoomSpy.mockClear()
+    saveProjectRegionsSpy = vi
+      .spyOn(documentApi, 'saveProjectRegions')
+      .mockResolvedValue(ProjectDocumentModel.regions)
   })
 
   it('passes initial viewer state to the extracted child components', async () => {
@@ -286,6 +291,7 @@ describe('ViewerPage', () => {
         type: 'rectangle',
       }),
     ])
+    expect(saveProjectRegionsSpy).toHaveBeenLastCalledWith('doc1', ProjectDocumentModel.regions)
     expect(getStub(wrapper, ViewerToolbarStub).props()).toEqual(
       expect.objectContaining({
         regionCount: 1,
@@ -321,11 +327,31 @@ describe('ViewerPage', () => {
         height: 40,
       })
     )
+    expect(saveProjectRegionsSpy).toHaveBeenLastCalledWith('doc1', ProjectDocumentModel.regions)
 
     await wrapper.find('[data-testid="select-region"]').trigger('click')
     await wrapper.find('[data-testid="delete-selected"]').trigger('click')
 
     expect(ProjectDocumentModel.regions).toEqual([])
+    expect(saveProjectRegionsSpy).toHaveBeenLastCalledWith('doc1', [])
+    expect(getStub(wrapper, ViewerToolbarStub).props()).toEqual(
+      expect.objectContaining({
+        regionCount: 0,
+        hasSelectedRegion: false,
+      })
+    )
+  })
+
+  it('deletes the selected region from toolbar delete events', async () => {
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
+
+    await wrapper.find('[data-testid="add-region"]').trigger('click')
+    await wrapper.find('[data-testid="select-region"]').trigger('click')
+    await wrapper.find('[data-testid="delete-region"]').trigger('click')
+
+    expect(ProjectDocumentModel.regions).toEqual([])
+    expect(saveProjectRegionsSpy).toHaveBeenLastCalledWith('doc1', [])
     expect(getStub(wrapper, ViewerToolbarStub).props()).toEqual(
       expect.objectContaining({
         regionCount: 0,
