@@ -20,6 +20,24 @@ function getButton(wrapper, label) {
   return wrapper.findAll('button').find((button) => button.text() === label)
 }
 
+function expectToolButtonPressed(wrapper, label, isPressed = true) {
+  expect(getButton(wrapper, label).attributes('aria-pressed')).toBe(String(isPressed))
+}
+
+function expectButtonDisabled(wrapper, label, isDisabled = true) {
+  expect(getButton(wrapper, label).element.disabled).toBe(isDisabled)
+}
+
+function expectCurrentThumbnail(thumbnails, index) {
+  thumbnails.forEach((thumbnail, thumbnailIndex) => {
+    if (thumbnailIndex === index) {
+      expect(thumbnail.attributes('aria-current')).toBe('page')
+    } else {
+      expect(thumbnail.attributes('aria-current')).toBeUndefined()
+    }
+  })
+}
+
 async function createSelectedRectangle(wrapper) {
   const stage = getLatestStage()
 
@@ -58,7 +76,7 @@ describe('ViewerPage', () => {
     const thumbnails = wrapper.findAll('.thumb')
 
     expect(thumbnails).toHaveLength(15)
-    expect(thumbnails[0].classes()).toContain('active')
+    expectCurrentThumbnail(thumbnails, 0)
     expect(wrapper.text()).toContain('Page 1 / 15')
     expect(wrapper.text()).toContain('Zoom: 100%')
     expect(wrapper.text()).toContain('Regions: 0')
@@ -104,7 +122,7 @@ describe('ViewerPage', () => {
     const thumbnails = wrapper.findAll('.thumb')
 
     expect(wrapper.text()).toContain('Page 5 / 15')
-    expect(thumbnails[4].classes()).toContain('active')
+    expectCurrentThumbnail(thumbnails, 4)
   })
 
   it('creates the Konva stage and drawing layers when the component is mounted', async () => {
@@ -147,11 +165,11 @@ describe('ViewerPage', () => {
     const wrapper = mount(ViewerPage)
     await flushImageLoad()
 
-    expect(getButton(wrapper, 'Select').classes()).toContain('btn-primary')
-    expect(getButton(wrapper, 'Rectangle').classes()).toContain('btn-outline-secondary')
-    expect(getButton(wrapper, 'Polygon').classes()).toContain('btn-outline-secondary')
-    expect(getButton(wrapper, 'Polyline').classes()).toContain('btn-outline-secondary')
-    expect(getButton(wrapper, 'Delete').element.disabled).toBe(true)
+    expectToolButtonPressed(wrapper, 'Select')
+    expectToolButtonPressed(wrapper, 'Rectangle', false)
+    expectToolButtonPressed(wrapper, 'Polygon', false)
+    expectToolButtonPressed(wrapper, 'Polyline', false)
+    expectButtonDisabled(wrapper, 'Delete')
   })
 
   it('renders a bottom status bar with document state', async () => {
@@ -243,7 +261,7 @@ describe('ViewerPage', () => {
       })
     )
     expect(wrapper.text()).toContain('Regions: 1')
-    expect(getButton(wrapper, 'Rectangle').classes()).toContain('btn-primary')
+    expectToolButtonPressed(wrapper, 'Rectangle')
     expect(rects.at(-1).config).toEqual(
       expect.objectContaining({
         x: 100,
@@ -314,7 +332,7 @@ describe('ViewerPage', () => {
       })
     )
     expect(wrapper.text()).toContain('Regions: 1')
-    expect(getButton(wrapper, 'Polygon').classes()).toContain('btn-primary')
+    expectToolButtonPressed(wrapper, 'Polygon')
     expect(lines.at(-1).config).toEqual(
       expect.objectContaining({
         points: [100, 50, 250, 50, 200, 150],
@@ -445,7 +463,7 @@ describe('ViewerPage', () => {
         ],
       })
     )
-    expect(getButton(wrapper, 'Polyline').classes()).toContain('btn-primary')
+    expectToolButtonPressed(wrapper, 'Polyline')
     expect(lines.at(-1).config).toEqual(
       expect.objectContaining({
         points: [100, 50, 250, 50, 200, 150],
@@ -813,13 +831,13 @@ describe('ViewerPage', () => {
     await wrapper.vm.$nextTick()
 
     expect(ProjectDocumentModel.regions).toHaveLength(1)
-    expect(getButton(wrapper, 'Delete').element.disabled).toBe(false)
+    expectButtonDisabled(wrapper, 'Delete', false)
 
     await getButton(wrapper, 'Delete').trigger('click')
 
     expect(ProjectDocumentModel.regions).toHaveLength(0)
     expect(wrapper.text()).toContain('Regions: 0')
-    expect(getButton(wrapper, 'Delete').element.disabled).toBe(true)
+    expectButtonDisabled(wrapper, 'Delete')
   })
 
   it('deletes the selected region with the Delete key', async () => {
@@ -854,13 +872,13 @@ describe('ViewerPage', () => {
     const stage = getLatestStage()
     const transformer = getTransformerInstances().at(-1)
 
-    expect(getButton(wrapper, 'Delete').element.disabled).toBe(false)
+    expectButtonDisabled(wrapper, 'Delete', false)
     expect(transformer.nodes).toHaveBeenLastCalledWith([getRectInstances().at(-1)])
 
     stage.trigger('click', { target: stage })
     await wrapper.vm.$nextTick()
 
-    expect(getButton(wrapper, 'Delete').element.disabled).toBe(true)
+    expectButtonDisabled(wrapper, 'Delete')
     expect(getTransformerInstances().at(-1).nodes).toHaveBeenLastCalledWith([])
   })
 
@@ -874,7 +892,7 @@ describe('ViewerPage', () => {
     stage.trigger('click', { target: selectedRectangle })
     await wrapper.vm.$nextTick()
 
-    expect(getButton(wrapper, 'Delete').element.disabled).toBe(false)
+    expectButtonDisabled(wrapper, 'Delete', false)
   })
 
   it('clears the current selection with the Escape key', async () => {
@@ -883,12 +901,12 @@ describe('ViewerPage', () => {
 
     await createSelectedRectangle(wrapper)
 
-    expect(getButton(wrapper, 'Delete').element.disabled).toBe(false)
+    expectButtonDisabled(wrapper, 'Delete', false)
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     await wrapper.vm.$nextTick()
 
-    expect(getButton(wrapper, 'Delete').element.disabled).toBe(true)
+    expectButtonDisabled(wrapper, 'Delete')
     expect(getTransformerInstances().at(-1).nodes).toHaveBeenLastCalledWith([])
   })
 
@@ -896,8 +914,8 @@ describe('ViewerPage', () => {
     const wrapper = mount(ViewerPage)
     await flushImageLoad()
 
-    expect(getButton(wrapper, 'Previous').element.disabled).toBe(true)
-    expect(getButton(wrapper, 'Next').element.disabled).toBe(false)
+    expectButtonDisabled(wrapper, 'Previous')
+    expectButtonDisabled(wrapper, 'Next', false)
   })
 
   it('moves to the next page and updates the active thumbnail', async () => {
@@ -910,9 +928,8 @@ describe('ViewerPage', () => {
     const thumbnails = wrapper.findAll('.thumb')
 
     expect(wrapper.text()).toContain('Page 2 / 15')
-    expect(getButton(wrapper, 'Previous').element.disabled).toBe(false)
-    expect(thumbnails[1].classes()).toContain('active')
-    expect(thumbnails[0].classes()).not.toContain('active')
+    expectButtonDisabled(wrapper, 'Previous', false)
+    expectCurrentThumbnail(thumbnails, 1)
   })
 
   it('moves back to the previous page and restores the first thumbnail as active', async () => {
@@ -927,8 +944,8 @@ describe('ViewerPage', () => {
     const thumbnails = wrapper.findAll('.thumb')
 
     expect(wrapper.text()).toContain('Page 1 / 15')
-    expect(getButton(wrapper, 'Previous').element.disabled).toBe(true)
-    expect(thumbnails[0].classes()).toContain('active')
+    expectButtonDisabled(wrapper, 'Previous')
+    expectCurrentThumbnail(thumbnails, 0)
   })
 
   it('selects a page when its thumbnail is clicked', async () => {
@@ -940,7 +957,7 @@ describe('ViewerPage', () => {
     await flushImageLoad()
 
     expect(wrapper.text()).toContain('Page 5 / 15')
-    expect(thumbnails[4].classes()).toContain('active')
+    expectCurrentThumbnail(thumbnails, 4)
   })
 
   it('disables Next on the last page', async () => {
@@ -952,7 +969,7 @@ describe('ViewerPage', () => {
     await flushImageLoad()
 
     expect(wrapper.text()).toContain('Page 15 / 15')
-    expect(getButton(wrapper, 'Next').element.disabled).toBe(true)
+    expectButtonDisabled(wrapper, 'Next')
   })
 
   it('increases and decreases zoom using the configured step', async () => {
@@ -1012,7 +1029,7 @@ describe('ViewerPage', () => {
     }
 
     expect(wrapper.text()).toContain('Zoom: 800%')
-    expect(getButton(wrapper, '+').element.disabled).toBe(true)
+    expectButtonDisabled(wrapper, '+')
   })
 
   it('does not allow zoom below the configured minimum', async () => {
@@ -1024,7 +1041,7 @@ describe('ViewerPage', () => {
     }
 
     expect(wrapper.text()).toContain('Zoom: 25%')
-    expect(getButton(wrapper, '-').element.disabled).toBe(true)
+    expectButtonDisabled(wrapper, '-')
   })
 
   it('reloads the Konva image when the selected page changes and destroys the previous node', async () => {

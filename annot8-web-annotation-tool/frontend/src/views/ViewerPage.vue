@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, ref, onMounted, onBeforeUnmount, watch } from 'vue'
-import { BBadge, BButton, BButtonGroup } from 'bootstrap-vue-next'
+import { BBadge, BButton, BButtonGroup, BImg } from 'bootstrap-vue-next'
 import Konva from 'konva'
 import { ProjectDocumentModel } from '../models/ProjectDocumentModel'
 import { fetchProjectDocument, saveProjectRegions } from '../services/documentApi'
@@ -975,9 +975,11 @@ onBeforeUnmount(() => {
       aria-label="Page thumbnails"
     >
       <div class="sidebar-header">
-        <button
+        <BButton
           type="button"
-          class="sidebar-toggle btn btn-sm btn-outline-secondary"
+          class="sidebar-toggle"
+          size="sm"
+          variant="outline-secondary"
           :aria-label="sidebarCollapsed ? 'Show page thumbnails' : 'Hide page thumbnails'"
           :title="sidebarCollapsed ? 'Show page thumbnails' : 'Hide page thumbnails'"
           @click="toggleSidebar"
@@ -993,7 +995,7 @@ onBeforeUnmount(() => {
             <path v-if="sidebarCollapsed" d="M8.5 8.5 12 12l-3.5 3.5"></path>
             <path v-else d="M11.5 8.5 8 12l3.5 3.5"></path>
           </svg>
-        </button>
+        </BButton>
 
         <div
           v-if="!sidebarCollapsed"
@@ -1004,20 +1006,22 @@ onBeforeUnmount(() => {
       </div>
 
       <div v-if="!sidebarCollapsed" class="sidebar-thumbnails">
-        <button
+        <BButton
           v-for="(p, index) in pages"
           :key="p"
           type="button"
-          class="thumb btn p-1 mb-3 w-100"
-          :class="selectedIndex === index ? 'active btn-primary' : 'btn-light'"
+          class="thumb p-1 mb-3 w-100"
+          :active="selectedIndex === index"
+          :variant="selectedIndex === index ? 'primary' : 'light'"
+          :aria-current="selectedIndex === index ? 'page' : undefined"
           :aria-label="`Open page ${index + 1}`"
           @click="selectPage(index)"
         >
-          <img :src="p" class="img-fluid rounded border" />
-          <span class="thumb-label badge text-bg-light mt-2">
+          <BImg :src="p" fluid rounded class="border" />
+          <BBadge variant="light" class="thumb-label mt-2">
             {{ index + 1 }}
-          </span>
-        </button>
+          </BBadge>
+        </BButton>
       </div>
     </aside>
 
@@ -1054,6 +1058,7 @@ onBeforeUnmount(() => {
             <BButton
               type="button"
               :variant="activeTool === 'select' ? 'primary' : 'outline-secondary'"
+              :aria-pressed="activeTool === 'select'"
               @click="setActiveTool('select')"
             >
               Select
@@ -1061,6 +1066,7 @@ onBeforeUnmount(() => {
             <BButton
               type="button"
               :variant="activeTool === 'rectangle' ? 'primary' : 'outline-secondary'"
+              :aria-pressed="activeTool === 'rectangle'"
               @click="setActiveTool('rectangle')"
             >
               Rectangle
@@ -1068,6 +1074,7 @@ onBeforeUnmount(() => {
             <BButton
               type="button"
               :variant="activeTool === 'polygon' ? 'primary' : 'outline-secondary'"
+              :aria-pressed="activeTool === 'polygon'"
               @click="setActiveTool('polygon')"
             >
               Polygon
@@ -1075,6 +1082,7 @@ onBeforeUnmount(() => {
             <BButton
               type="button"
               :variant="activeTool === 'polyline' ? 'primary' : 'outline-secondary'"
+              :aria-pressed="activeTool === 'polyline'"
               @click="setActiveTool('polyline')"
             >
               Polyline
