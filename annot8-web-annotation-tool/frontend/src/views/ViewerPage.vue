@@ -1,6 +1,13 @@
 <script setup>
 import { computed, nextTick, ref, onMounted, onBeforeUnmount, watch } from 'vue'
-import { BBadge, BButton, BButtonGroup, BImg, BNavbar } from 'bootstrap-vue-next'
+import {
+  BBadge,
+  BButton,
+  BButtonGroup,
+  BButtonToolbar,
+  BImg,
+  BNavbar,
+} from 'bootstrap-vue-next'
 import Konva from 'konva'
 import { ProjectDocumentModel } from '../models/ProjectDocumentModel'
 import { fetchProjectDocument, saveProjectRegions } from '../services/documentApi'
@@ -1031,7 +1038,10 @@ onBeforeUnmount(() => {
         variant="body"
         aria-label="Viewer controls"
       >
-        <div class="d-flex align-items-center gap-2 flex-wrap w-100">
+        <BButtonToolbar
+          class="d-flex align-items-center gap-2 flex-wrap w-100"
+          aria-label="Viewer actions"
+        >
           <BButtonGroup size="sm" aria-label="Page navigation">
             <BButton
               type="button"
@@ -1138,7 +1148,7 @@ onBeforeUnmount(() => {
           <BBadge variant="light" class="coords border ms-md-auto">
             ({{ mousePos.x }}, {{ mousePos.y }})
           </BBadge>
-        </div>
+        </BButtonToolbar>
       </BNavbar>
 
       <div

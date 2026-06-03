@@ -166,6 +166,7 @@ describe('ViewerPage', () => {
     await flushImageLoad()
 
     expect(wrapper.find('nav[aria-label="Viewer controls"]').exists()).toBe(true)
+    expect(wrapper.find('[role="toolbar"][aria-label="Viewer actions"]').exists()).toBe(true)
     expectToolButtonPressed(wrapper, 'Select')
     expectToolButtonPressed(wrapper, 'Rectangle', false)
     expectToolButtonPressed(wrapper, 'Polygon', false)
