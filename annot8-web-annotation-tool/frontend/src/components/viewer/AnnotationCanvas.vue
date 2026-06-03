@@ -106,8 +106,7 @@ function getDocumentBounds() {
   }
 }
 
-function getClampedDocumentPointer() {
-  const pointerPosition = stage?.getPointerPosition()
+function getClampedDocumentPointer(pointerPosition = stage?.getPointerPosition()) {
   const documentPoint = getDocumentCoordinates(
     pointerPosition,
     props.zoomLevel,
@@ -118,6 +117,19 @@ function getClampedDocumentPointer() {
   )
 
   return documentPoint ? clampPointToBounds(documentPoint, getDocumentBounds()) : null
+}
+
+function isPointerInsideVisibleDocument(pointerPosition) {
+  if (!pointerPosition || !baseImageWidth || !baseImageHeight) return false
+
+  const bounds = getVisibleBounds()
+
+  return (
+    pointerPosition.x >= 0 &&
+    pointerPosition.x <= bounds.width &&
+    pointerPosition.y >= 0 &&
+    pointerPosition.y <= bounds.height
+  )
 }
 
 function updateZoom() {
@@ -613,7 +625,11 @@ function renderRegions() {
 function beginRectangleRegion() {
   if (!stage || !regionLayer || !pageImageNode || props.activeTool !== 'rectangle') return
 
-  const documentStart = getClampedDocumentPointer()
+  const pointerPosition = stage.getPointerPosition()
+
+  if (!isPointerInsideVisibleDocument(pointerPosition)) return
+
+  const documentStart = getClampedDocumentPointer(pointerPosition)
 
   if (!documentStart) return
 
@@ -761,7 +777,7 @@ function beginPointRegion() {
   if (!['polygon', 'polyline'].includes(props.activeTool)) return
 
   const pointerPosition = stage.getPointerPosition()
-  const documentPoint = getClampedDocumentPointer()
+  const documentPoint = getClampedDocumentPointer(pointerPosition)
 
   if (!documentPoint) return
 

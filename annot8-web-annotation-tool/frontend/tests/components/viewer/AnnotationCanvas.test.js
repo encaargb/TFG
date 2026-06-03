@@ -366,6 +366,64 @@ describe('AnnotationCanvas', () => {
     )
   })
 
+  it('creates a rectangle after leaving the right and bottom bounds and returning inside', async () => {
+    const wrapper = mountCanvas({ activeTool: 'rectangle' })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousedown')
+
+    const draftRectangle = getRectInstances().at(-1)
+
+    stage.getPointerPosition.mockReturnValue({ x: 9999, y: 9999 })
+    stage.trigger('mousemove')
+
+    expect(draftRectangle.destroy).not.toHaveBeenCalled()
+
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 150 })
+    stage.trigger('mousemove')
+    stage.trigger('mouseup')
+
+    expect(wrapper.emitted('add-region')[0][0]).toEqual(
+      expect.objectContaining({
+        left: 200,
+        top: 100,
+        right: 500,
+        bottom: 300,
+      })
+    )
+  })
+
+  it('creates a rectangle after leaving the left and top bounds and returning inside', async () => {
+    const wrapper = mountCanvas({ activeTool: 'rectangle' })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 150 })
+    stage.trigger('mousedown')
+
+    const draftRectangle = getRectInstances().at(-1)
+
+    stage.getPointerPosition.mockReturnValue({ x: -100, y: -80 })
+    stage.trigger('mousemove')
+
+    expect(draftRectangle.destroy).not.toHaveBeenCalled()
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousemove')
+    stage.trigger('mouseup')
+
+    expect(wrapper.emitted('add-region')[0][0]).toEqual(
+      expect.objectContaining({
+        left: 200,
+        top: 100,
+        right: 500,
+        bottom: 300,
+      })
+    )
+  })
+
   it('does not emit a rectangle when the drag area is too small', async () => {
     const wrapper = mountCanvas({ activeTool: 'rectangle' })
     await flushImageLoad()
