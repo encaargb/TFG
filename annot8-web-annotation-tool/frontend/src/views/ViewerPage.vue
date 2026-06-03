@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import { BBadge, BButton, BButtonGroup } from 'bootstrap-vue-next'
 import Konva from 'konva'
 import { ProjectDocumentModel } from '../models/ProjectDocumentModel'
 import { fetchProjectDocument, saveProjectRegions } from '../services/documentApi'
@@ -1023,111 +1024,108 @@ onBeforeUnmount(() => {
     <main class="viewer d-flex flex-column flex-grow-1 overflow-hidden">
       <div class="viewer-controls navbar bg-body border-bottom px-3 py-2">
         <div class="d-flex align-items-center gap-2 flex-wrap w-100">
-          <div class="btn-group btn-group-sm" role="group" aria-label="Page navigation">
-            <button
+          <BButtonGroup size="sm" aria-label="Page navigation">
+            <BButton
               type="button"
-              class="btn btn-outline-secondary"
+              variant="outline-secondary"
               @click="goToPreviousPage"
               :disabled="selectedIndex === 0"
             >
               Previous
-            </button>
+            </BButton>
 
-            <button
+            <BButton
               type="button"
-              class="btn btn-outline-secondary"
+              variant="outline-secondary"
               @click="goToNextPage"
               :disabled="selectedIndex === pages.length - 1"
             >
               Next
-            </button>
-          </div>
+            </BButton>
+          </BButtonGroup>
 
-          <span class="badge text-bg-secondary">
+          <BBadge variant="secondary">
             Page {{ selectedIndex + 1 }} / {{ pages.length }}
-          </span>
+          </BBadge>
 
           <div class="vr d-none d-md-block"></div>
 
-          <div class="btn-group btn-group-sm" role="group" aria-label="Region tools">
-            <button
+          <BButtonGroup size="sm" aria-label="Region tools">
+            <BButton
               type="button"
-              class="btn"
-              :class="activeTool === 'select' ? 'btn-primary' : 'btn-outline-secondary'"
+              :variant="activeTool === 'select' ? 'primary' : 'outline-secondary'"
               @click="setActiveTool('select')"
             >
               Select
-            </button>
-            <button
+            </BButton>
+            <BButton
               type="button"
-              class="btn"
-              :class="activeTool === 'rectangle' ? 'btn-primary' : 'btn-outline-secondary'"
+              :variant="activeTool === 'rectangle' ? 'primary' : 'outline-secondary'"
               @click="setActiveTool('rectangle')"
             >
               Rectangle
-            </button>
-            <button
+            </BButton>
+            <BButton
               type="button"
-              class="btn"
-              :class="activeTool === 'polygon' ? 'btn-primary' : 'btn-outline-secondary'"
+              :variant="activeTool === 'polygon' ? 'primary' : 'outline-secondary'"
               @click="setActiveTool('polygon')"
             >
               Polygon
-            </button>
-            <button
+            </BButton>
+            <BButton
               type="button"
-              class="btn"
-              :class="activeTool === 'polyline' ? 'btn-primary' : 'btn-outline-secondary'"
+              :variant="activeTool === 'polyline' ? 'primary' : 'outline-secondary'"
               @click="setActiveTool('polyline')"
             >
               Polyline
-            </button>
-          </div>
+            </BButton>
+          </BButtonGroup>
 
-          <span class="badge text-bg-light border">
+          <BBadge variant="light" class="border">
             Regions: {{ currentPageRegions.length }}
-          </span>
+          </BBadge>
 
-          <button
+          <BButton
             type="button"
-            class="btn btn-sm btn-outline-danger"
+            size="sm"
+            variant="outline-danger"
             :disabled="!selectedRegionId"
             @click="deleteSelectedRegion"
           >
             Delete
-          </button>
+          </BButton>
 
           <div class="vr d-none d-md-block"></div>
 
-          <div class="btn-group btn-group-sm" role="group" aria-label="Zoom controls">
-            <button
+          <BButtonGroup size="sm" aria-label="Zoom controls">
+            <BButton
               type="button"
-              class="btn btn-outline-secondary"
+              variant="outline-secondary"
               @click="zoomOut"
               :disabled="zoomLevel <= MIN_ZOOM"
             >
               -
-            </button>
-            <button type="button" class="btn btn-outline-secondary" @click="resetZoom">
+            </BButton>
+            <BButton type="button" variant="outline-secondary" @click="resetZoom">
               Reset
-            </button>
-            <button
+            </BButton>
+            <BButton
               type="button"
-              class="btn btn-outline-secondary"
+              variant="outline-secondary"
               @click="zoomIn"
               :disabled="zoomLevel >= MAX_ZOOM"
             >
               +
-            </button>
-          </div>
+            </BButton>
+          </BButtonGroup>
 
-          <span class="badge text-bg-light border">
+          <BBadge variant="light" class="border">
             Zoom: {{ zoomPercentage }}%
-          </span>
+          </BBadge>
 
-          <span class="coords badge text-bg-light border ms-md-auto">
+          <BBadge variant="light" class="coords border ms-md-auto">
             ({{ mousePos.x }}, {{ mousePos.y }})
-          </span>
+          </BBadge>
         </div>
       </div>
 
