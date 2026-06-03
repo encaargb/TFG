@@ -101,6 +101,27 @@ function polylineRegion(overrides = {}) {
   }
 }
 
+async function drawPointRegionWithDoubleClick(activeTool) {
+  const wrapper = mountCanvas({ activeTool })
+  await flushImageLoad()
+
+  const stage = getLatestStage()
+
+  stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+  stage.trigger('click', { evt: { detail: 1 } })
+
+  stage.getPointerPosition.mockReturnValue({ x: 250, y: 50 })
+  stage.trigger('click', { evt: { detail: 1 } })
+
+  stage.getPointerPosition.mockReturnValue({ x: 200, y: 150 })
+  stage.trigger('click', { evt: { detail: 1 } })
+
+  stage.trigger('click', { evt: { detail: 2 } })
+  stage.trigger('dblclick')
+
+  return wrapper
+}
+
 describe('AnnotationCanvas', () => {
   beforeEach(() => {
     resetKonvaMocks()
@@ -778,6 +799,23 @@ describe('AnnotationCanvas', () => {
     expect(wrapper.emitted('select-region')).toEqual([['region-1']])
   })
 
+  it('does not add a duplicate polygon point when finishing with double click', async () => {
+    const wrapper = await drawPointRegionWithDoubleClick('polygon')
+
+    expect(wrapper.emitted('add-region')[0][0]).toEqual(
+      expect.objectContaining({
+        id: 'region-1',
+        pageIndex: 0,
+        type: 'polygon',
+        points: [
+          { x: 200, y: 100 },
+          { x: 500, y: 100 },
+          { x: 400, y: 300 },
+        ],
+      })
+    )
+  })
+
   it('cancels an active polygon draft with Escape', async () => {
     const wrapper = mountCanvas({ activeTool: 'polygon' })
     await flushImageLoad()
@@ -876,6 +914,39 @@ describe('AnnotationCanvas', () => {
     )
   })
 
+  it('updates the last polygon vertex after finishing with double click', async () => {
+    const wrapper = await drawPointRegionWithDoubleClick('polygon')
+    const region = wrapper.emitted('add-region')[0][0]
+
+    await wrapper.setProps({
+      activeTool: 'select',
+      selectedRegionId: 'region-1',
+      regions: [region],
+    })
+
+    const polygon = [...getLineInstances()].reverse().find((line) => line.config.id === 'region-1')
+    const lastVertexHandle = getCircleInstances().slice(-3).at(-1)
+
+    lastVertexHandle.x(210)
+    lastVertexHandle.y(175)
+    lastVertexHandle.trigger('dragmove')
+
+    expect(polygon.points).toHaveBeenLastCalledWith([100, 50, 250, 50, 210, 175])
+
+    lastVertexHandle.trigger('dragend')
+
+    expect(wrapper.emitted('update-region')[0][0]).toEqual({
+      id: 'region-1',
+      changes: {
+        points: [
+          { x: 200, y: 100 },
+          { x: 500, y: 100 },
+          { x: 420, y: 350 },
+        ],
+      },
+    })
+  })
+
   it('hides and restores selected polygon vertex handles while dragging the whole region', async () => {
     mountCanvas({
       selectedRegionId: 'region-1',
@@ -931,6 +1002,23 @@ describe('AnnotationCanvas', () => {
       })
     )
     expect(wrapper.emitted('select-region')).toEqual([['region-1']])
+  })
+
+  it('does not add a duplicate polyline point when finishing with double click', async () => {
+    const wrapper = await drawPointRegionWithDoubleClick('polyline')
+
+    expect(wrapper.emitted('add-region')[0][0]).toEqual(
+      expect.objectContaining({
+        id: 'region-1',
+        pageIndex: 0,
+        type: 'polyline',
+        points: [
+          { x: 200, y: 100 },
+          { x: 500, y: 100 },
+          { x: 400, y: 300 },
+        ],
+      })
+    )
   })
 
   it('cancels an active polyline draft with Escape', async () => {
@@ -997,6 +1085,41 @@ describe('AnnotationCanvas', () => {
         strokeScaleEnabled: false,
       })
     )
+  })
+
+  it('updates the last polyline vertex after finishing with double click', async () => {
+    const wrapper = await drawPointRegionWithDoubleClick('polyline')
+    const region = wrapper.emitted('add-region')[0][0]
+
+    await wrapper.setProps({
+      activeTool: 'select',
+      selectedRegionId: 'region-1',
+      regions: [region],
+    })
+
+    const polyline = [...getLineInstances()]
+      .reverse()
+      .find((line) => line.config.id === 'region-1')
+    const lastVertexHandle = getCircleInstances().slice(-3).at(-1)
+
+    lastVertexHandle.x(210)
+    lastVertexHandle.y(175)
+    lastVertexHandle.trigger('dragmove')
+
+    expect(polyline.points).toHaveBeenLastCalledWith([100, 50, 250, 50, 210, 175])
+
+    lastVertexHandle.trigger('dragend')
+
+    expect(wrapper.emitted('update-region')[0][0]).toEqual({
+      id: 'region-1',
+      changes: {
+        points: [
+          { x: 200, y: 100 },
+          { x: 500, y: 100 },
+          { x: 420, y: 350 },
+        ],
+      },
+    })
   })
 
   it('hides and restores selected polyline vertex handles while dragging the whole region', async () => {

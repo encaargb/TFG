@@ -803,6 +803,8 @@ function beginPointRegion() {
 }
 
 function handleStageClick(event) {
+  if (event?.evt?.detail > 1) return
+
   beginPointRegion()
 
   if (props.activeTool !== 'select') return
