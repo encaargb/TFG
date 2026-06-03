@@ -253,7 +253,7 @@ describe('AnnotationCanvas', () => {
     expect(wrapper.emitted('add-region')[0][0]).not.toHaveProperty('y')
     expect(wrapper.emitted('add-region')[0][0]).not.toHaveProperty('width')
     expect(wrapper.emitted('add-region')[0][0]).not.toHaveProperty('height')
-    expect(wrapper.emitted('select-region')).toEqual([['region-1']])
+    expect(wrapper.emitted('select-region')).toBeUndefined()
   })
 
   it('normalizes rectangle creation when dragging from bottom-right to top-left', async () => {
@@ -476,6 +476,20 @@ describe('AnnotationCanvas', () => {
     rectangle.trigger('click')
 
     expect(wrapper.emitted('select-region')).toEqual([['region-1']])
+  })
+
+  it('emits clear-selected-region when clicking empty canvas in select mode', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [rectangleRegion()],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    stage.trigger('click')
+
+    expect(wrapper.emitted('clear-selected-region')).toEqual([[]])
   })
 
   it('emits selection and update events for existing regions', async () => {
@@ -959,7 +973,7 @@ describe('AnnotationCanvas', () => {
         ],
       })
     )
-    expect(wrapper.emitted('select-region')).toEqual([['region-1']])
+    expect(wrapper.emitted('select-region')).toBeUndefined()
   })
 
   it('clamps the point-region draft preview inside page bounds', async () => {
@@ -1181,7 +1195,7 @@ describe('AnnotationCanvas', () => {
         ],
       })
     )
-    expect(wrapper.emitted('select-region')).toEqual([['region-1']])
+    expect(wrapper.emitted('select-region')).toBeUndefined()
   })
 
   it('does not add a duplicate polyline point when finishing with double click', async () => {
@@ -1421,7 +1435,7 @@ describe('AnnotationCanvas', () => {
     expect(polygonWrapper.emitted('add-region')[0][0]).toEqual(
       expect.objectContaining({ type: 'polygon' })
     )
-    expect(polygonWrapper.emitted('select-region')).toEqual([['region-1']])
+    expect(polygonWrapper.emitted('select-region')).toBeUndefined()
 
     polygonWrapper.unmount()
     resetKonvaMocks()
@@ -1445,7 +1459,7 @@ describe('AnnotationCanvas', () => {
     expect(polylineWrapper.emitted('add-region')[0][0]).toEqual(
       expect.objectContaining({ type: 'polyline' })
     )
-    expect(polylineWrapper.emitted('select-region')).toEqual([['region-1']])
+    expect(polylineWrapper.emitted('select-region')).toBeUndefined()
   })
 
   it('emits delete-selected-region when Delete is pressed', async () => {

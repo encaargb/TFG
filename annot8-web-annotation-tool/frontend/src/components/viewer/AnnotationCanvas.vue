@@ -755,7 +755,6 @@ function commitDraftRectangleRegion() {
 
   if (draftRegion && isDrawableRegion(draftRegion)) {
     emit('add-region', draftRegion)
-    emit('select-region', draftRegion.id)
   } else {
     renderRegions()
   }
@@ -853,7 +852,6 @@ function commitDraftPointRegion() {
 
   if (isDrawableRegion(draftRegion)) {
     emit('add-region', draftRegion)
-    emit('select-region', draftRegion.id)
   } else {
     renderRegions()
   }

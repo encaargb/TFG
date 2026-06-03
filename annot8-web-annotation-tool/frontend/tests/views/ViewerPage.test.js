@@ -392,4 +392,26 @@ describe('ViewerPage', () => {
       })
     )
   })
+
+  it('does not select the last created region when switching to select tool', async () => {
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
+
+    await wrapper.find('[data-testid="tool-rectangle"]').trigger('click')
+    await wrapper.find('[data-testid="add-region"]').trigger('click')
+    await wrapper.find('[data-testid="tool-select"]').trigger('click')
+
+    expect(getStub(wrapper, ViewerToolbarStub).props()).toEqual(
+      expect.objectContaining({
+        activeTool: 'select',
+        hasSelectedRegion: false,
+      })
+    )
+    expect(getStub(wrapper, AnnotationCanvasStub).props()).toEqual(
+      expect.objectContaining({
+        activeTool: 'select',
+        selectedRegionId: null,
+      })
+    )
+  })
 })
