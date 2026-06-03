@@ -5,6 +5,7 @@
 </template>
 
 <script setup>
+import { BApp } from 'bootstrap-vue-next'
 import ViewerPage from './views/ViewerPage.vue'
 </script>
 
