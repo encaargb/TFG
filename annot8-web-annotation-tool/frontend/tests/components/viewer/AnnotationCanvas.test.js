@@ -181,6 +181,20 @@ describe('AnnotationCanvas', () => {
     expect(wrapper.emitted('select-region')).toBeUndefined()
   })
 
+  it('emits the selected rectangle id when clicking an existing rectangle', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: null,
+      regions: [rectangleRegion()],
+    })
+    await flushImageLoad()
+
+    const rectangle = getRectInstances().find((rect) => rect.config.id === 'region-1')
+
+    rectangle.trigger('click')
+
+    expect(wrapper.emitted('select-region')).toEqual([['region-1']])
+  })
+
   it('emits selection and update events for existing regions', async () => {
     const wrapper = mountCanvas({
       selectedRegionId: 'region-1',
