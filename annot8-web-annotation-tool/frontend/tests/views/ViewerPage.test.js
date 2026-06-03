@@ -515,9 +515,10 @@ describe('ViewerPage', () => {
     const polylineNode = [...getLineInstances()]
       .reverse()
       .find((line) => line.config.id === 'region-1')
-    const firstVertexHandle = getCircleInstances()[0]
+    const vertexHandles = getCircleInstances().slice(-2)
+    const firstVertexHandle = vertexHandles[0]
 
-    expect(getCircleInstances()).toHaveLength(2)
+    expect(vertexHandles).toHaveLength(2)
 
     firstVertexHandle.x(75)
     firstVertexHandle.y(90)
@@ -595,10 +596,11 @@ describe('ViewerPage', () => {
     await getButton(wrapper, 'Select').trigger('click')
 
     const polygonNode = getLineInstances().at(-1)
-    const firstVertexHandle = getCircleInstances()[0]
+    const vertexHandles = getCircleInstances().slice(-3)
+    const firstVertexHandle = vertexHandles[0]
     const transformer = getTransformerInstances().at(-1)
 
-    expect(getCircleInstances()).toHaveLength(3)
+    expect(vertexHandles).toHaveLength(3)
     expect(firstVertexHandle.config).toEqual(
       expect.objectContaining({
         x: 100,

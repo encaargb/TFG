@@ -1,33 +1,16 @@
 <script setup>
-import { computed, nextTick, ref, onMounted, onBeforeUnmount, watch } from 'vue'
-import Konva from 'konva'
+import { computed, nextTick, ref, onMounted } from 'vue'
+import AnnotationCanvas from '../components/viewer/AnnotationCanvas.vue'
 import PageSidebar from '../components/viewer/PageSidebar.vue'
 import ViewerStatusBar from '../components/viewer/ViewerStatusBar.vue'
 import ViewerToolbar from '../components/viewer/ViewerToolbar.vue'
 import { ProjectDocumentModel } from '../models/ProjectDocumentModel'
 import { fetchProjectDocument, saveProjectRegions } from '../services/documentApi'
 import {
-  getDocumentCoordinates,
-  getFittedDimensions,
   getNextZoom,
   getPreviousZoom,
-  getVisibleDimensions,
   getZoomPercentage,
 } from '../utils/viewerMath'
-import {
-  clampPointToBounds,
-  clampPolygonToBounds,
-  clampRectangleToBounds,
-  createPolygonRegion,
-  createPolylineRegion,
-  createRectangleRegion,
-  flattenPoints,
-  isDrawableRegion,
-  toDocumentPoints,
-  toDocumentRectangle,
-  toVisiblePoints,
-  toVisibleRectangle,
-} from '../utils/regionGeometry'
 
 const documentId = ref(ProjectDocumentModel.id)
 const pages = ref(ProjectDocumentModel.pages)
@@ -37,20 +20,20 @@ const selectedIndex = ref(0)
 const MIN_ZOOM = 0.25
 const MAX_ZOOM = 8
 const ZOOM_STEP = 0.25
-const REGION_COLOR = '#0d6efd'
-const POLYGON_CLOSE_DISTANCE = 8
-const MIN_VISIBLE_REGION_SIZE = 4
 
 const zoomLevel = ref(1)
 const activeTool = ref('select')
 const selectedRegionId = ref(null)
 const sidebarCollapsed = ref(false)
+const annotationCanvas = ref(null)
+let regionSequence = 0
 
 const selectedPage = computed(() => pages.value[selectedIndex.value])
 const zoomPercentage = computed(() => getZoomPercentage(zoomLevel.value))
 const currentPageRegions = computed(() =>
   regions.value.filter((region) => region.pageIndex === selectedIndex.value)
 )
+const nextRegionId = computed(() => `region-${regionSequence + 1}`)
 
 const mousePos = ref({ x: 0, y: 0 })
 
@@ -58,7 +41,6 @@ const mousePos = ref({ x: 0, y: 0 })
 // a predictable view state.
 function resetZoom() {
   zoomLevel.value = 1
-  updateZoom()
 }
 
 function goToPreviousPage() {
@@ -84,24 +66,14 @@ function selectPage(index) {
 async function toggleSidebar() {
   sidebarCollapsed.value = !sidebarCollapsed.value
   await nextTick()
-  updateZoom()
+  annotationCanvas.value?.updateZoom()
 }
 
 function setActiveTool(tool) {
-  if (['polygon', 'polyline'].includes(activeTool.value) && activeTool.value !== tool) {
-    cancelDraftPointRegion()
-  }
-
   activeTool.value = tool
-
-  if (tool === 'select') {
-    renderRegions()
-    return
-  }
 
   if (tool !== 'select') {
     selectedRegionId.value = null
-    renderRegions()
   }
 }
 
@@ -109,16 +81,15 @@ function deleteSelectedRegion() {
   if (!selectedRegionId.value) return
 
   regions.value = regions.value.filter((region) => region.id !== selectedRegionId.value)
+  ProjectDocumentModel.regions = regions.value
   persistRegions()
   selectedRegionId.value = null
-  renderRegions()
 }
 
 function clearSelectedRegion() {
   if (!selectedRegionId.value) return
 
   selectedRegionId.value = null
-  renderRegions()
 }
 
 // Saves the whole region list. The mock API intentionally stores a full
@@ -137,797 +108,39 @@ function updateRegionSequence() {
   }, 0)
 }
 
-function handleKeydown(event) {
-  if (['polygon', 'polyline'].includes(activeTool.value) && event.key === 'Enter') {
-    commitDraftPointRegion()
-    return
-  }
-
-  if (['polygon', 'polyline'].includes(activeTool.value) && event.key === 'Escape') {
-    cancelDraftPointRegion()
-    return
-  }
-
-  if (event.key === 'Escape') {
-    clearSelectedRegion()
-    return
-  }
-
-  if (event.key !== 'Delete' && event.key !== 'Backspace') return
-
-  deleteSelectedRegion()
-}
-
 function zoomIn() {
   if (zoomLevel.value < MAX_ZOOM) {
     zoomLevel.value = getNextZoom(zoomLevel.value, ZOOM_STEP, MAX_ZOOM)
-    updateZoom()
   }
 }
 
 function zoomOut() {
   if (zoomLevel.value > MIN_ZOOM) {
     zoomLevel.value = getPreviousZoom(zoomLevel.value, ZOOM_STEP, MIN_ZOOM)
-    updateZoom()
   }
 }
 
-// ---------------- KONVA ----------------
-
-const canvasContainer = ref(null)
-const canvasWrapper = ref(null)
-
-let stage = null
-let imageLayer = null
-let regionLayer = null
-let pageImageNode = null
-let transformer = null
-let draftRegionNode = null
-let draftRegionStart = null
-let draftPointRegionPoints = []
-let regionSequence = 0
-let imageLoadSequence = 0
-
-let baseImageWidth = 0
-let baseImageHeight = 0
-let originalImageWidth = 0
-let originalImageHeight = 0
-
-// Regions are stored in original document coordinates. This scale converts
-// them to the fitted image size used by Konva.
-function getRegionScale() {
-  return {
-    scaleX: baseImageWidth / originalImageWidth,
-    scaleY: baseImageHeight / originalImageHeight,
-  }
+function addRegion(region) {
+  regionSequence += 1
+  regions.value.push(region)
+  ProjectDocumentModel.regions = regions.value
+  persistRegions()
 }
 
-// Bounds are based on the original page size, not the scaled canvas size.
-function getDocumentBounds() {
-  return {
-    width: originalImageWidth,
-    height: originalImageHeight,
-  }
+function updateRegion({ id, changes }) {
+  const region = regions.value.find((candidate) => candidate.id === id)
+  if (!region) return
+
+  Object.assign(region, changes)
+  ProjectDocumentModel.regions = regions.value
+  persistRegions()
 }
 
-// Applies the current zoom to the Konva stage, page image, and region overlay.
-function updateZoom() {
-  if (!stage || !pageImageNode) return
-
-  const { width: visibleWidth, height: visibleHeight } = getVisibleDimensions(
-    baseImageWidth,
-    baseImageHeight,
-    zoomLevel.value
-  )
-
-  stage.width(visibleWidth)
-  stage.height(visibleHeight)
-
-  pageImageNode.x(0)
-  pageImageNode.y(0)
-  pageImageNode.width(visibleWidth)
-  pageImageNode.height(visibleHeight)
-
-  imageLayer.draw()
-  renderRegions()
-}
-
-function getVisibleBounds() {
-  return getVisibleDimensions(baseImageWidth, baseImageHeight, zoomLevel.value)
-}
-
-function normalizeVisibleRectangle(rectangle) {
-  const x = rectangle.width < 0 ? rectangle.x + rectangle.width : rectangle.x
-  const y = rectangle.height < 0 ? rectangle.y + rectangle.height : rectangle.y
-
-  return {
-    x,
-    y,
-    width: Math.abs(rectangle.width),
-    height: Math.abs(rectangle.height),
-  }
-}
-
-function clampVisibleRectangle(rectangle, minimumSize = 0) {
-  const bounds = getVisibleBounds()
-  const normalizedRectangle = normalizeVisibleRectangle(rectangle)
-  const width = Math.min(Math.max(minimumSize, normalizedRectangle.width), bounds.width)
-  const height = Math.min(Math.max(minimumSize, normalizedRectangle.height), bounds.height)
-  const maxX = Math.max(0, bounds.width - width)
-  const maxY = Math.max(0, bounds.height - height)
-
-  return {
-    x: Math.max(0, Math.min(maxX, normalizedRectangle.x)),
-    y: Math.max(0, Math.min(maxY, normalizedRectangle.y)),
-    width,
-    height,
-  }
-}
-
-function clampTransformerBox(oldBox, newBox) {
-  if (
-    newBox.width < MIN_VISIBLE_REGION_SIZE ||
-    newBox.height < MIN_VISIBLE_REGION_SIZE
-  ) {
-    return oldBox
-  }
-
-  return {
-    ...newBox,
-    ...clampVisibleRectangle(newBox, MIN_VISIBLE_REGION_SIZE),
-  }
-}
-
-function getNodeVisibleRectangle(node) {
-  const scaleXNode = typeof node.scaleX === 'function' ? node.scaleX() : 1
-  const scaleYNode = typeof node.scaleY === 'function' ? node.scaleY() : 1
-
-  return {
-    x: node.x(),
-    y: node.y(),
-    width: node.width() * scaleXNode,
-    height: node.height() * scaleYNode,
-  }
-}
-
-function applyVisibleRectangleToNode(node, rectangle) {
-  node.x(rectangle.x)
-  node.y(rectangle.y)
-  node.width(rectangle.width)
-  node.height(rectangle.height)
-
-  if (typeof node.scaleX === 'function') node.scaleX(1)
-  if (typeof node.scaleY === 'function') node.scaleY(1)
-}
-
-function syncTransformedRectangleNode(node) {
-  const visibleRectangle = clampVisibleRectangle(
-    getNodeVisibleRectangle(node),
-    MIN_VISIBLE_REGION_SIZE
-  )
-  applyVisibleRectangleToNode(node, visibleRectangle)
-
-  return visibleRectangle
-}
-
-function getVisiblePolygonBounds(points) {
-  const xs = points.map((point) => point.x)
-  const ys = points.map((point) => point.y)
-
-  return {
-    minX: Math.min(...xs),
-    minY: Math.min(...ys),
-    maxX: Math.max(...xs),
-    maxY: Math.max(...ys),
-  }
-}
-
-function clampVisiblePolygonDelta(points, delta) {
-  const bounds = getVisibleBounds()
-  const polygonBounds = getVisiblePolygonBounds(points)
-
-  return {
-    x: Math.max(-polygonBounds.minX, Math.min(bounds.width - polygonBounds.maxX, delta.x)),
-    y: Math.max(-polygonBounds.minY, Math.min(bounds.height - polygonBounds.maxY, delta.y)),
-  }
-}
-
-function createRectangleRegionNode(region) {
-  const { scaleX, scaleY } = getRegionScale()
-  const visibleRegion = toVisibleRectangle(region, scaleX, scaleY, zoomLevel.value)
-
-  const node = new Konva.Rect({
-    ...visibleRegion,
-    id: region.id,
-    draggable: activeTool.value === 'select',
-    fill: `${region.color}26`,
-    stroke: region.color,
-    strokeWidth: selectedRegionId.value === region.id ? 3 : 2,
-    strokeScaleEnabled: false,
-    dragBoundFunc: (position) => {
-      const clamped = clampVisibleRectangle({
-        x: position.x,
-        y: position.y,
-        width: node.width(),
-        height: node.height(),
-      })
-
-      return {
-        x: clamped.x,
-        y: clamped.y,
-      }
-    },
-  })
-
-  node.on('click tap', () => {
-    if (activeTool.value !== 'select') return
-    selectedRegionId.value = region.id
-    renderRegions()
-  })
-
-  node.on('dragmove', () => {
-    applyVisibleRectangleToNode(node, clampVisibleRectangle(getNodeVisibleRectangle(node)))
-    regionLayer.draw()
-  })
-
-  node.on('transform', () => {
-    syncTransformedRectangleNode(node)
-    regionLayer.draw()
-  })
-
-  node.on('dragend transformend', () => {
-    // Konva transforms can leave scale values on the node. The visible size is
-    // converted back into document coordinates and the node scale is reset.
-    const visibleRectangle = syncTransformedRectangleNode(node)
-
-    const documentRectangle = clampRectangleToBounds(
-      toDocumentRectangle(visibleRectangle, scaleX, scaleY, zoomLevel.value),
-      getDocumentBounds()
-    )
-
-    Object.assign(region, documentRectangle)
-    persistRegions()
-
-    if (typeof node.scaleX === 'function') node.scaleX(1)
-    if (typeof node.scaleY === 'function') node.scaleY(1)
-
-    renderRegions()
-  })
-
-  return node
-}
-
-function createPointRegionNode(region) {
-  const { scaleX, scaleY } = getRegionScale()
-  const visiblePoints = toVisiblePoints(region.points, scaleX, scaleY, zoomLevel.value)
-  const flatVisiblePoints = flattenPoints(visiblePoints)
-  const isPolygon = region.type === 'polygon'
-
-  const node = new Konva.Line({
-    points: flatVisiblePoints,
-    closed: isPolygon,
-    id: region.id,
-    draggable: activeTool.value === 'select',
-    fill: isPolygon ? `${region.color}26` : 'transparent',
-    stroke: region.color,
-    strokeWidth: selectedRegionId.value === region.id ? 3 : 2,
-    strokeScaleEnabled: false,
-    dragBoundFunc: (position) => clampVisiblePolygonDelta(visiblePoints, position),
-  })
-
-  node.on('click tap', () => {
-    if (activeTool.value !== 'select') return
-    selectedRegionId.value = region.id
-    renderRegions()
-  })
-
-  node.on('dragmove', () => {
-    const delta = clampVisiblePolygonDelta(visiblePoints, { x: node.x(), y: node.y() })
-    node.x(delta.x)
-    node.y(delta.y)
-    regionLayer.draw()
-  })
-
-  node.on('dragend', () => {
-    const delta = clampVisiblePolygonDelta(visiblePoints, { x: node.x(), y: node.y() })
-    const movedVisiblePoints = visiblePoints.map((point) => ({
-      x: point.x + delta.x,
-      y: point.y + delta.y,
-    }))
-    const documentPoints = toDocumentPoints(movedVisiblePoints, scaleX, scaleY, zoomLevel.value)
-
-    Object.assign(region, clampPolygonToBounds({ points: documentPoints }, getDocumentBounds()))
-    persistRegions()
-    renderRegions()
-  })
-
-  return node
-}
-
-function createPointRegionVertexHandles(region, pointRegionNode) {
-  const { scaleX, scaleY } = getRegionScale()
-  const visiblePoints = toVisiblePoints(region.points, scaleX, scaleY, zoomLevel.value)
-  const editedVisiblePoints = visiblePoints.map((point) => ({ ...point }))
-
-  return visiblePoints.map((point, index) => {
-    const handle = new Konva.Circle({
-      x: point.x,
-      y: point.y,
-      radius: 5,
-      draggable: true,
-      fill: '#ffffff',
-      stroke: region.color,
-      strokeWidth: 2,
-      strokeScaleEnabled: false,
-      hitStrokeWidth: 12,
-      dragBoundFunc: (position) => {
-        const bounds = getVisibleBounds()
-
-        return {
-          x: Math.max(0, Math.min(bounds.width, position.x)),
-          y: Math.max(0, Math.min(bounds.height, position.y)),
-        }
-      },
-    })
-
-    handle.on('click tap', () => {
-      if (activeTool.value !== 'select') return
-      selectedRegionId.value = region.id
-      renderRegions()
-    })
-
-    handle.on('dragmove', () => {
-      const bounds = getVisibleBounds()
-      const nextPoint = {
-        x: Math.max(0, Math.min(bounds.width, handle.x())),
-        y: Math.max(0, Math.min(bounds.height, handle.y())),
-      }
-
-      handle.x(nextPoint.x)
-      handle.y(nextPoint.y)
-      editedVisiblePoints[index] = nextPoint
-      pointRegionNode.points(flattenPoints(editedVisiblePoints))
-      regionLayer.draw()
-    })
-
-    handle.on('dragend', () => {
-      const documentPoints = toDocumentPoints(
-        editedVisiblePoints,
-        scaleX,
-        scaleY,
-        zoomLevel.value
-      )
-
-      Object.assign(region, clampPolygonToBounds({ points: documentPoints }, getDocumentBounds()))
-      persistRegions()
-      renderRegions()
-    })
-
-    return handle
-  })
-}
-
-// Creates the interactive Konva node for an existing stored region.
-function createRegionNode(region) {
-  if (region.type === 'polygon' || region.type === 'polyline') {
-    return createPointRegionNode(region)
-  }
-
-  return createRectangleRegionNode(region)
-}
-
-// Rebuilds the region layer for the current page and attaches the transformer
-// to the selected region when the select tool is active.
-function renderRegions() {
-  if (!regionLayer || !baseImageWidth || !baseImageHeight) return
-
-  regionLayer.destroyChildren()
-  transformer = new Konva.Transformer({
-    rotateEnabled: false,
-    flipEnabled: false,
-    keepRatio: false,
-    boundBoxFunc: (oldBox, newBox) => clampTransformerBox(oldBox, newBox),
-  })
-
-  let selectedNode = null
-
-  currentPageRegions.value.forEach((region) => {
-    const node = createRegionNode(region)
-    regionLayer.add(node)
-
-    if (region.id === selectedRegionId.value) {
-      selectedNode = node
-    }
-
-    if (
-      (region.type === 'polygon' || region.type === 'polyline') &&
-      region.id === selectedRegionId.value &&
-      activeTool.value === 'select'
-    ) {
-      createPointRegionVertexHandles(region, node).forEach((handle) => regionLayer.add(handle))
-    }
-  })
-
-  regionLayer.add(transformer)
-
-  if (
-    selectedNode &&
-    activeTool.value === 'select' &&
-    !['polygon', 'polyline'].includes(
-      currentPageRegions.value.find((region) => region.id === selectedRegionId.value)?.type
-    )
-  ) {
-    transformer.nodes([selectedNode])
-  } else {
-    transformer.nodes([])
-  }
-
-  regionLayer.draw()
-}
-
-// Starts drawing a rectangle region at the current pointer position.
-function beginRectangleRegion() {
-  if (!stage || !regionLayer || !pageImageNode || activeTool.value !== 'rectangle') return
-
-  const pointerPosition = stage.getPointerPosition()
-  const documentStart = getDocumentCoordinates(
-    pointerPosition,
-    zoomLevel.value,
-    baseImageWidth,
-    baseImageHeight,
-    originalImageWidth,
-    originalImageHeight
-  )
-
-  if (!documentStart) return
-
-  selectedRegionId.value = null
-  draftRegionStart = documentStart
-
-  const { scaleX, scaleY } = getRegionScale()
-  const visibleStart = toVisibleRectangle(
-    {
-      x: documentStart.x,
-      y: documentStart.y,
-      width: 0,
-      height: 0,
-    },
-    scaleX,
-    scaleY,
-    zoomLevel.value
-  )
-
-  draftRegionNode = new Konva.Rect({
-    ...visibleStart,
-    fill: `${REGION_COLOR}26`,
-    stroke: REGION_COLOR,
-    strokeWidth: 2,
-    strokeScaleEnabled: false,
-    dash: [6, 4],
-  })
-
-  regionLayer.add(draftRegionNode)
-  regionLayer.draw()
-}
-
-// Updates the temporary rectangle while the user is dragging.
-function updateDraftRectangleRegion() {
-  if (!stage || !draftRegionNode || !draftRegionStart) return
-
-  const pointerPosition = stage.getPointerPosition()
-  const documentEnd = getDocumentCoordinates(
-    pointerPosition,
-    zoomLevel.value,
-    baseImageWidth,
-    baseImageHeight,
-    originalImageWidth,
-    originalImageHeight
-  )
-
-  if (!documentEnd) return
-
-  const draftRegion = createRectangleRegion({
-    id: 'draft-region',
-    pageIndex: selectedIndex.value,
-    start: draftRegionStart,
-    end: documentEnd,
-    color: REGION_COLOR,
-  })
-  const { scaleX, scaleY } = getRegionScale()
-  const visibleRegion = toVisibleRectangle(draftRegion, scaleX, scaleY, zoomLevel.value)
-
-  draftRegionNode.x(visibleRegion.x)
-  draftRegionNode.y(visibleRegion.y)
-  draftRegionNode.width(visibleRegion.width)
-  draftRegionNode.height(visibleRegion.height)
-  regionLayer.draw()
-}
-
-function updateDraftPointRegion() {
-  if (!stage || !draftRegionNode || !['polygon', 'polyline'].includes(activeTool.value)) return
-
-  const pointerPosition = stage.getPointerPosition()
-  const shouldClosePolygon =
-    activeTool.value === 'polygon' && isPointerNearFirstPolygonPoint(pointerPosition)
-  const documentHoverPoint = getDocumentCoordinates(
-    pointerPosition,
-    zoomLevel.value,
-    baseImageWidth,
-    baseImageHeight,
-    originalImageWidth,
-    originalImageHeight
-  )
-
-  const visiblePoints = toVisiblePoints(
-    documentHoverPoint && !shouldClosePolygon
-      ? [...draftPointRegionPoints, documentHoverPoint]
-      : draftPointRegionPoints,
-    getRegionScale().scaleX,
-    getRegionScale().scaleY,
-    zoomLevel.value
-  )
-
-  draftRegionNode.points(flattenPoints(visiblePoints))
-  draftRegionNode.closed(shouldClosePolygon)
-  draftRegionNode.fill(shouldClosePolygon ? `${REGION_COLOR}26` : `${REGION_COLOR}12`)
-  regionLayer.draw()
-}
-
-function isPointerNearFirstPolygonPoint(pointerPosition) {
-  if (!pointerPosition || draftPointRegionPoints.length < 3) return false
-
-  const { scaleX, scaleY } = getRegionScale()
-  const [firstVisiblePoint] = toVisiblePoints(
-    [draftPointRegionPoints[0]],
-    scaleX,
-    scaleY,
-    zoomLevel.value
-  )
-  const distance = Math.hypot(
-    pointerPosition.x - firstVisiblePoint.x,
-    pointerPosition.y - firstVisiblePoint.y
-  )
-
-  return distance <= POLYGON_CLOSE_DISTANCE
-}
-
-// Converts the temporary rectangle into a stored region if it is large enough.
-function commitDraftRectangleRegion() {
-  if (!stage || !draftRegionNode || !draftRegionStart) return
-
-  const pointerPosition = stage.getPointerPosition()
-  const documentEnd = getDocumentCoordinates(
-    pointerPosition,
-    zoomLevel.value,
-    baseImageWidth,
-    baseImageHeight,
-    originalImageWidth,
-    originalImageHeight
-  )
-
-  let draftRegion = null
-
-  if (documentEnd) {
-    const region = createRectangleRegion({
-      id: `region-${regionSequence + 1}`,
-      pageIndex: selectedIndex.value,
-      start: draftRegionStart,
-      end: documentEnd,
-      color: REGION_COLOR,
-    })
-
-    draftRegion = {
-      ...region,
-      ...clampRectangleToBounds(region, getDocumentBounds()),
-    }
-  }
-
-  draftRegionNode.destroy()
-  draftRegionNode = null
-  draftRegionStart = null
-
-  if (draftRegion && isDrawableRegion(draftRegion)) {
-    regionSequence += 1
-    regions.value.push(draftRegion)
-    persistRegions()
-    selectedRegionId.value = draftRegion.id
-  }
-
-  renderRegions()
-}
-
-function beginPointRegion() {
-  if (!stage || !regionLayer || !pageImageNode) return
-  if (!['polygon', 'polyline'].includes(activeTool.value)) return
-
-  const pointerPosition = stage.getPointerPosition()
-  const documentPoint = getDocumentCoordinates(
-    pointerPosition,
-    zoomLevel.value,
-    baseImageWidth,
-    baseImageHeight,
-    originalImageWidth,
-    originalImageHeight
-  )
-
-  if (!documentPoint) return
-
-  if (activeTool.value === 'polygon' && isPointerNearFirstPolygonPoint(pointerPosition)) {
-    commitDraftPointRegion()
-    return
-  }
-
-  selectedRegionId.value = null
-  draftPointRegionPoints.push(clampPointToBounds(documentPoint, getDocumentBounds()))
-
-  if (!draftRegionNode) {
-    draftRegionNode = new Konva.Line({
-      points: [],
-      closed: false,
-      fill: activeTool.value === 'polygon' ? `${REGION_COLOR}12` : 'transparent',
-      stroke: REGION_COLOR,
-      strokeWidth: 2,
-      strokeScaleEnabled: false,
-      dash: [6, 4],
-    })
-    regionLayer.add(draftRegionNode)
-  }
-
-  updateDraftPointRegion()
-}
-
-function handleStageClick(event) {
-  beginPointRegion()
-
-  if (activeTool.value !== 'select') return
-
-  const clickTarget = event?.target
-
-  if (clickTarget && clickTarget !== stage && clickTarget !== pageImageNode) return
-
-  clearSelectedRegion()
-}
-
-function cancelDraftPointRegion() {
-  if (draftRegionNode) {
-    draftRegionNode.destroy()
-  }
-
-  draftRegionNode = null
-  draftPointRegionPoints = []
-  renderRegions()
-}
-
-function commitDraftPointRegion() {
-  if (!draftRegionNode || !['polygon', 'polyline'].includes(activeTool.value)) return
-
-  const createRegion = activeTool.value === 'polygon' ? createPolygonRegion : createPolylineRegion
-  const region = createRegion({
-    id: `region-${regionSequence + 1}`,
-    pageIndex: selectedIndex.value,
-    points: draftPointRegionPoints,
-    color: REGION_COLOR,
-  })
-  const draftRegion = {
-    ...region,
-    ...clampPolygonToBounds(region, getDocumentBounds()),
-  }
-
-  draftRegionNode.destroy()
-  draftRegionNode = null
-  draftPointRegionPoints = []
-
-  if (isDrawableRegion(draftRegion)) {
-    regionSequence += 1
-    regions.value.push(draftRegion)
-    persistRegions()
-    selectedRegionId.value = draftRegion.id
-  }
-
-  renderRegions()
-}
-
-// Loads a page image into Konva. The load sequence prevents stale image loads
-// from overwriting the currently selected page after fast navigation.
-function loadSelectedPageInKonva(src) {
-  if (!imageLayer || !stage) return
-
-  const loadId = imageLoadSequence + 1
-  imageLoadSequence = loadId
-
-  const img = new window.Image()
-  img.src = src
-
-  img.onload = () => {
-    if (loadId !== imageLoadSequence || !stage || !imageLayer) return
-
-    if (pageImageNode) {
-      pageImageNode.destroy()
-      pageImageNode = null
-    }
-
-    const maxWidth = 1000
-    const maxHeight = 700
-
-    const fittedDimensions = getFittedDimensions(
-      img.width,
-      img.height,
-      maxWidth,
-      maxHeight
-    )
-
-    originalImageWidth = img.width
-    originalImageHeight = img.height
-    baseImageWidth = fittedDimensions.width
-    baseImageHeight = fittedDimensions.height
-
-    stage.width(baseImageWidth)
-    stage.height(baseImageHeight)
-
-    pageImageNode = new Konva.Image({
-      x: 0,
-      y: 0,
-      image: img,
-      width: baseImageWidth,
-      height: baseImageHeight
-    })
-
-    imageLayer.add(pageImageNode)
-    updateZoom()
-
-    // Reset scroll after changing pages so the next page starts at the top-left.
-    if (canvasWrapper.value) {
-      canvasWrapper.value.scrollTop = 0
-      canvasWrapper.value.scrollLeft = 0
-    }
-  }
+function setMousePosition(position) {
+  mousePos.value = position
 }
 
 onMounted(() => {
-  stage = new Konva.Stage({
-    container: canvasContainer.value,
-    width: 1000,
-    height: 700
-  })
-
-  imageLayer = new Konva.Layer()
-  regionLayer = new Konva.Layer()
-  stage.add(imageLayer)
-  stage.add(regionLayer)
-
-  stage.on('mousemove', () => {
-    const pos = stage.getPointerPosition()
-    const coordinates = getDocumentCoordinates(
-      pos,
-      zoomLevel.value,
-      baseImageWidth,
-      baseImageHeight,
-      originalImageWidth,
-      originalImageHeight
-    )
-
-    if (!coordinates) return
-
-    mousePos.value = coordinates
-
-    if (draftRegionNode) {
-      if (['polygon', 'polyline'].includes(activeTool.value)) {
-        updateDraftPointRegion()
-      } else {
-        updateDraftRectangleRegion()
-      }
-    }
-  })
-  stage.on('mousedown', beginRectangleRegion)
-  stage.on('click', handleStageClick)
-  stage.on('mouseup', commitDraftRectangleRegion)
-  stage.on('dblclick', commitDraftPointRegion)
-  window.addEventListener('keydown', handleKeydown)
-
-  if (selectedPage.value) {
-    loadSelectedPageInKonva(selectedPage.value)
-  }
-
   fetchProjectDocument()
     .then((document) => {
       if (document === ProjectDocumentModel) return
@@ -937,35 +150,10 @@ onMounted(() => {
       regions.value = document.regions
       ProjectDocumentModel.regions = document.regions
       updateRegionSequence()
-
-      if (selectedPage.value) {
-        loadSelectedPageInKonva(selectedPage.value)
-      }
     })
     .catch((error) => {
       console.error(error)
     })
-})
-
-watch(selectedPage, (newPage) => {
-  loadSelectedPageInKonva(newPage)
-})
-
-onBeforeUnmount(() => {
-  if (stage) {
-    stage.destroy()
-    stage = null
-  }
-
-  window.removeEventListener('keydown', handleKeydown)
-
-  imageLayer = null
-  regionLayer = null
-  pageImageNode = null
-  transformer = null
-  draftRegionNode = null
-  draftRegionStart = null
-  draftPointRegionPoints = []
 })
 </script>
 
@@ -1000,13 +188,22 @@ onBeforeUnmount(() => {
         @zoom-in="zoomIn"
       />
 
-      <div
-        ref="canvasWrapper"
-        class="canvas-wrapper flex-grow-1 overflow-auto p-4"
-        :class="`canvas-wrapper--${activeTool}`"
-      >
-        <div ref="canvasContainer" class="konva-container shadow-sm"></div>
-      </div>
+      <AnnotationCanvas
+        ref="annotationCanvas"
+        :selected-page="selectedPage"
+        :page-index="selectedIndex"
+        :regions="regions"
+        :selected-region-id="selectedRegionId"
+        :active-tool="activeTool"
+        :zoom-level="zoomLevel"
+        :next-region-id="nextRegionId"
+        @add-region="addRegion"
+        @update-region="updateRegion"
+        @select-region="selectedRegionId = $event"
+        @clear-selected-region="clearSelectedRegion"
+        @delete-selected-region="deleteSelectedRegion"
+        @mouse-position-change="setMousePosition"
+      />
       <ViewerStatusBar
         :selected-index="selectedIndex"
         :total-pages="pages.length"
@@ -1028,33 +225,5 @@ onBeforeUnmount(() => {
 .viewer {
   min-width: 0;
   min-height: 0;
-}
-
-.canvas-wrapper {
-  background: #dee2e6;
-  min-width: 0;
-  min-height: 0;
-}
-
-.canvas-wrapper--select {
-  cursor: default;
-}
-
-.canvas-wrapper--rectangle {
-  cursor: crosshair;
-}
-
-.canvas-wrapper--polygon {
-  cursor: crosshair;
-}
-
-.canvas-wrapper--polyline {
-  cursor: crosshair;
-}
-
-.konva-container {
-  display: inline-block;
-  background: white;
-  border: 1px solid #adb5bd;
 }
 </style>
