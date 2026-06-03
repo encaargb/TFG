@@ -1,1120 +1,369 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
-import Konva from 'konva'
-import { ProjectDocumentModel } from '../../src/models/ProjectDocumentModel'
 import ViewerPage from '../../src/views/ViewerPage.vue'
-import {
-  getImageInstances,
-  getLayerInstances,
-  getLatestStage,
-  getCircleInstances,
-  getLineInstances,
-  getRectInstances,
-  getTransformerInstances,
-  resetKonvaMocks,
-} from '../setup'
+import { ProjectDocumentModel } from '../../src/models/ProjectDocumentModel'
 
-const flushImageLoad = () => new Promise((resolve) => setTimeout(resolve, 0))
+const updateZoomSpy = vi.fn()
 
-function getButton(wrapper, label) {
-  return wrapper.findAll('button').find((button) => button.text() === label)
+const PageSidebarStub = {
+  name: 'PageSidebar',
+  props: ['pages', 'selectedIndex', 'collapsed'],
+  emits: ['select-page', 'toggle-sidebar'],
+  template: `
+    <aside class="page-sidebar-stub">
+      <span data-testid="sidebar-state">{{ selectedIndex }} {{ collapsed }} {{ pages.length }}</span>
+      <button type="button" data-testid="select-page-5" @click="$emit('select-page', 4)">Select page 5</button>
+      <button type="button" data-testid="toggle-sidebar" @click="$emit('toggle-sidebar')">Toggle sidebar</button>
+    </aside>
+  `,
 }
 
-function expectToolButtonPressed(wrapper, label, isPressed = true) {
-  expect(getButton(wrapper, label).attributes('aria-pressed')).toBe(String(isPressed))
+const ViewerToolbarStub = {
+  name: 'ViewerToolbar',
+  props: [
+    'selectedIndex',
+    'totalPages',
+    'activeTool',
+    'regionCount',
+    'hasSelectedRegion',
+    'zoomLevel',
+    'minZoom',
+    'maxZoom',
+    'zoomPercentage',
+    'mousePos',
+  ],
+  emits: [
+    'previous-page',
+    'next-page',
+    'set-active-tool',
+    'delete-selected-region',
+    'zoom-out',
+    'reset-zoom',
+    'zoom-in',
+  ],
+  template: `
+    <nav class="viewer-toolbar-stub">
+      <span data-testid="toolbar-state">
+        {{ selectedIndex }} {{ totalPages }} {{ activeTool }} {{ regionCount }}
+        {{ hasSelectedRegion }} {{ zoomLevel }} {{ zoomPercentage }}
+      </span>
+      <button type="button" data-testid="previous-page" @click="$emit('previous-page')">Previous</button>
+      <button type="button" data-testid="next-page" @click="$emit('next-page')">Next</button>
+      <button type="button" data-testid="tool-rectangle" @click="$emit('set-active-tool', 'rectangle')">Rectangle</button>
+      <button type="button" data-testid="tool-select" @click="$emit('set-active-tool', 'select')">Select</button>
+      <button type="button" data-testid="delete-region" @click="$emit('delete-selected-region')">Delete</button>
+      <button type="button" data-testid="zoom-in" @click="$emit('zoom-in')">Zoom in</button>
+      <button type="button" data-testid="zoom-out" @click="$emit('zoom-out')">Zoom out</button>
+      <button type="button" data-testid="reset-zoom" @click="$emit('reset-zoom')">Reset</button>
+    </nav>
+  `,
 }
 
-function expectButtonDisabled(wrapper, label, isDisabled = true) {
-  expect(getButton(wrapper, label).element.disabled).toBe(isDisabled)
+const ViewerStatusBarStub = {
+  name: 'ViewerStatusBar',
+  props: ['selectedIndex', 'totalPages', 'zoomPercentage', 'activeTool', 'regionCount', 'mousePos'],
+  template: `
+    <footer class="viewer-status-bar-stub">
+      Page {{ selectedIndex + 1 }} / {{ totalPages }}
+      Zoom {{ zoomPercentage }}%
+      Tool {{ activeTool }}
+      Regions {{ regionCount }}
+      X {{ mousePos.x }} Y {{ mousePos.y }}
+    </footer>
+  `,
 }
 
-function expectCurrentThumbnail(thumbnails, index) {
-  thumbnails.forEach((thumbnail, thumbnailIndex) => {
-    if (thumbnailIndex === index) {
-      expect(thumbnail.attributes('aria-current')).toBe('page')
-    } else {
-      expect(thumbnail.attributes('aria-current')).toBeUndefined()
-    }
+const AnnotationCanvasStub = {
+  name: 'AnnotationCanvas',
+  props: [
+    'selectedPage',
+    'pageIndex',
+    'regions',
+    'selectedRegionId',
+    'activeTool',
+    'zoomLevel',
+    'nextRegionId',
+  ],
+  emits: [
+    'add-region',
+    'update-region',
+    'select-region',
+    'clear-selected-region',
+    'delete-selected-region',
+    'mouse-position-change',
+  ],
+  setup(_, { expose }) {
+    expose({ updateZoom: updateZoomSpy })
+  },
+  template: `
+    <section class="annotation-canvas-stub">
+      <span data-testid="canvas-state">
+        {{ selectedPage }} {{ pageIndex }} {{ regions.length }}
+        {{ selectedRegionId }} {{ activeTool }} {{ zoomLevel }} {{ nextRegionId }}
+      </span>
+      <button
+        type="button"
+        data-testid="add-region"
+        @click="$emit('add-region', {
+          id: nextRegionId,
+          pageIndex,
+          type: 'rectangle',
+          x: 10,
+          y: 20,
+          width: 30,
+          height: 40,
+          color: '#0d6efd',
+          annotations: []
+        })"
+      >
+        Add region
+      </button>
+      <button
+        type="button"
+        data-testid="update-region"
+        @click="$emit('update-region', { id: 'region-1', changes: { x: 99, y: 88 } })"
+      >
+        Update region
+      </button>
+      <button type="button" data-testid="select-region" @click="$emit('select-region', 'region-1')">Select region</button>
+      <button type="button" data-testid="clear-region" @click="$emit('clear-selected-region')">Clear region</button>
+      <button type="button" data-testid="delete-selected" @click="$emit('delete-selected-region')">Delete selected</button>
+      <button
+        type="button"
+        data-testid="move-mouse"
+        @click="$emit('mouse-position-change', { x: 321, y: 654 })"
+      >
+        Move mouse
+      </button>
+    </section>
+  `,
+}
+
+function mountViewerPage() {
+  return mount(ViewerPage, {
+    global: {
+      stubs: {
+        PageSidebar: PageSidebarStub,
+        ViewerToolbar: ViewerToolbarStub,
+        ViewerStatusBar: ViewerStatusBarStub,
+        AnnotationCanvas: AnnotationCanvasStub,
+      },
+    },
   })
 }
 
-async function createSelectedRectangle(wrapper) {
-  const stage = getLatestStage()
+async function flushMountedFetch() {
+  await Promise.resolve()
+}
 
-  await getButton(wrapper, 'Rectangle').trigger('click')
-
-  stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
-  stage.trigger('mousedown')
-
-  stage.getPointerPosition.mockReturnValue({ x: 250, y: 150 })
-  stage.trigger('mousemove')
-  stage.trigger('mouseup')
-  await wrapper.vm.$nextTick()
-
-  await getButton(wrapper, 'Select').trigger('click')
-
-  return getRectInstances().at(-1)
+function getStub(wrapper, component) {
+  return wrapper.findComponent(component)
 }
 
 describe('ViewerPage', () => {
   beforeEach(() => {
-    ProjectDocumentModel.regions.length = 0
-    resetKonvaMocks()
-    Konva.Stage.mockClear()
-    Konva.Layer.mockClear()
-    Konva.Image.mockClear()
-    Konva.Rect.mockClear()
-    Konva.Line.mockClear()
-    Konva.Circle.mockClear()
-    Konva.Transformer.mockClear()
+    ProjectDocumentModel.id = 'doc1'
+    ProjectDocumentModel.pages = Array.from(
+      { length: 15 },
+      (_, index) => `/documents/doc1/pages/pg${index + 1}.jpeg`
+    )
+    ProjectDocumentModel.regions = []
+    updateZoomSpy.mockClear()
   })
 
-  it('renders the document thumbnails and highlights the first page by default', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
+  it('passes initial viewer state to the extracted child components', async () => {
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
 
-    const thumbnails = wrapper.findAll('.thumb')
+    const sidebar = getStub(wrapper, PageSidebarStub)
+    const toolbar = getStub(wrapper, ViewerToolbarStub)
+    const canvas = getStub(wrapper, AnnotationCanvasStub)
+    const statusBar = getStub(wrapper, ViewerStatusBarStub)
 
-    expect(thumbnails).toHaveLength(15)
-    expectCurrentThumbnail(thumbnails, 0)
-    expect(wrapper.text()).toContain('Page 1 / 15')
-    expect(wrapper.text()).toContain('Zoom: 100%')
-    expect(wrapper.text()).toContain('Regions: 0')
-  })
-
-  it('collapses and expands the page thumbnail sidebar', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
-
-    const stage = getLatestStage()
-
-    expect(wrapper.find('.sidebar').classes()).not.toContain('sidebar--collapsed')
-    expect(wrapper.findAll('.thumb')).toHaveLength(15)
-
-    stage.width.mockClear()
-    await wrapper.find('button[aria-label="Hide page thumbnails"]').trigger('click')
-
-    expect(wrapper.find('.sidebar').classes()).toContain('sidebar--collapsed')
-    expect(wrapper.findAll('.thumb')).toHaveLength(0)
-    expect(stage.width).toHaveBeenLastCalledWith(1000)
-
-    await wrapper.find('button[aria-label="Show page thumbnails"]').trigger('click')
-
-    expect(wrapper.find('.sidebar').classes()).not.toContain('sidebar--collapsed')
-    expect(wrapper.findAll('.thumb')).toHaveLength(15)
-  })
-
-  it('keeps the selected page when the thumbnail sidebar is collapsed and expanded', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
-
-    await wrapper.findAll('.thumb')[4].trigger('click')
-    await flushImageLoad()
-
-    expect(wrapper.text()).toContain('Page 5 / 15')
-
-    await wrapper.find('button[aria-label="Hide page thumbnails"]').trigger('click')
-
-    expect(wrapper.text()).toContain('Page 5 / 15')
-
-    await wrapper.find('button[aria-label="Show page thumbnails"]').trigger('click')
-
-    const thumbnails = wrapper.findAll('.thumb')
-
-    expect(wrapper.text()).toContain('Page 5 / 15')
-    expectCurrentThumbnail(thumbnails, 4)
-  })
-
-  it('creates the Konva stage and drawing layers when the component is mounted', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
-
-    const stage = getLatestStage()
-    const layers = getLayerInstances()
-
-    expect(Konva.Stage).toHaveBeenCalledTimes(1)
-    expect(Konva.Layer).toHaveBeenCalledTimes(2)
-    expect(stage.config.container).toBe(wrapper.find('.konva-container').element)
-    expect(stage.config.width).toBe(1000)
-    expect(stage.config.height).toBe(700)
-    expect(stage.add).toHaveBeenCalledWith(layers[0])
-    expect(stage.add).toHaveBeenCalledWith(layers[1])
-  })
-
-  it('loads the selected page image into Konva on mount', async () => {
-    mount(ViewerPage)
-    await flushImageLoad()
-
-    const layer = getLayerInstances()[0]
-    const createdImages = getImageInstances()
-
-    expect(Konva.Image).toHaveBeenCalledTimes(1)
-    expect(Konva.Image).toHaveBeenCalledWith(
+    expect(sidebar.props()).toEqual(
       expect.objectContaining({
-        x: 0,
-        y: 0,
-        width: 1000,
-        height: 500,
+        pages: ProjectDocumentModel.pages,
+        selectedIndex: 0,
+        collapsed: false,
       })
     )
-    expect(layer.add).toHaveBeenCalledWith(createdImages[0])
-    expect(layer.draw).toHaveBeenCalled()
-  })
-
-  it('renders the select, rectangle, polygon, and polyline region tools', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
-
-    expect(wrapper.find('nav[aria-label="Viewer controls"]').exists()).toBe(true)
-    expect(wrapper.find('[role="toolbar"][aria-label="Viewer actions"]').exists()).toBe(true)
-    expectToolButtonPressed(wrapper, 'Select')
-    expectToolButtonPressed(wrapper, 'Rectangle', false)
-    expectToolButtonPressed(wrapper, 'Polygon', false)
-    expectToolButtonPressed(wrapper, 'Polyline', false)
-    expectButtonDisabled(wrapper, 'Delete')
-  })
-
-  it('renders a bottom status bar with document state', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
-
-    const statusBar = wrapper.find('.status-bar')
-
-    expect(statusBar.exists()).toBe(true)
+    expect(toolbar.props()).toEqual(
+      expect.objectContaining({
+        selectedIndex: 0,
+        totalPages: 15,
+        activeTool: 'select',
+        regionCount: 0,
+        hasSelectedRegion: false,
+        zoomLevel: 1,
+        zoomPercentage: 100,
+      })
+    )
+    expect(canvas.props()).toEqual(
+      expect.objectContaining({
+        selectedPage: '/documents/doc1/pages/pg1.jpeg',
+        pageIndex: 0,
+        regions: [],
+        selectedRegionId: null,
+        activeTool: 'select',
+        zoomLevel: 1,
+        nextRegionId: 'region-1',
+      })
+    )
     expect(statusBar.text()).toContain('Page 1 / 15')
     expect(statusBar.text()).toContain('Zoom 100%')
     expect(statusBar.text()).toContain('Tool select')
     expect(statusBar.text()).toContain('Regions 0')
-    expect(statusBar.text()).toContain('X 0 · Y 0')
   })
 
-  it('updates the bottom status bar when viewer state changes', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
+  it('wires sidebar page selection and collapse events to parent state', async () => {
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
 
-    const stage = getLatestStage()
-    const statusBar = wrapper.find('.status-bar')
+    await wrapper.find('[data-testid="zoom-in"]').trigger('click')
+    await wrapper.find('[data-testid="select-page-5"]').trigger('click')
 
-    await getButton(wrapper, 'Rectangle').trigger('click')
+    expect(getStub(wrapper, AnnotationCanvasStub).props()).toEqual(
+      expect.objectContaining({
+        selectedPage: '/documents/doc1/pages/pg5.jpeg',
+        pageIndex: 4,
+        zoomLevel: 1,
+      })
+    )
+    expect(getStub(wrapper, ViewerStatusBarStub).text()).toContain('Page 5 / 15')
 
-    stage.getPointerPosition.mockReturnValue({ x: 250, y: 125 })
-    stage.trigger('mousemove')
-    await wrapper.vm.$nextTick()
+    await wrapper.find('[data-testid="toggle-sidebar"]').trigger('click')
 
-    await getButton(wrapper, 'Next').trigger('click')
-    await flushImageLoad()
-
-    expect(statusBar.text()).toContain('Page 2 / 15')
-    expect(statusBar.text()).toContain('Tool rectangle')
-    expect(statusBar.text()).toContain('X 500 · Y 250')
+    expect(getStub(wrapper, PageSidebarStub).props('collapsed')).toBe(true)
+    expect(updateZoomSpy).toHaveBeenCalledTimes(1)
   })
 
-  it('updates the canvas cursor mode when switching region tools', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
+  it('wires toolbar navigation, tool, and zoom events to child props', async () => {
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
 
-    const canvasWrapper = wrapper.find('.canvas-wrapper')
+    await wrapper.find('[data-testid="next-page"]').trigger('click')
+    await wrapper.find('[data-testid="tool-rectangle"]').trigger('click')
+    await wrapper.find('[data-testid="zoom-in"]').trigger('click')
 
-    expect(canvasWrapper.classes()).toContain('canvas-wrapper--select')
+    expect(getStub(wrapper, ViewerToolbarStub).props()).toEqual(
+      expect.objectContaining({
+        selectedIndex: 1,
+        activeTool: 'rectangle',
+        zoomLevel: 1.25,
+        zoomPercentage: 125,
+      })
+    )
+    expect(getStub(wrapper, AnnotationCanvasStub).props()).toEqual(
+      expect.objectContaining({
+        pageIndex: 1,
+        activeTool: 'rectangle',
+        zoomLevel: 1.25,
+      })
+    )
 
-    await getButton(wrapper, 'Rectangle').trigger('click')
+    await wrapper.find('[data-testid="reset-zoom"]').trigger('click')
+    await wrapper.find('[data-testid="previous-page"]').trigger('click')
 
-    expect(canvasWrapper.classes()).toContain('canvas-wrapper--rectangle')
-
-    await getButton(wrapper, 'Polygon').trigger('click')
-
-    expect(canvasWrapper.classes()).toContain('canvas-wrapper--polygon')
-
-    await getButton(wrapper, 'Polyline').trigger('click')
-
-    expect(canvasWrapper.classes()).toContain('canvas-wrapper--polyline')
+    expect(getStub(wrapper, ViewerToolbarStub).props()).toEqual(
+      expect.objectContaining({
+        selectedIndex: 0,
+        zoomLevel: 1,
+        zoomPercentage: 100,
+      })
+    )
   })
 
-  it('creates a rectangular region by dragging on the document', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
+  it('stores regions emitted by the canvas and updates selected-region state', async () => {
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
 
-    const stage = getLatestStage()
+    await wrapper.find('[data-testid="add-region"]').trigger('click')
 
-    await getButton(wrapper, 'Rectangle').trigger('click')
-
-    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
-    stage.trigger('mousedown')
-
-    stage.getPointerPosition.mockReturnValue({ x: 250, y: 150 })
-    stage.trigger('mousemove')
-    stage.trigger('mouseup')
-    await wrapper.vm.$nextTick()
-
-    const regions = ProjectDocumentModel.regions
-    const rects = getRectInstances()
-    const transformer = getTransformerInstances().at(-1)
-
-    expect(regions).toHaveLength(1)
-    expect(regions[0]).toEqual(
+    expect(ProjectDocumentModel.regions).toEqual([
       expect.objectContaining({
         id: 'region-1',
         pageIndex: 0,
         type: 'rectangle',
-        x: 200,
-        y: 100,
-        width: 300,
-        height: 200,
-      })
-    )
-    expect(wrapper.text()).toContain('Regions: 1')
-    expectToolButtonPressed(wrapper, 'Rectangle')
-    expect(rects.at(-1).config).toEqual(
+      }),
+    ])
+    expect(getStub(wrapper, ViewerToolbarStub).props()).toEqual(
       expect.objectContaining({
-        x: 100,
-        y: 50,
-        width: 150,
-        height: 100,
-        id: 'region-1',
-        strokeScaleEnabled: false,
+        regionCount: 1,
+        hasSelectedRegion: false,
       })
     )
-    expect(transformer.nodes).toHaveBeenLastCalledWith([])
+    expect(getStub(wrapper, AnnotationCanvasStub).props('nextRegionId')).toBe('region-2')
+
+    await wrapper.find('[data-testid="select-region"]').trigger('click')
+
+    expect(getStub(wrapper, ViewerToolbarStub).props('hasSelectedRegion')).toBe(true)
+    expect(getStub(wrapper, AnnotationCanvasStub).props('selectedRegionId')).toBe('region-1')
+
+    await wrapper.find('[data-testid="clear-region"]').trigger('click')
+
+    expect(getStub(wrapper, ViewerToolbarStub).props('hasSelectedRegion')).toBe(false)
+    expect(getStub(wrapper, AnnotationCanvasStub).props('selectedRegionId')).toBe(null)
   })
 
-  it('does not create a region when the drag area is too small', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
+  it('updates, deletes, and persists region state from child component events', async () => {
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
 
-    const stage = getLatestStage()
+    await wrapper.find('[data-testid="add-region"]').trigger('click')
+    await wrapper.find('[data-testid="update-region"]').trigger('click')
 
-    await getButton(wrapper, 'Rectangle').trigger('click')
-
-    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
-    stage.trigger('mousedown')
-
-    stage.getPointerPosition.mockReturnValue({ x: 101, y: 51 })
-    stage.trigger('mousemove')
-    stage.trigger('mouseup')
-    await wrapper.vm.$nextTick()
-
-    expect(ProjectDocumentModel.regions).toHaveLength(0)
-    expect(wrapper.text()).toContain('Regions: 0')
-  })
-
-  it('creates a polygon region from clicked vertices and Enter', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
-
-    const stage = getLatestStage()
-
-    await getButton(wrapper, 'Polygon').trigger('click')
-
-    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
-    stage.trigger('click')
-
-    stage.getPointerPosition.mockReturnValue({ x: 250, y: 50 })
-    stage.trigger('click')
-
-    stage.getPointerPosition.mockReturnValue({ x: 200, y: 150 })
-    stage.trigger('click')
-
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
-    await wrapper.vm.$nextTick()
-
-    const regions = ProjectDocumentModel.regions
-    const lines = getLineInstances()
-
-    expect(regions).toHaveLength(1)
-    expect(regions[0]).toEqual(
-      expect.objectContaining({
-        id: 'region-1',
-        pageIndex: 0,
-        type: 'polygon',
-        points: [
-          { x: 200, y: 100 },
-          { x: 500, y: 100 },
-          { x: 400, y: 300 },
-        ],
-      })
-    )
-    expect(wrapper.text()).toContain('Regions: 1')
-    expectToolButtonPressed(wrapper, 'Polygon')
-    expect(lines.at(-1).config).toEqual(
-      expect.objectContaining({
-        points: [100, 50, 250, 50, 200, 150],
-        closed: true,
-        id: 'region-1',
-        strokeScaleEnabled: false,
-      })
-    )
-  })
-
-  it('does not create a polygon region with fewer than three vertices', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
-
-    const stage = getLatestStage()
-
-    await getButton(wrapper, 'Polygon').trigger('click')
-
-    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
-    stage.trigger('click')
-
-    stage.getPointerPosition.mockReturnValue({ x: 250, y: 50 })
-    stage.trigger('click')
-
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
-    await wrapper.vm.$nextTick()
-
-    expect(ProjectDocumentModel.regions).toHaveLength(0)
-    expect(wrapper.text()).toContain('Regions: 0')
-  })
-
-  it('closes a polygon when clicking near its first vertex', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
-
-    const stage = getLatestStage()
-
-    await getButton(wrapper, 'Polygon').trigger('click')
-
-    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
-    stage.trigger('click')
-
-    stage.getPointerPosition.mockReturnValue({ x: 250, y: 50 })
-    stage.trigger('click')
-
-    stage.getPointerPosition.mockReturnValue({ x: 200, y: 150 })
-    stage.trigger('click')
-
-    stage.getPointerPosition.mockReturnValue({ x: 106, y: 54 })
-    stage.trigger('click')
-    await wrapper.vm.$nextTick()
-
-    expect(ProjectDocumentModel.regions).toHaveLength(1)
-    expect(ProjectDocumentModel.regions[0]).toEqual(
-      expect.objectContaining({
-        type: 'polygon',
-        points: [
-          { x: 200, y: 100 },
-          { x: 500, y: 100 },
-          { x: 400, y: 300 },
-        ],
-      })
-    )
-    expect(wrapper.text()).toContain('Regions: 1')
-  })
-
-  it('visually previews polygon closure near the first vertex', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
-
-    const stage = getLatestStage()
-
-    await getButton(wrapper, 'Polygon').trigger('click')
-
-    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
-    stage.trigger('click')
-
-    stage.getPointerPosition.mockReturnValue({ x: 250, y: 50 })
-    stage.trigger('click')
-
-    stage.getPointerPosition.mockReturnValue({ x: 200, y: 150 })
-    stage.trigger('click')
-
-    const draftPolygonNode = getLineInstances().at(-1)
-
-    stage.getPointerPosition.mockReturnValue({ x: 106, y: 54 })
-    stage.trigger('mousemove')
-
-    expect(draftPolygonNode.closed).toHaveBeenLastCalledWith(true)
-    expect(draftPolygonNode.fill).toHaveBeenLastCalledWith('#0d6efd26')
-    expect(draftPolygonNode.points).toHaveBeenLastCalledWith([100, 50, 250, 50, 200, 150])
-
-    wrapper.unmount()
-  })
-
-  it('creates a polyline region from clicked vertices and Enter', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
-
-    const stage = getLatestStage()
-
-    await getButton(wrapper, 'Polyline').trigger('click')
-
-    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
-    stage.trigger('click')
-
-    stage.getPointerPosition.mockReturnValue({ x: 250, y: 50 })
-    stage.trigger('click')
-
-    stage.getPointerPosition.mockReturnValue({ x: 200, y: 150 })
-    stage.trigger('click')
-
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
-    await wrapper.vm.$nextTick()
-
-    const lines = getLineInstances()
-
-    expect(ProjectDocumentModel.regions).toHaveLength(1)
     expect(ProjectDocumentModel.regions[0]).toEqual(
       expect.objectContaining({
         id: 'region-1',
-        pageIndex: 0,
-        type: 'polyline',
-        points: [
-          { x: 200, y: 100 },
-          { x: 500, y: 100 },
-          { x: 400, y: 300 },
-        ],
+        x: 99,
+        y: 88,
+        width: 30,
+        height: 40,
       })
     )
-    expectToolButtonPressed(wrapper, 'Polyline')
-    expect(lines.at(-1).config).toEqual(
+
+    await wrapper.find('[data-testid="select-region"]').trigger('click')
+    await wrapper.find('[data-testid="delete-selected"]').trigger('click')
+
+    expect(ProjectDocumentModel.regions).toEqual([])
+    expect(getStub(wrapper, ViewerToolbarStub).props()).toEqual(
       expect.objectContaining({
-        points: [100, 50, 250, 50, 200, 150],
-        closed: false,
-        fill: 'transparent',
-        id: 'region-1',
-        strokeScaleEnabled: false,
+        regionCount: 0,
+        hasSelectedRegion: false,
       })
     )
   })
 
-  it('does not create a polyline region with fewer than two vertices', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
+  it('updates status information from canvas mouse-position events', async () => {
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
 
-    const stage = getLatestStage()
+    await wrapper.find('[data-testid="tool-rectangle"]').trigger('click')
+    await wrapper.find('[data-testid="move-mouse"]').trigger('click')
 
-    await getButton(wrapper, 'Polyline').trigger('click')
+    const statusBar = getStub(wrapper, ViewerStatusBarStub)
 
-    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
-    stage.trigger('click')
-
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
-    await wrapper.vm.$nextTick()
-
-    expect(ProjectDocumentModel.regions).toHaveLength(0)
-    expect(wrapper.text()).toContain('Regions: 0')
+    expect(statusBar.text()).toContain('Tool rectangle')
+    expect(statusBar.text()).toContain('X 321 Y 654')
   })
 
-  it('edits polyline vertices with draggable handles in select mode', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
+  it('clears the selected region when switching to a drawing tool', async () => {
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
 
-    const stage = getLatestStage()
+    await wrapper.find('[data-testid="add-region"]').trigger('click')
+    await wrapper.find('[data-testid="select-region"]').trigger('click')
 
-    await getButton(wrapper, 'Polyline').trigger('click')
+    expect(getStub(wrapper, ViewerToolbarStub).props('hasSelectedRegion')).toBe(true)
 
-    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
-    stage.trigger('click')
-    stage.getPointerPosition.mockReturnValue({ x: 250, y: 50 })
-    stage.trigger('click')
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
-    await wrapper.vm.$nextTick()
+    await wrapper.find('[data-testid="tool-rectangle"]').trigger('click')
 
-    await getButton(wrapper, 'Select').trigger('click')
-
-    const polylineNode = [...getLineInstances()]
-      .reverse()
-      .find((line) => line.config.id === 'region-1')
-    const vertexHandles = getCircleInstances().slice(-2)
-    const firstVertexHandle = vertexHandles[0]
-
-    expect(vertexHandles).toHaveLength(2)
-
-    firstVertexHandle.x(75)
-    firstVertexHandle.y(90)
-    firstVertexHandle.trigger('dragmove')
-
-    expect(polylineNode.points).toHaveBeenLastCalledWith([75, 90, 250, 50])
-
-    firstVertexHandle.trigger('dragend')
-    await wrapper.vm.$nextTick()
-
-    expect(ProjectDocumentModel.regions[0]).toEqual(
+    expect(getStub(wrapper, ViewerToolbarStub).props('hasSelectedRegion')).toBe(false)
+    expect(getStub(wrapper, AnnotationCanvasStub).props()).toEqual(
       expect.objectContaining({
-        points: [
-          { x: 150, y: 180 },
-          { x: 500, y: 100 },
-        ],
+        activeTool: 'rectangle',
+        selectedRegionId: null,
       })
     )
-  })
-
-  it('keeps moved polygon regions inside the document boundaries', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
-
-    const stage = getLatestStage()
-
-    await getButton(wrapper, 'Polygon').trigger('click')
-
-    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
-    stage.trigger('click')
-    stage.getPointerPosition.mockReturnValue({ x: 250, y: 50 })
-    stage.trigger('click')
-    stage.getPointerPosition.mockReturnValue({ x: 200, y: 150 })
-    stage.trigger('click')
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
-    await wrapper.vm.$nextTick()
-
-    const regionNode = [...getLineInstances()]
-      .reverse()
-      .find((line) => line.config.id === 'region-1')
-
-    regionNode.x(-200)
-    regionNode.y(9999)
-    regionNode.trigger('dragend')
-    await wrapper.vm.$nextTick()
-
-    expect(ProjectDocumentModel.regions[0]).toEqual(
-      expect.objectContaining({
-        points: [
-          { x: 0, y: 800 },
-          { x: 300, y: 800 },
-          { x: 200, y: 1000 },
-        ],
-      })
-    )
-  })
-
-  it('edits polygon vertices with draggable handles in select mode', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
-
-    const stage = getLatestStage()
-
-    await getButton(wrapper, 'Polygon').trigger('click')
-
-    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
-    stage.trigger('click')
-    stage.getPointerPosition.mockReturnValue({ x: 250, y: 50 })
-    stage.trigger('click')
-    stage.getPointerPosition.mockReturnValue({ x: 200, y: 150 })
-    stage.trigger('click')
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
-    await wrapper.vm.$nextTick()
-
-    await getButton(wrapper, 'Select').trigger('click')
-
-    const polygonNode = getLineInstances().at(-1)
-    const vertexHandles = getCircleInstances().slice(-3)
-    const firstVertexHandle = vertexHandles[0]
-    const transformer = getTransformerInstances().at(-1)
-
-    expect(vertexHandles).toHaveLength(3)
-    expect(firstVertexHandle.config).toEqual(
-      expect.objectContaining({
-        x: 100,
-        y: 50,
-        radius: 5,
-        draggable: true,
-        strokeScaleEnabled: false,
-      })
-    )
-    expect(transformer.nodes).toHaveBeenLastCalledWith([])
-
-    firstVertexHandle.x(75)
-    firstVertexHandle.y(90)
-    firstVertexHandle.trigger('dragmove')
-
-    expect(polygonNode.points).toHaveBeenLastCalledWith([75, 90, 250, 50, 200, 150])
-
-    firstVertexHandle.trigger('dragend')
-    await wrapper.vm.$nextTick()
-
-    expect(ProjectDocumentModel.regions[0]).toEqual(
-      expect.objectContaining({
-        points: [
-          { x: 150, y: 180 },
-          { x: 500, y: 100 },
-          { x: 400, y: 300 },
-        ],
-      })
-    )
-  })
-
-  it('keeps moved regions inside the document boundaries', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
-
-    const stage = getLatestStage()
-
-    await getButton(wrapper, 'Rectangle').trigger('click')
-
-    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
-    stage.trigger('mousedown')
-
-    stage.getPointerPosition.mockReturnValue({ x: 250, y: 150 })
-    stage.trigger('mousemove')
-    stage.trigger('mouseup')
-    await wrapper.vm.$nextTick()
-
-    const regionNode = getRectInstances().at(-1)
-
-    regionNode.x(-20)
-    regionNode.y(9999)
-    regionNode.trigger('dragend')
-    await wrapper.vm.$nextTick()
-
-    expect(ProjectDocumentModel.regions[0]).toEqual(
-      expect.objectContaining({
-        x: 0,
-        y: 800,
-        width: 300,
-        height: 200,
-      })
-    )
-  })
-
-  it('visually stops dragged regions at the document boundaries before dropping', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
-
-    const stage = getLatestStage()
-
-    await getButton(wrapper, 'Rectangle').trigger('click')
-
-    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
-    stage.trigger('mousedown')
-
-    stage.getPointerPosition.mockReturnValue({ x: 250, y: 150 })
-    stage.trigger('mousemove')
-    stage.trigger('mouseup')
-    await wrapper.vm.$nextTick()
-
-    const regionNode = getRectInstances().at(-1)
-
-    regionNode.x(-20)
-    regionNode.y(9999)
-    regionNode.trigger('dragmove')
-
-    expect(regionNode.x).toHaveBeenLastCalledWith(0)
-    expect(regionNode.y).toHaveBeenLastCalledWith(400)
-  })
-
-  it('limits transformed regions to the visible document area', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
-
-    const stage = getLatestStage()
-
-    await getButton(wrapper, 'Rectangle').trigger('click')
-
-    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
-    stage.trigger('mousedown')
-
-    stage.getPointerPosition.mockReturnValue({ x: 250, y: 150 })
-    stage.trigger('mousemove')
-    stage.trigger('mouseup')
-    await wrapper.vm.$nextTick()
-
-    const transformer = getTransformerInstances().at(-1)
-    const clampedBox = transformer.config.boundBoxFunc(
-      { x: 100, y: 50, width: 150, height: 100 },
-      { x: -50, y: 600, width: 1200, height: 800 }
-    )
-
-    expect(transformer.config.flipEnabled).toBe(false)
-    expect(clampedBox).toEqual({
-      x: 0,
-      y: 0,
-      width: 1000,
-      height: 500,
-    })
-  })
-
-  it('keeps rectangle resize handles from flipping regions when dragged past the opposite edge', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
-
-    const stage = getLatestStage()
-
-    await getButton(wrapper, 'Rectangle').trigger('click')
-
-    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
-    stage.trigger('mousedown')
-
-    stage.getPointerPosition.mockReturnValue({ x: 250, y: 150 })
-    stage.trigger('mousemove')
-    stage.trigger('mouseup')
-    await wrapper.vm.$nextTick()
-
-    const transformer = getTransformerInstances().at(-1)
-    const clampedBox = transformer.config.boundBoxFunc(
-      { x: 100, y: 50, width: 150, height: 100 },
-      { x: 250, y: 150, width: -120, height: -80 }
-    )
-
-    expect(clampedBox).toEqual({ x: 100, y: 50, width: 150, height: 100 })
-  })
-
-  it('keeps rectangle dimensions synchronized while a transformer resize is in progress', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
-
-    const stage = getLatestStage()
-
-    await getButton(wrapper, 'Rectangle').trigger('click')
-
-    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
-    stage.trigger('mousedown')
-
-    stage.getPointerPosition.mockReturnValue({ x: 250, y: 150 })
-    stage.trigger('mousemove')
-    stage.trigger('mouseup')
-    await wrapper.vm.$nextTick()
-
-    const regionNode = getRectInstances().at(-1)
-
-    regionNode.scaleX(2)
-    regionNode.scaleY(1.5)
-    regionNode.trigger('transform')
-
-    expect(regionNode.width).toHaveBeenLastCalledWith(300)
-    expect(regionNode.height).toHaveBeenLastCalledWith(150)
-    expect(regionNode.scaleX).toHaveBeenLastCalledWith(1)
-    expect(regionNode.scaleY).toHaveBeenLastCalledWith(1)
-    expect(ProjectDocumentModel.regions[0]).toEqual(
-      expect.objectContaining({
-        width: 300,
-        height: 200,
-      })
-    )
-  })
-
-  it('updates a rectangle region when resized with transformer handles', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
-
-    const stage = getLatestStage()
-
-    await getButton(wrapper, 'Rectangle').trigger('click')
-
-    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
-    stage.trigger('mousedown')
-
-    stage.getPointerPosition.mockReturnValue({ x: 250, y: 150 })
-    stage.trigger('mousemove')
-    stage.trigger('mouseup')
-    await wrapper.vm.$nextTick()
-
-    const regionNode = getRectInstances().at(-1)
-
-    regionNode.scaleX(2)
-    regionNode.scaleY(1.5)
-    regionNode.trigger('transformend')
-    await wrapper.vm.$nextTick()
-
-    expect(ProjectDocumentModel.regions[0]).toEqual(
-      expect.objectContaining({
-        x: 200,
-        y: 100,
-        width: 600,
-        height: 300,
-      })
-    )
-    expect(regionNode.width).toHaveBeenLastCalledWith(300)
-    expect(regionNode.height).toHaveBeenLastCalledWith(150)
-    expect(regionNode.scaleX).toHaveBeenLastCalledWith(1)
-    expect(regionNode.scaleY).toHaveBeenLastCalledWith(1)
-  })
-
-  it('deletes the selected region from the toolbar', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
-
-    const stage = getLatestStage()
-
-    await getButton(wrapper, 'Rectangle').trigger('click')
-
-    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
-    stage.trigger('mousedown')
-
-    stage.getPointerPosition.mockReturnValue({ x: 250, y: 150 })
-    stage.trigger('mousemove')
-    stage.trigger('mouseup')
-    await wrapper.vm.$nextTick()
-
-    expect(ProjectDocumentModel.regions).toHaveLength(1)
-    expectButtonDisabled(wrapper, 'Delete', false)
-
-    await getButton(wrapper, 'Delete').trigger('click')
-
-    expect(ProjectDocumentModel.regions).toHaveLength(0)
-    expect(wrapper.text()).toContain('Regions: 0')
-    expectButtonDisabled(wrapper, 'Delete')
-  })
-
-  it('deletes the selected region with the Delete key', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
-
-    const stage = getLatestStage()
-
-    await getButton(wrapper, 'Rectangle').trigger('click')
-
-    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
-    stage.trigger('mousedown')
-
-    stage.getPointerPosition.mockReturnValue({ x: 250, y: 150 })
-    stage.trigger('mousemove')
-    stage.trigger('mouseup')
-    await wrapper.vm.$nextTick()
-
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }))
-    await wrapper.vm.$nextTick()
-
-    expect(ProjectDocumentModel.regions).toHaveLength(0)
-    expect(wrapper.text()).toContain('Regions: 0')
-  })
-
-  it('clears the current selection when clicking outside any existing region', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
-
-    await createSelectedRectangle(wrapper)
-
-    const stage = getLatestStage()
-    const transformer = getTransformerInstances().at(-1)
-
-    expectButtonDisabled(wrapper, 'Delete', false)
-    expect(transformer.nodes).toHaveBeenLastCalledWith([getRectInstances().at(-1)])
-
-    stage.trigger('click', { target: stage })
-    await wrapper.vm.$nextTick()
-
-    expectButtonDisabled(wrapper, 'Delete')
-    expect(getTransformerInstances().at(-1).nodes).toHaveBeenLastCalledWith([])
-  })
-
-  it('keeps the current selection when clicking an existing region', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
-
-    const selectedRectangle = await createSelectedRectangle(wrapper)
-    const stage = getLatestStage()
-
-    stage.trigger('click', { target: selectedRectangle })
-    await wrapper.vm.$nextTick()
-
-    expectButtonDisabled(wrapper, 'Delete', false)
-  })
-
-  it('clears the current selection with the Escape key', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
-
-    await createSelectedRectangle(wrapper)
-
-    expectButtonDisabled(wrapper, 'Delete', false)
-
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
-    await wrapper.vm.$nextTick()
-
-    expectButtonDisabled(wrapper, 'Delete')
-    expect(getTransformerInstances().at(-1).nodes).toHaveBeenLastCalledWith([])
-  })
-
-  it('disables Previous on the first page and enables Next', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
-
-    expectButtonDisabled(wrapper, 'Previous')
-    expectButtonDisabled(wrapper, 'Next', false)
-  })
-
-  it('moves to the next page and updates the active thumbnail', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
-
-    await getButton(wrapper, 'Next').trigger('click')
-    await flushImageLoad()
-
-    const thumbnails = wrapper.findAll('.thumb')
-
-    expect(wrapper.text()).toContain('Page 2 / 15')
-    expectButtonDisabled(wrapper, 'Previous', false)
-    expectCurrentThumbnail(thumbnails, 1)
-  })
-
-  it('moves back to the previous page and restores the first thumbnail as active', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
-
-    await getButton(wrapper, 'Next').trigger('click')
-    await flushImageLoad()
-    await getButton(wrapper, 'Previous').trigger('click')
-    await flushImageLoad()
-
-    const thumbnails = wrapper.findAll('.thumb')
-
-    expect(wrapper.text()).toContain('Page 1 / 15')
-    expectButtonDisabled(wrapper, 'Previous')
-    expectCurrentThumbnail(thumbnails, 0)
-  })
-
-  it('selects a page when its thumbnail is clicked', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
-
-    const thumbnails = wrapper.findAll('.thumb')
-    await thumbnails[4].trigger('click')
-    await flushImageLoad()
-
-    expect(wrapper.text()).toContain('Page 5 / 15')
-    expectCurrentThumbnail(thumbnails, 4)
-  })
-
-  it('disables Next on the last page', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
-
-    const thumbnails = wrapper.findAll('.thumb')
-    await thumbnails.at(-1).trigger('click')
-    await flushImageLoad()
-
-    expect(wrapper.text()).toContain('Page 15 / 15')
-    expectButtonDisabled(wrapper, 'Next')
-  })
-
-  it('increases and decreases zoom using the configured step', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
-
-    await getButton(wrapper, '+').trigger('click')
-    expect(wrapper.text()).toContain('Zoom: 125%')
-
-    await getButton(wrapper, '-').trigger('click')
-    expect(wrapper.text()).toContain('Zoom: 100%')
-  })
-
-  it('updates the Konva stage and image dimensions when zoom changes', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
-
-    const stage = getLatestStage()
-    const imageNode = getImageInstances()[0]
-
-    await getButton(wrapper, '+').trigger('click')
-
-    expect(stage.width).toHaveBeenLastCalledWith(1250)
-    expect(stage.height).toHaveBeenLastCalledWith(625)
-    expect(imageNode.width).toHaveBeenLastCalledWith(1250)
-    expect(imageNode.height).toHaveBeenLastCalledWith(625)
-  })
-
-  it('resets zoom when the reset button is pressed', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
-
-    await getButton(wrapper, '+').trigger('click')
-    await getButton(wrapper, 'Reset').trigger('click')
-
-    expect(wrapper.text()).toContain('Zoom: 100%')
-  })
-
-  it('resets zoom when the page changes', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
-
-    await getButton(wrapper, '+').trigger('click')
-    await getButton(wrapper, 'Next').trigger('click')
-    await flushImageLoad()
-
-    expect(wrapper.text()).toContain('Page 2 / 15')
-    expect(wrapper.text()).toContain('Zoom: 100%')
-  })
-
-  it('does not allow zoom above the configured maximum', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
-
-    for (let i = 0; i < 30; i += 1) {
-      await getButton(wrapper, '+').trigger('click')
-    }
-
-    expect(wrapper.text()).toContain('Zoom: 800%')
-    expectButtonDisabled(wrapper, '+')
-  })
-
-  it('does not allow zoom below the configured minimum', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
-
-    for (let i = 0; i < 20; i += 1) {
-      await getButton(wrapper, '-').trigger('click')
-    }
-
-    expect(wrapper.text()).toContain('Zoom: 25%')
-    expectButtonDisabled(wrapper, '-')
-  })
-
-  it('reloads the Konva image when the selected page changes and destroys the previous node', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
-
-    const firstImage = getImageInstances()[0]
-
-    await getButton(wrapper, 'Next').trigger('click')
-    await flushImageLoad()
-
-    const images = getImageInstances()
-
-    expect(Konva.Image).toHaveBeenCalledTimes(2)
-    expect(firstImage.destroy).toHaveBeenCalledTimes(1)
-    expect(images).toHaveLength(2)
-  })
-
-  it('updates the mouse coordinates using the Konva pointer position', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
-
-    const stage = getLatestStage()
-    stage.getPointerPosition.mockReturnValue({ x: 250, y: 125 })
-
-    stage.trigger('mousemove')
-    await wrapper.vm.$nextTick()
-
-    expect(wrapper.find('.coords').text()).toContain('(500, 250)')
-  })
-
-  it('keeps the previous coordinates when Konva returns no pointer position', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
-
-    const stage = getLatestStage()
-    stage.getPointerPosition.mockReturnValue({ x: 250, y: 125 })
-    stage.trigger('mousemove')
-    await wrapper.vm.$nextTick()
-
-    stage.getPointerPosition.mockReturnValue(null)
-    stage.trigger('mousemove')
-    await wrapper.vm.$nextTick()
-
-    expect(wrapper.find('.coords').text()).toContain('(500, 250)')
-  })
-
-  it('converts pointer coordinates to original document dimensions using the current zoom level', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
-
-    await getButton(wrapper, '+').trigger('click')
-
-    const stage = getLatestStage()
-    stage.getPointerPosition.mockReturnValue({ x: 300, y: 180 })
-
-    stage.trigger('mousemove')
-    await wrapper.vm.$nextTick()
-
-    expect(wrapper.find('.coords').text()).toContain('(480, 288)')
-  })
-
-  it('cleans up the Konva stage when the component is unmounted', async () => {
-    const wrapper = mount(ViewerPage)
-    await flushImageLoad()
-
-    const stage = getLatestStage()
-    wrapper.unmount()
-
-    expect(stage.destroy).toHaveBeenCalledTimes(1)
   })
 })

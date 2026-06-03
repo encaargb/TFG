@@ -26,14 +26,14 @@ const activeTool = ref('select')
 const selectedRegionId = ref(null)
 const sidebarCollapsed = ref(false)
 const annotationCanvas = ref(null)
-let regionSequence = 0
+const regionSequence = ref(0)
 
 const selectedPage = computed(() => pages.value[selectedIndex.value])
 const zoomPercentage = computed(() => getZoomPercentage(zoomLevel.value))
 const currentPageRegions = computed(() =>
   regions.value.filter((region) => region.pageIndex === selectedIndex.value)
 )
-const nextRegionId = computed(() => `region-${regionSequence + 1}`)
+const nextRegionId = computed(() => `region-${regionSequence.value + 1}`)
 
 const mousePos = ref({ x: 0, y: 0 })
 
@@ -102,7 +102,7 @@ function persistRegions() {
 
 // Keeps generated region ids increasing after data is loaded from the backend.
 function updateRegionSequence() {
-  regionSequence = regions.value.reduce((highestId, region) => {
+  regionSequence.value = regions.value.reduce((highestId, region) => {
     const match = String(region.id).match(/^region-(\d+)$/)
     return match ? Math.max(highestId, Number(match[1])) : highestId
   }, 0)
@@ -121,7 +121,7 @@ function zoomOut() {
 }
 
 function addRegion(region) {
-  regionSequence += 1
+  regionSequence.value += 1
   regions.value.push(region)
   ProjectDocumentModel.regions = regions.value
   persistRegions()
