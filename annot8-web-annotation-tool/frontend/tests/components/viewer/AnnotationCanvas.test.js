@@ -59,6 +59,20 @@ function polygonRegion(overrides = {}) {
   }
 }
 
+function polylineRegion(overrides = {}) {
+  return {
+    id: 'region-1',
+    pageIndex: 0,
+    type: 'polyline',
+    points: [
+      { x: 200, y: 100 },
+      { x: 500, y: 100 },
+    ],
+    color: '#0d6efd',
+    ...overrides,
+  }
+}
+
 describe('AnnotationCanvas', () => {
   beforeEach(() => {
     resetKonvaMocks()
@@ -506,5 +520,134 @@ describe('AnnotationCanvas', () => {
         strokeScaleEnabled: false,
       })
     )
+  })
+
+  it('emits a polyline region after multiple clicks and Enter', async () => {
+    const wrapper = mountCanvas({ activeTool: 'polyline' })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 50 })
+    stage.trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 200, y: 150 })
+    stage.trigger('click')
+
+    expect(wrapper.emitted('add-region')).toBeUndefined()
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+
+    expect(wrapper.emitted('add-region')[0][0]).toEqual(
+      expect.objectContaining({
+        id: 'region-1',
+        pageIndex: 0,
+        type: 'polyline',
+        points: [
+          { x: 200, y: 100 },
+          { x: 500, y: 100 },
+          { x: 400, y: 300 },
+        ],
+      })
+    )
+    expect(wrapper.emitted('select-region')).toEqual([['region-1']])
+  })
+
+  it('cancels an active polyline draft with Escape', async () => {
+    const wrapper = mountCanvas({ activeTool: 'polyline' })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('click')
+
+    const draftPolyline = getLineInstances().at(-1)
+
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 50 })
+    stage.trigger('click')
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+
+    expect(draftPolyline.destroy).toHaveBeenCalledTimes(1)
+    expect(wrapper.emitted('add-region')).toBeUndefined()
+  })
+
+  it('rejects polyline drafts with fewer than two points', async () => {
+    const wrapper = mountCanvas({ activeTool: 'polyline' })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('click')
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+
+    expect(wrapper.emitted('add-region')).toBeUndefined()
+    expect(wrapper.emitted('select-region')).toBeUndefined()
+  })
+
+  it('renders selected polyline vertex handles', async () => {
+    mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [polylineRegion()],
+    })
+    await flushImageLoad()
+
+    const polyline = getLineInstances().find((line) => line.config.id === 'region-1')
+    const vertexHandles = getCircleInstances().slice(-2)
+
+    expect(polyline.config).toEqual(
+      expect.objectContaining({
+        points: [100, 50, 250, 50],
+        closed: false,
+        fill: 'transparent',
+        strokeWidth: 3,
+      })
+    )
+    expect(vertexHandles).toHaveLength(2)
+    expect(vertexHandles[0].config).toEqual(
+      expect.objectContaining({
+        x: 100,
+        y: 50,
+        radius: 5,
+        draggable: true,
+        strokeScaleEnabled: false,
+      })
+    )
+  })
+
+  it('emits updated polyline points after vertex editing', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [polylineRegion()],
+    })
+    await flushImageLoad()
+
+    const polyline = getLineInstances().find((line) => line.config.id === 'region-1')
+    const firstVertexHandle = getCircleInstances().slice(-2)[0]
+
+    firstVertexHandle.x(75)
+    firstVertexHandle.y(90)
+    firstVertexHandle.trigger('dragmove')
+
+    expect(polyline.points).toHaveBeenLastCalledWith([75, 90, 250, 50])
+
+    firstVertexHandle.trigger('dragend')
+
+    expect(wrapper.emitted('update-region')[0][0]).toEqual({
+      id: 'region-1',
+      changes: {
+        points: [
+          { x: 150, y: 180 },
+          { x: 500, y: 100 },
+        ],
+      },
+    })
   })
 })
