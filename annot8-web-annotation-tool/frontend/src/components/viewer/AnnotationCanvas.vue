@@ -549,6 +549,13 @@ function renderRegions() {
     rotateEnabled: false,
     flipEnabled: false,
     keepRatio: false,
+    anchorSize: 10,
+    anchorCornerRadius: 5,
+    anchorFill: '#ffffff',
+    anchorStroke: '#0d6efd',
+    anchorStrokeWidth: 2,
+    borderStroke: '#0d6efd',
+    borderStrokeWidth: 1,
     boundBoxFunc: (oldBox, newBox) => clampTransformerBox(oldBox, newBox),
   })
 

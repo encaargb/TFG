@@ -156,6 +156,15 @@ describe('AnnotationCanvas', () => {
       })
     )
     expect(transformer.nodes).toHaveBeenLastCalledWith([rectangle])
+    expect(transformer.config).toEqual(
+      expect.objectContaining({
+        anchorSize: 10,
+        anchorCornerRadius: 5,
+        anchorFill: '#ffffff',
+        anchorStroke: '#0d6efd',
+        anchorStrokeWidth: 2,
+      })
+    )
   })
 
   it('renders legacy rectangle regions and attaches the transformer to the selected rectangle', async () => {
