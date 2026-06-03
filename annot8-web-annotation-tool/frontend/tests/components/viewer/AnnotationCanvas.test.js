@@ -6,6 +6,7 @@ import {
   getImageInstances,
   getLayerInstances,
   getLatestStage,
+  getCircleInstances,
   getLineInstances,
   getRectInstances,
   getTransformerInstances,
@@ -38,6 +39,21 @@ function rectangleRegion(overrides = {}) {
     y: 100,
     width: 300,
     height: 200,
+    color: '#0d6efd',
+    ...overrides,
+  }
+}
+
+function polygonRegion(overrides = {}) {
+  return {
+    id: 'region-1',
+    pageIndex: 0,
+    type: 'polygon',
+    points: [
+      { x: 200, y: 100 },
+      { x: 500, y: 100 },
+      { x: 400, y: 300 },
+    ],
     color: '#0d6efd',
     ...overrides,
   }
@@ -360,32 +376,134 @@ describe('AnnotationCanvas', () => {
     expect(imageNode.height).toHaveBeenLastCalledWith(625)
   })
 
+  it('emits a polygon region after multiple clicks and Enter', async () => {
+    const wrapper = mountCanvas({ activeTool: 'polygon' })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 50 })
+    stage.trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 200, y: 150 })
+    stage.trigger('click')
+
+    expect(wrapper.emitted('add-region')).toBeUndefined()
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+
+    expect(wrapper.emitted('add-region')[0][0]).toEqual(
+      expect.objectContaining({
+        id: 'region-1',
+        pageIndex: 0,
+        type: 'polygon',
+        points: [
+          { x: 200, y: 100 },
+          { x: 500, y: 100 },
+          { x: 400, y: 300 },
+        ],
+      })
+    )
+    expect(wrapper.emitted('select-region')).toEqual([['region-1']])
+  })
+
+  it('cancels an active polygon draft with Escape', async () => {
+    const wrapper = mountCanvas({ activeTool: 'polygon' })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('click')
+
+    const draftPolygon = getLineInstances().at(-1)
+
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 50 })
+    stage.trigger('click')
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+
+    expect(draftPolygon.destroy).toHaveBeenCalledTimes(1)
+    expect(wrapper.emitted('add-region')).toBeUndefined()
+  })
+
+  it('rejects polygon drafts with fewer than three points', async () => {
+    const wrapper = mountCanvas({ activeTool: 'polygon' })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 50 })
+    stage.trigger('click')
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+
+    expect(wrapper.emitted('add-region')).toBeUndefined()
+    expect(wrapper.emitted('select-region')).toBeUndefined()
+  })
+
+  it('closes a polygon when clicking near the first point', async () => {
+    const wrapper = mountCanvas({ activeTool: 'polygon' })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 50 })
+    stage.trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 200, y: 150 })
+    stage.trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 106, y: 54 })
+    stage.trigger('click')
+
+    expect(wrapper.emitted('add-region')[0][0]).toEqual(
+      expect.objectContaining({
+        type: 'polygon',
+        points: [
+          { x: 200, y: 100 },
+          { x: 500, y: 100 },
+          { x: 400, y: 300 },
+        ],
+      })
+    )
+  })
+
   it('renders point regions with vertex handles when selected in select mode', async () => {
     mountCanvas({
       selectedRegionId: 'region-1',
-      regions: [
-        {
-          id: 'region-1',
-          pageIndex: 0,
-          type: 'polygon',
-          points: [
-            { x: 200, y: 100 },
-            { x: 500, y: 100 },
-            { x: 400, y: 300 },
-          ],
-          color: '#0d6efd',
-        },
-      ],
+      regions: [polygonRegion()],
     })
     await flushImageLoad()
 
     const polygon = getLineInstances().find((line) => line.config.id === 'region-1')
+    const vertexHandles = getCircleInstances().slice(-3)
 
     expect(polygon.config).toEqual(
       expect.objectContaining({
         points: [100, 50, 250, 50, 200, 150],
         closed: true,
         strokeWidth: 3,
+      })
+    )
+    expect(vertexHandles).toHaveLength(3)
+    expect(vertexHandles[0].config).toEqual(
+      expect.objectContaining({
+        x: 100,
+        y: 50,
+        radius: 5,
+        draggable: true,
+        strokeScaleEnabled: false,
       })
     )
   })
