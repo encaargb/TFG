@@ -29,6 +29,20 @@ function mountCanvas(props = {}) {
   })
 }
 
+function rectangleRegion(overrides = {}) {
+  return {
+    id: 'region-1',
+    pageIndex: 0,
+    type: 'rectangle',
+    x: 200,
+    y: 100,
+    width: 300,
+    height: 200,
+    color: '#0d6efd',
+    ...overrides,
+  }
+}
+
 describe('AnnotationCanvas', () => {
   beforeEach(() => {
     resetKonvaMocks()
@@ -65,18 +79,7 @@ describe('AnnotationCanvas', () => {
   it('renders rectangle regions and attaches the transformer to the selected rectangle', async () => {
     mountCanvas({
       selectedRegionId: 'region-1',
-      regions: [
-        {
-          id: 'region-1',
-          pageIndex: 0,
-          type: 'rectangle',
-          x: 200,
-          y: 100,
-          width: 300,
-          height: 200,
-          color: '#0d6efd',
-        },
-      ],
+      regions: [rectangleRegion()],
     })
     await flushImageLoad()
 
@@ -137,21 +140,51 @@ describe('AnnotationCanvas', () => {
     expect(wrapper.emitted('select-region')).toEqual([['region-1']])
   })
 
+  it('normalizes rectangle creation when dragging from bottom-right to top-left', async () => {
+    const wrapper = mountCanvas({ activeTool: 'rectangle' })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 150 })
+    stage.trigger('mousedown')
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousemove')
+    stage.trigger('mouseup')
+
+    expect(wrapper.emitted('add-region')[0][0]).toEqual(
+      expect.objectContaining({
+        id: 'region-1',
+        pageIndex: 0,
+        type: 'rectangle',
+        x: 200,
+        y: 100,
+        width: 300,
+        height: 200,
+      })
+    )
+  })
+
+  it('does not emit a rectangle when the drag area is too small', async () => {
+    const wrapper = mountCanvas({ activeTool: 'rectangle' })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousedown')
+
+    stage.getPointerPosition.mockReturnValue({ x: 101, y: 51 })
+    stage.trigger('mousemove')
+    stage.trigger('mouseup')
+
+    expect(wrapper.emitted('add-region')).toBeUndefined()
+    expect(wrapper.emitted('select-region')).toBeUndefined()
+  })
+
   it('emits selection and update events for existing regions', async () => {
     const wrapper = mountCanvas({
       selectedRegionId: 'region-1',
-      regions: [
-        {
-          id: 'region-1',
-          pageIndex: 0,
-          type: 'rectangle',
-          x: 200,
-          y: 100,
-          width: 300,
-          height: 200,
-          color: '#0d6efd',
-        },
-      ],
+      regions: [rectangleRegion()],
     })
     await flushImageLoad()
 
@@ -171,6 +204,130 @@ describe('AnnotationCanvas', () => {
         width: 300,
         height: 200,
       },
+    })
+  })
+
+  it('visually clamps dragged rectangles inside the visible document bounds', async () => {
+    mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [rectangleRegion()],
+    })
+    await flushImageLoad()
+
+    const rectangle = getRectInstances().find((rect) => rect.config.id === 'region-1')
+
+    rectangle.x(-20)
+    rectangle.y(9999)
+    rectangle.trigger('dragmove')
+
+    expect(rectangle.x).toHaveBeenLastCalledWith(0)
+    expect(rectangle.y).toHaveBeenLastCalledWith(400)
+  })
+
+  it('emits clamped rectangle updates after dragging outside document bounds', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [rectangleRegion()],
+    })
+    await flushImageLoad()
+
+    const rectangle = getRectInstances().find((rect) => rect.config.id === 'region-1')
+
+    rectangle.x(-20)
+    rectangle.y(9999)
+    rectangle.trigger('dragend')
+
+    expect(wrapper.emitted('update-region')[0][0]).toEqual({
+      id: 'region-1',
+      changes: {
+        x: 0,
+        y: 800,
+        width: 300,
+        height: 200,
+      },
+    })
+  })
+
+  it('keeps rectangle dimensions synchronized while transformer resizing is in progress', async () => {
+    mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [rectangleRegion()],
+    })
+    await flushImageLoad()
+
+    const rectangle = getRectInstances().find((rect) => rect.config.id === 'region-1')
+
+    rectangle.scaleX(2)
+    rectangle.scaleY(1.5)
+    rectangle.trigger('transform')
+
+    expect(rectangle.width).toHaveBeenLastCalledWith(300)
+    expect(rectangle.height).toHaveBeenLastCalledWith(150)
+    expect(rectangle.scaleX).toHaveBeenLastCalledWith(1)
+    expect(rectangle.scaleY).toHaveBeenLastCalledWith(1)
+  })
+
+  it('emits rectangle update events after transformer resizing', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [rectangleRegion()],
+    })
+    await flushImageLoad()
+
+    const rectangle = getRectInstances().find((rect) => rect.config.id === 'region-1')
+
+    rectangle.scaleX(2)
+    rectangle.scaleY(1.5)
+    rectangle.trigger('transformend')
+
+    expect(wrapper.emitted('update-region')[0][0]).toEqual({
+      id: 'region-1',
+      changes: {
+        x: 200,
+        y: 100,
+        width: 600,
+        height: 300,
+      },
+    })
+    expect(rectangle.scaleX).toHaveBeenLastCalledWith(1)
+    expect(rectangle.scaleY).toHaveBeenLastCalledWith(1)
+  })
+
+  it('prevents invalid negative rectangle dimensions from transformer resizing', async () => {
+    mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [rectangleRegion()],
+    })
+    await flushImageLoad()
+
+    const transformer = getTransformerInstances().at(-1)
+    const clampedBox = transformer.config.boundBoxFunc(
+      { x: 100, y: 50, width: 150, height: 100 },
+      { x: 250, y: 150, width: -120, height: -80 }
+    )
+
+    expect(transformer.config.flipEnabled).toBe(false)
+    expect(clampedBox).toEqual({ x: 100, y: 50, width: 150, height: 100 })
+  })
+
+  it('keeps transformed rectangles inside the visible document bounds', async () => {
+    mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [rectangleRegion()],
+    })
+    await flushImageLoad()
+
+    const transformer = getTransformerInstances().at(-1)
+    const clampedBox = transformer.config.boundBoxFunc(
+      { x: 100, y: 50, width: 150, height: 100 },
+      { x: -50, y: 600, width: 1200, height: 800 }
+    )
+
+    expect(clampedBox).toEqual({
+      x: 0,
+      y: 0,
+      width: 1000,
+      height: 500,
     })
   })
 
