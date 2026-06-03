@@ -75,6 +75,17 @@ npm test
 
 This runs the frontend tests and the mock backend HTTP tests.
 
+The frontend test suite uses Vitest. Vue components are tested with Vue Test Utils, and Konva is mocked in component tests so annotation behavior can be checked without a real canvas.
+
+The mock backend HTTP tests use the Node.js test runner.
+
+Recommended validation before commits:
+
+```bash
+npm run build
+npm test
+```
+
 ## Docker Demo
 
 The project can also run as a single Docker container:
