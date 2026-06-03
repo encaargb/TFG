@@ -165,6 +165,7 @@ describe('ViewerPage', () => {
     const wrapper = mount(ViewerPage)
     await flushImageLoad()
 
+    expect(wrapper.find('nav[aria-label="Viewer controls"]').exists()).toBe(true)
     expectToolButtonPressed(wrapper, 'Select')
     expectToolButtonPressed(wrapper, 'Rectangle', false)
     expectToolButtonPressed(wrapper, 'Polygon', false)

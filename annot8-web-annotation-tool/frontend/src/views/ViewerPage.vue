@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, ref, onMounted, onBeforeUnmount, watch } from 'vue'
-import { BBadge, BButton, BButtonGroup, BImg } from 'bootstrap-vue-next'
+import { BBadge, BButton, BButtonGroup, BImg, BNavbar } from 'bootstrap-vue-next'
 import Konva from 'konva'
 import { ProjectDocumentModel } from '../models/ProjectDocumentModel'
 import { fetchProjectDocument, saveProjectRegions } from '../services/documentApi'
@@ -1026,7 +1026,11 @@ onBeforeUnmount(() => {
     </aside>
 
     <main class="viewer d-flex flex-column flex-grow-1 overflow-hidden">
-      <div class="viewer-controls navbar bg-body border-bottom px-3 py-2">
+      <BNavbar
+        class="viewer-controls border-bottom px-3 py-2"
+        variant="body"
+        aria-label="Viewer controls"
+      >
         <div class="d-flex align-items-center gap-2 flex-wrap w-100">
           <BButtonGroup size="sm" aria-label="Page navigation">
             <BButton
@@ -1135,7 +1139,7 @@ onBeforeUnmount(() => {
             ({{ mousePos.x }}, {{ mousePos.y }})
           </BBadge>
         </div>
-      </div>
+      </BNavbar>
 
       <div
         ref="canvasWrapper"
