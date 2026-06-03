@@ -390,6 +390,75 @@ describe('AnnotationCanvas', () => {
     expect(imageNode.height).toHaveBeenLastCalledWith(625)
   })
 
+  it('reloads the Konva image when the selected page changes', async () => {
+    const wrapper = mountCanvas()
+    await flushImageLoad()
+
+    const firstImage = getImageInstances()[0]
+
+    await wrapper.setProps({ selectedPage: '/page-2.png' })
+    await flushImageLoad()
+
+    expect(Konva.Image).toHaveBeenCalledTimes(2)
+    expect(firstImage.destroy).toHaveBeenCalledTimes(1)
+    expect(getImageInstances()).toHaveLength(2)
+  })
+
+  it('ignores stale image loads after the selected page changes quickly', async () => {
+    const OriginalImage = window.Image
+    const deferredImages = []
+
+    window.Image = class {
+      constructor() {
+        this.width = 2000
+        this.height = 1000
+        deferredImages.push(this)
+      }
+
+      set src(value) {
+        this._src = value
+      }
+
+      get src() {
+        return this._src
+      }
+    }
+
+    try {
+      const wrapper = mountCanvas({ selectedPage: '/page-1.png' })
+
+      await wrapper.setProps({ selectedPage: '/page-2.png' })
+
+      deferredImages[0].onload()
+
+      expect(Konva.Image).not.toHaveBeenCalled()
+
+      deferredImages[1].onload()
+
+      expect(Konva.Image).toHaveBeenCalledTimes(1)
+      expect(Konva.Image).toHaveBeenCalledWith(
+        expect.objectContaining({
+          image: deferredImages[1],
+          width: 1000,
+          height: 500,
+        })
+      )
+    } finally {
+      window.Image = OriginalImage
+    }
+  })
+
+  it('destroys the Konva stage when unmounted', async () => {
+    const wrapper = mountCanvas()
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    wrapper.unmount()
+
+    expect(stage.destroy).toHaveBeenCalledTimes(1)
+  })
+
   it('emits a polygon region after multiple clicks and Enter', async () => {
     const wrapper = mountCanvas({ activeTool: 'polygon' })
     await flushImageLoad()
