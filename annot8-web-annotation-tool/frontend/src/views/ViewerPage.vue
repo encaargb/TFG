@@ -1,14 +1,8 @@
 <script setup>
 import { computed, nextTick, ref, onMounted, onBeforeUnmount, watch } from 'vue'
-import {
-  BBadge,
-  BButton,
-  BButtonGroup,
-  BButtonToolbar,
-  BNavbar,
-} from 'bootstrap-vue-next'
 import Konva from 'konva'
 import PageSidebar from '../components/viewer/PageSidebar.vue'
+import ViewerToolbar from '../components/viewer/ViewerToolbar.vue'
 import { ProjectDocumentModel } from '../models/ProjectDocumentModel'
 import { fetchProjectDocument, saveProjectRegions } from '../services/documentApi'
 import {
@@ -985,123 +979,25 @@ onBeforeUnmount(() => {
     />
 
     <main class="viewer d-flex flex-column flex-grow-1 overflow-hidden">
-      <BNavbar
-        class="viewer-controls border-bottom px-3 py-2"
-        variant="body"
-        aria-label="Viewer controls"
-      >
-        <BButtonToolbar
-          class="d-flex align-items-center gap-2 flex-wrap w-100"
-          aria-label="Viewer actions"
-        >
-          <BButtonGroup size="sm" aria-label="Page navigation">
-            <BButton
-              type="button"
-              variant="outline-secondary"
-              @click="goToPreviousPage"
-              :disabled="selectedIndex === 0"
-            >
-              Previous
-            </BButton>
-
-            <BButton
-              type="button"
-              variant="outline-secondary"
-              @click="goToNextPage"
-              :disabled="selectedIndex === pages.length - 1"
-            >
-              Next
-            </BButton>
-          </BButtonGroup>
-
-          <BBadge variant="secondary">
-            Page {{ selectedIndex + 1 }} / {{ pages.length }}
-          </BBadge>
-
-          <div class="vr d-none d-md-block"></div>
-
-          <BButtonGroup size="sm" aria-label="Region tools">
-            <BButton
-              type="button"
-              :variant="activeTool === 'select' ? 'primary' : 'outline-secondary'"
-              :aria-pressed="activeTool === 'select'"
-              @click="setActiveTool('select')"
-            >
-              Select
-            </BButton>
-            <BButton
-              type="button"
-              :variant="activeTool === 'rectangle' ? 'primary' : 'outline-secondary'"
-              :aria-pressed="activeTool === 'rectangle'"
-              @click="setActiveTool('rectangle')"
-            >
-              Rectangle
-            </BButton>
-            <BButton
-              type="button"
-              :variant="activeTool === 'polygon' ? 'primary' : 'outline-secondary'"
-              :aria-pressed="activeTool === 'polygon'"
-              @click="setActiveTool('polygon')"
-            >
-              Polygon
-            </BButton>
-            <BButton
-              type="button"
-              :variant="activeTool === 'polyline' ? 'primary' : 'outline-secondary'"
-              :aria-pressed="activeTool === 'polyline'"
-              @click="setActiveTool('polyline')"
-            >
-              Polyline
-            </BButton>
-          </BButtonGroup>
-
-          <BBadge variant="light" class="border">
-            Regions: {{ currentPageRegions.length }}
-          </BBadge>
-
-          <BButton
-            type="button"
-            size="sm"
-            variant="outline-danger"
-            :disabled="!selectedRegionId"
-            @click="deleteSelectedRegion"
-          >
-            Delete
-          </BButton>
-
-          <div class="vr d-none d-md-block"></div>
-
-          <BButtonGroup size="sm" aria-label="Zoom controls">
-            <BButton
-              type="button"
-              variant="outline-secondary"
-              @click="zoomOut"
-              :disabled="zoomLevel <= MIN_ZOOM"
-            >
-              -
-            </BButton>
-            <BButton type="button" variant="outline-secondary" @click="resetZoom">
-              Reset
-            </BButton>
-            <BButton
-              type="button"
-              variant="outline-secondary"
-              @click="zoomIn"
-              :disabled="zoomLevel >= MAX_ZOOM"
-            >
-              +
-            </BButton>
-          </BButtonGroup>
-
-          <BBadge variant="light" class="border">
-            Zoom: {{ zoomPercentage }}%
-          </BBadge>
-
-          <BBadge variant="light" class="coords border ms-md-auto">
-            ({{ mousePos.x }}, {{ mousePos.y }})
-          </BBadge>
-        </BButtonToolbar>
-      </BNavbar>
+      <ViewerToolbar
+        :selected-index="selectedIndex"
+        :total-pages="pages.length"
+        :active-tool="activeTool"
+        :region-count="currentPageRegions.length"
+        :has-selected-region="Boolean(selectedRegionId)"
+        :zoom-level="zoomLevel"
+        :min-zoom="MIN_ZOOM"
+        :max-zoom="MAX_ZOOM"
+        :zoom-percentage="zoomPercentage"
+        :mouse-pos="mousePos"
+        @previous-page="goToPreviousPage"
+        @next-page="goToNextPage"
+        @set-active-tool="setActiveTool"
+        @delete-selected-region="deleteSelectedRegion"
+        @zoom-out="zoomOut"
+        @reset-zoom="resetZoom"
+        @zoom-in="zoomIn"
+      />
 
       <div
         ref="canvasWrapper"
@@ -1143,10 +1039,6 @@ onBeforeUnmount(() => {
 .viewer {
   min-width: 0;
   min-height: 0;
-}
-
-.coords {
-  font-family: monospace;
 }
 
 .status-bar {
