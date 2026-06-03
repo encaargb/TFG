@@ -650,4 +650,122 @@ describe('AnnotationCanvas', () => {
       },
     })
   })
+
+  it('emits clear-selected-region when Escape is pressed in select mode', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [rectangleRegion()],
+    })
+    await flushImageLoad()
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+
+    expect(wrapper.emitted('clear-selected-region')).toEqual([[]])
+  })
+
+  it('cancels active point-region drafts when Escape is pressed', async () => {
+    const polygonWrapper = mountCanvas({ activeTool: 'polygon' })
+    await flushImageLoad()
+
+    let stage = getLatestStage()
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('click')
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 50 })
+    stage.trigger('click')
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+
+    expect(polygonWrapper.emitted('add-region')).toBeUndefined()
+
+    polygonWrapper.unmount()
+    resetKonvaMocks()
+    Konva.Stage.mockClear()
+    Konva.Layer.mockClear()
+    Konva.Image.mockClear()
+    Konva.Line.mockClear()
+    Konva.Transformer.mockClear()
+
+    const polylineWrapper = mountCanvas({ activeTool: 'polyline' })
+    await flushImageLoad()
+
+    stage = getLatestStage()
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('click')
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 50 })
+    stage.trigger('click')
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+
+    expect(polylineWrapper.emitted('add-region')).toBeUndefined()
+  })
+
+  it('confirms active polygon and polyline drafts when Enter is pressed', async () => {
+    const polygonWrapper = mountCanvas({ activeTool: 'polygon' })
+    await flushImageLoad()
+
+    let stage = getLatestStage()
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('click')
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 50 })
+    stage.trigger('click')
+    stage.getPointerPosition.mockReturnValue({ x: 200, y: 150 })
+    stage.trigger('click')
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+
+    expect(polygonWrapper.emitted('add-region')[0][0]).toEqual(
+      expect.objectContaining({ type: 'polygon' })
+    )
+    expect(polygonWrapper.emitted('select-region')).toEqual([['region-1']])
+
+    polygonWrapper.unmount()
+    resetKonvaMocks()
+    Konva.Stage.mockClear()
+    Konva.Layer.mockClear()
+    Konva.Image.mockClear()
+    Konva.Line.mockClear()
+    Konva.Transformer.mockClear()
+
+    const polylineWrapper = mountCanvas({ activeTool: 'polyline' })
+    await flushImageLoad()
+
+    stage = getLatestStage()
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('click')
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 50 })
+    stage.trigger('click')
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+
+    expect(polylineWrapper.emitted('add-region')[0][0]).toEqual(
+      expect.objectContaining({ type: 'polyline' })
+    )
+    expect(polylineWrapper.emitted('select-region')).toEqual([['region-1']])
+  })
+
+  it('emits delete-selected-region when Delete is pressed', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [rectangleRegion()],
+    })
+    await flushImageLoad()
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }))
+
+    expect(wrapper.emitted('delete-selected-region')).toEqual([[]])
+  })
+
+  it('emits delete-selected-region when Backspace is pressed', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [rectangleRegion()],
+    })
+    await flushImageLoad()
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace' }))
+
+    expect(wrapper.emitted('delete-selected-region')).toEqual([[]])
+  })
 })
