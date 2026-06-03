@@ -69,6 +69,7 @@ defineEmits([
         <BButton
           type="button"
           variant="outline-secondary"
+          aria-label="Previous page"
           :disabled="selectedIndex === 0"
           @click="$emit('previous-page')"
         >
@@ -78,6 +79,7 @@ defineEmits([
         <BButton
           type="button"
           variant="outline-secondary"
+          aria-label="Next page"
           :disabled="selectedIndex === totalPages - 1"
           @click="$emit('next-page')"
         >
@@ -94,6 +96,7 @@ defineEmits([
       <BButtonGroup size="sm" aria-label="Region tools">
         <BButton
           type="button"
+          aria-label="Select region tool"
           :variant="activeTool === 'select' ? 'primary' : 'outline-secondary'"
           :aria-pressed="activeTool === 'select'"
           @click="$emit('set-active-tool', 'select')"
@@ -102,6 +105,7 @@ defineEmits([
         </BButton>
         <BButton
           type="button"
+          aria-label="Select rectangle tool"
           :variant="activeTool === 'rectangle' ? 'primary' : 'outline-secondary'"
           :aria-pressed="activeTool === 'rectangle'"
           @click="$emit('set-active-tool', 'rectangle')"
@@ -110,6 +114,7 @@ defineEmits([
         </BButton>
         <BButton
           type="button"
+          aria-label="Select polygon tool"
           :variant="activeTool === 'polygon' ? 'primary' : 'outline-secondary'"
           :aria-pressed="activeTool === 'polygon'"
           @click="$emit('set-active-tool', 'polygon')"
@@ -118,6 +123,7 @@ defineEmits([
         </BButton>
         <BButton
           type="button"
+          aria-label="Select polyline tool"
           :variant="activeTool === 'polyline' ? 'primary' : 'outline-secondary'"
           :aria-pressed="activeTool === 'polyline'"
           @click="$emit('set-active-tool', 'polyline')"
@@ -134,6 +140,7 @@ defineEmits([
         type="button"
         size="sm"
         variant="outline-danger"
+        aria-label="Delete selected region"
         :disabled="!hasSelectedRegion"
         @click="$emit('delete-selected-region')"
       >
@@ -146,17 +153,24 @@ defineEmits([
         <BButton
           type="button"
           variant="outline-secondary"
+          aria-label="Zoom out"
           :disabled="zoomLevel <= minZoom"
           @click="$emit('zoom-out')"
         >
           -
         </BButton>
-        <BButton type="button" variant="outline-secondary" @click="$emit('reset-zoom')">
+        <BButton
+          type="button"
+          variant="outline-secondary"
+          aria-label="Reset zoom"
+          @click="$emit('reset-zoom')"
+        >
           Reset
         </BButton>
         <BButton
           type="button"
           variant="outline-secondary"
+          aria-label="Zoom in"
           :disabled="zoomLevel >= maxZoom"
           @click="$emit('zoom-in')"
         >

@@ -20,16 +20,16 @@ function mountToolbar(props = {}) {
   })
 }
 
-function getButton(wrapper, label) {
-  return wrapper.findAll('button').find((button) => button.text() === label)
+function getButtonByLabel(wrapper, label) {
+  return wrapper.find(`button[aria-label="${label}"]`)
 }
 
 function expectButtonDisabled(wrapper, label, isDisabled = true) {
-  expect(getButton(wrapper, label).element.disabled).toBe(isDisabled)
+  expect(getButtonByLabel(wrapper, label).element.disabled).toBe(isDisabled)
 }
 
 function expectToolButtonPressed(wrapper, label, isPressed = true) {
-  expect(getButton(wrapper, label).attributes('aria-pressed')).toBe(String(isPressed))
+  expect(getButtonByLabel(wrapper, label).attributes('aria-pressed')).toBe(String(isPressed))
 }
 
 describe('ViewerToolbar', () => {
@@ -42,10 +42,10 @@ describe('ViewerToolbar', () => {
     expect(wrapper.text()).toContain('Regions: 2')
     expect(wrapper.text()).toContain('Zoom: 100%')
     expect(wrapper.text()).toContain('(12, 34)')
-    expect(getButton(wrapper, 'Previous').exists()).toBe(true)
-    expect(getButton(wrapper, 'Next').exists()).toBe(true)
-    expect(getButton(wrapper, 'Delete').exists()).toBe(true)
-    expect(getButton(wrapper, 'Reset').exists()).toBe(true)
+    expect(getButtonByLabel(wrapper, 'Previous page').exists()).toBe(true)
+    expect(getButtonByLabel(wrapper, 'Next page').exists()).toBe(true)
+    expect(getButtonByLabel(wrapper, 'Delete selected region').exists()).toBe(true)
+    expect(getButtonByLabel(wrapper, 'Reset zoom').exists()).toBe(true)
   })
 
   it('reflects disabled states from the current viewer state', () => {
@@ -55,11 +55,11 @@ describe('ViewerToolbar', () => {
       zoomLevel: 0.25,
     })
 
-    expectButtonDisabled(wrapper, 'Previous')
-    expectButtonDisabled(wrapper, 'Next', false)
-    expectButtonDisabled(wrapper, 'Delete')
-    expectButtonDisabled(wrapper, '-')
-    expectButtonDisabled(wrapper, '+', false)
+    expectButtonDisabled(wrapper, 'Previous page')
+    expectButtonDisabled(wrapper, 'Next page', false)
+    expectButtonDisabled(wrapper, 'Delete selected region')
+    expectButtonDisabled(wrapper, 'Zoom out')
+    expectButtonDisabled(wrapper, 'Zoom in', false)
   })
 
   it('disables next and zoom in at their upper bounds', () => {
@@ -68,31 +68,31 @@ describe('ViewerToolbar', () => {
       zoomLevel: 8,
     })
 
-    expectButtonDisabled(wrapper, 'Previous', false)
-    expectButtonDisabled(wrapper, 'Next')
-    expectButtonDisabled(wrapper, '+')
+    expectButtonDisabled(wrapper, 'Previous page', false)
+    expectButtonDisabled(wrapper, 'Next page')
+    expectButtonDisabled(wrapper, 'Zoom in')
   })
 
   it('keeps delete enabled when a region is selected', () => {
     const wrapper = mountToolbar({ hasSelectedRegion: true })
 
-    expectButtonDisabled(wrapper, 'Delete', false)
+    expectButtonDisabled(wrapper, 'Delete selected region', false)
   })
 
   it('marks the active annotation tool', () => {
     const wrapper = mountToolbar({ activeTool: 'polygon' })
 
-    expectToolButtonPressed(wrapper, 'Select', false)
-    expectToolButtonPressed(wrapper, 'Rectangle', false)
-    expectToolButtonPressed(wrapper, 'Polygon')
-    expectToolButtonPressed(wrapper, 'Polyline', false)
+    expectToolButtonPressed(wrapper, 'Select region tool', false)
+    expectToolButtonPressed(wrapper, 'Select rectangle tool', false)
+    expectToolButtonPressed(wrapper, 'Select polygon tool')
+    expectToolButtonPressed(wrapper, 'Select polyline tool', false)
   })
 
   it('emits navigation events', async () => {
     const wrapper = mountToolbar()
 
-    await getButton(wrapper, 'Previous').trigger('click')
-    await getButton(wrapper, 'Next').trigger('click')
+    await getButtonByLabel(wrapper, 'Previous page').trigger('click')
+    await getButtonByLabel(wrapper, 'Next page').trigger('click')
 
     expect(wrapper.emitted('previous-page')).toEqual([[]])
     expect(wrapper.emitted('next-page')).toEqual([[]])
@@ -101,10 +101,10 @@ describe('ViewerToolbar', () => {
   it('emits tool selection events with each annotation tool', async () => {
     const wrapper = mountToolbar()
 
-    await getButton(wrapper, 'Rectangle').trigger('click')
-    await getButton(wrapper, 'Polygon').trigger('click')
-    await getButton(wrapper, 'Polyline').trigger('click')
-    await getButton(wrapper, 'Select').trigger('click')
+    await getButtonByLabel(wrapper, 'Select rectangle tool').trigger('click')
+    await getButtonByLabel(wrapper, 'Select polygon tool').trigger('click')
+    await getButtonByLabel(wrapper, 'Select polyline tool').trigger('click')
+    await getButtonByLabel(wrapper, 'Select region tool').trigger('click')
 
     expect(wrapper.emitted('set-active-tool')).toEqual([
       ['rectangle'],
@@ -117,10 +117,10 @@ describe('ViewerToolbar', () => {
   it('emits delete and zoom events', async () => {
     const wrapper = mountToolbar()
 
-    await getButton(wrapper, 'Delete').trigger('click')
-    await getButton(wrapper, '-').trigger('click')
-    await getButton(wrapper, 'Reset').trigger('click')
-    await getButton(wrapper, '+').trigger('click')
+    await getButtonByLabel(wrapper, 'Delete selected region').trigger('click')
+    await getButtonByLabel(wrapper, 'Zoom out').trigger('click')
+    await getButtonByLabel(wrapper, 'Reset zoom').trigger('click')
+    await getButtonByLabel(wrapper, 'Zoom in').trigger('click')
 
     expect(wrapper.emitted('delete-selected-region')).toEqual([[]])
     expect(wrapper.emitted('zoom-out')).toEqual([[]])
