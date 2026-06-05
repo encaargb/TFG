@@ -97,6 +97,7 @@ function createStageMock(config) {
     ...createBaseNodeMock(config),
     config,
     add: vi.fn().mockReturnThis(),
+    container: vi.fn(() => config.container),
     on: vi.fn((eventName, handler) => {
       handlers.set(eventName, handler)
       return stage

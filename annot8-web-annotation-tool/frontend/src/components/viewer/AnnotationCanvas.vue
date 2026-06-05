@@ -86,6 +86,8 @@ let draftRegionStart = null
 let draftPointRegionPoints = []
 let vertexHandles = []
 let imageLoadSequence = 0
+let hoveredRegionId = null
+let draggedRegionId = null
 
 let baseImageWidth = 0
 let baseImageHeight = 0
@@ -104,6 +106,62 @@ function getDocumentBounds() {
     width: originalImageWidth,
     height: originalImageHeight,
   }
+}
+
+function setStageCursor(cursor) {
+  const container = stage?.container?.()
+
+  if (container) {
+    container.style.cursor = cursor
+  }
+}
+
+function resetStageCursor() {
+  setStageCursor('default')
+}
+
+function handleRegionMouseEnter(regionId) {
+  hoveredRegionId = regionId
+
+  if (props.activeTool === 'select' && !draggedRegionId) {
+    setStageCursor('grab')
+  }
+}
+
+function handleRegionMouseLeave(regionId) {
+  if (hoveredRegionId === regionId) {
+    hoveredRegionId = null
+  }
+
+  if (!draggedRegionId) {
+    resetStageCursor()
+  }
+}
+
+function beginRegionDrag(regionId) {
+  draggedRegionId = regionId
+
+  if (props.activeTool === 'select') {
+    setStageCursor('grabbing')
+  }
+}
+
+function endRegionDrag(regionId) {
+  if (draggedRegionId === regionId) {
+    draggedRegionId = null
+  }
+
+  if (props.activeTool === 'select' && hoveredRegionId === regionId) {
+    setStageCursor('grab')
+    return
+  }
+
+  resetStageCursor()
+}
+
+function attachRegionCursorHandlers(node, regionId) {
+  node.on('mouseenter', () => handleRegionMouseEnter(regionId))
+  node.on('mouseleave', () => handleRegionMouseLeave(regionId))
 }
 
 function getClampedDocumentPointer(pointerPosition = stage?.getPointerPosition()) {
@@ -391,6 +449,8 @@ function createRectangleRegionNode(region) {
     },
   })
 
+  attachRegionCursorHandlers(node, region.id)
+
   node.on('click tap', () => {
     if (props.activeTool !== 'select') return
     emit('select-region', region.id)
@@ -402,6 +462,8 @@ function createRectangleRegionNode(region) {
   })
 
   node.on('dragstart', () => {
+    beginRegionDrag(region.id)
+
     if (props.selectedRegionId === region.id) {
       hideActiveEditHandles()
     }
@@ -412,7 +474,7 @@ function createRectangleRegionNode(region) {
     regionLayer.draw()
   })
 
-  node.on('dragend transformend', () => {
+  const commitRegionChange = () => {
     const visibleRectangle = transformer?.getActiveAnchor?.()
       ? syncResizedRectangleNode(node, region, scaleX, scaleY)
       : syncTransformedRectangleNode(node)
@@ -433,7 +495,14 @@ function createRectangleRegionNode(region) {
     if (props.selectedRegionId === region.id) {
       showActiveEditHandles()
     }
+  }
+
+  node.on('dragend', () => {
+    commitRegionChange()
+    endRegionDrag(region.id)
   })
+
+  node.on('transformend', commitRegionChange)
 
   return node
 }
@@ -456,6 +525,8 @@ function createPointRegionNode(region) {
     dragBoundFunc: (position) => clampVisiblePolygonDelta(visiblePoints, position),
   })
 
+  attachRegionCursorHandlers(node, region.id)
+
   node.on('click tap', () => {
     if (props.activeTool !== 'select') return
     emit('select-region', region.id)
@@ -469,6 +540,8 @@ function createPointRegionNode(region) {
   })
 
   node.on('dragstart', () => {
+    beginRegionDrag(region.id)
+
     if (props.selectedRegionId === region.id) {
       hideActiveEditHandles()
     }
@@ -490,6 +563,8 @@ function createPointRegionNode(region) {
     if (props.selectedRegionId === region.id) {
       showActiveEditHandles()
     }
+
+    endRegionDrag(region.id)
   })
 
   return node
@@ -997,9 +1072,17 @@ watch(() => props.activeTool, (newTool, previousTool) => {
   if (['polygon', 'polyline'].includes(previousTool) && previousTool !== newTool) {
     cancelDraftPointRegion(false)
   }
+
+  if (previousTool === 'select' && newTool !== previousTool) {
+    hoveredRegionId = null
+    draggedRegionId = null
+    resetStageCursor()
+  }
 })
 
 onBeforeUnmount(() => {
+  resetStageCursor()
+
   if (stage) {
     stage.destroy()
     stage = null
@@ -1015,6 +1098,8 @@ onBeforeUnmount(() => {
   draftRegionStart = null
   draftPointRegionPoints = []
   vertexHandles = []
+  hoveredRegionId = null
+  draggedRegionId = null
 })
 
 defineExpose({

@@ -478,6 +478,97 @@ describe('AnnotationCanvas', () => {
     expect(wrapper.emitted('select-region')).toEqual([['region-1']])
   })
 
+  it('sets the grab cursor when hovering a rectangle region in select mode', async () => {
+    mountCanvas({
+      regions: [rectangleRegion()],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const rectangle = getRectInstances().find((rect) => rect.config.id === 'region-1')
+
+    rectangle.trigger('mouseenter')
+
+    expect(stage.container().style.cursor).toBe('grab')
+  })
+
+  it('sets the grabbing cursor while dragging a rectangle region', async () => {
+    mountCanvas({
+      regions: [rectangleRegion()],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const rectangle = getRectInstances().find((rect) => rect.config.id === 'region-1')
+
+    rectangle.trigger('dragstart')
+
+    expect(stage.container().style.cursor).toBe('grabbing')
+  })
+
+  it('returns to grab after dragging when the pointer is still over a rectangle region', async () => {
+    mountCanvas({
+      regions: [rectangleRegion()],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const rectangle = getRectInstances().find((rect) => rect.config.id === 'region-1')
+
+    rectangle.trigger('mouseenter')
+    rectangle.trigger('dragstart')
+    rectangle.trigger('dragend')
+
+    expect(stage.container().style.cursor).toBe('grab')
+  })
+
+  it('resets the cursor after dragging when the pointer is no longer over a rectangle region', async () => {
+    mountCanvas({
+      regions: [rectangleRegion()],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const rectangle = getRectInstances().find((rect) => rect.config.id === 'region-1')
+
+    rectangle.trigger('mouseenter')
+    rectangle.trigger('dragstart')
+    rectangle.trigger('mouseleave')
+    rectangle.trigger('dragend')
+
+    expect(stage.container().style.cursor).toBe('default')
+  })
+
+  it('resets the cursor when leaving a rectangle region', async () => {
+    mountCanvas({
+      regions: [rectangleRegion()],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const rectangle = getRectInstances().find((rect) => rect.config.id === 'region-1')
+
+    rectangle.trigger('mouseenter')
+    rectangle.trigger('mouseleave')
+
+    expect(stage.container().style.cursor).toBe('default')
+  })
+
+  it('does not set the grab cursor when hovering a rectangle region in drawing mode', async () => {
+    mountCanvas({
+      activeTool: 'rectangle',
+      regions: [rectangleRegion()],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const rectangle = getRectInstances().find((rect) => rect.config.id === 'region-1')
+
+    rectangle.trigger('mouseenter')
+
+    expect(stage.container().style.cursor).not.toBe('grab')
+  })
+
   it('emits clear-selected-region when clicking empty canvas in select mode', async () => {
     const wrapper = mountCanvas({
       selectedRegionId: 'region-1',
