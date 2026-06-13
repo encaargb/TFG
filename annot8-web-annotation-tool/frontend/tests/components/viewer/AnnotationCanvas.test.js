@@ -44,20 +44,6 @@ function rectangleRegion(overrides = {}) {
   }
 }
 
-function legacyRectangleRegion(overrides = {}) {
-  return {
-    id: 'region-1',
-    pageIndex: 0,
-    type: 'rectangle',
-    x: 200,
-    y: 100,
-    width: 300,
-    height: 200,
-    color: '#0d6efd',
-    ...overrides,
-  }
-}
-
 async function mountSelectedRectangleCanvas() {
   const wrapper = mountCanvas({
     selectedRegionId: 'region-1',
@@ -186,30 +172,6 @@ describe('AnnotationCanvas', () => {
         anchorStrokeWidth: 2,
       })
     )
-  })
-
-  it('renders legacy rectangle regions and attaches the transformer to the selected rectangle', async () => {
-    mountCanvas({
-      selectedRegionId: 'region-1',
-      regions: [legacyRectangleRegion()],
-    })
-    await flushImageLoad()
-
-    const rectangle = getRectInstances().find((rect) => rect.config.id === 'region-1')
-    const transformer = getTransformerInstances().at(-1)
-
-    expect(rectangle.config).toEqual(
-      expect.objectContaining({
-        id: 'region-1',
-        x: 100,
-        y: 50,
-        width: 150,
-        height: 100,
-        strokeWidth: 3,
-        draggable: true,
-      })
-    )
-    expect(transformer.nodes).toHaveBeenLastCalledWith([rectangle])
   })
 
   it('emits mouse coordinates in document space', async () => {

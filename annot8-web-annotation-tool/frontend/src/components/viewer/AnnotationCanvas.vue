@@ -18,8 +18,8 @@ import {
   toEdgeRectangle,
   toDocumentPoints,
   toDocumentRectangle,
-  toKonvaRectangle,
   toVisiblePoints,
+  toVisibleRectangle,
 } from '../../utils/regionGeometry'
 
 const props = defineProps({
@@ -362,7 +362,7 @@ function getAnchorAwareVisibleRectangle(originalRectangle, transformedRectangle)
 
 function syncResizedRectangleNode(node, region, scaleX, scaleY) {
   const visibleRectangle = getAnchorAwareVisibleRectangle(
-    toVisibleRectangleGeometry(region, scaleX, scaleY, props.zoomLevel),
+    toVisibleRectangle(region, scaleX, scaleY, props.zoomLevel),
     getNodeVisibleRectangle(node)
   )
   applyVisibleRectangleToNode(node, visibleRectangle)
@@ -392,19 +392,6 @@ function clampVisiblePolygonDelta(points, delta) {
   }
 }
 
-function toVisibleRectangleGeometry(region, scaleX, scaleY, zoomLevel) {
-  const rectangle = toKonvaRectangle(region)
-  const visibleScaleX = scaleX * zoomLevel
-  const visibleScaleY = scaleY * zoomLevel
-
-  return {
-    x: rectangle.x * visibleScaleX,
-    y: rectangle.y * visibleScaleY,
-    width: rectangle.width * visibleScaleX,
-    height: rectangle.height * visibleScaleY,
-  }
-}
-
 function getTransformedRectangleEdges(originalRegion, transformedRectangle) {
   const originalRectangle = toEdgeRectangle(originalRegion)
   const nextRectangle = toEdgeRectangle(transformedRectangle)
@@ -424,7 +411,7 @@ function getTransformedRectangleEdges(originalRegion, transformedRectangle) {
 
 function createRectangleRegionNode(region) {
   const { scaleX, scaleY } = getRegionScale()
-  const visibleRegion = toVisibleRectangleGeometry(region, scaleX, scaleY, props.zoomLevel)
+  const visibleRegion = toVisibleRectangle(region, scaleX, scaleY, props.zoomLevel)
 
   const node = new Konva.Rect({
     ...visibleRegion,
@@ -712,7 +699,7 @@ function beginRectangleRegion() {
   draftRegionStart = documentStart
 
   const { scaleX, scaleY } = getRegionScale()
-  const visibleStart = toVisibleRectangleGeometry(
+  const visibleStart = toVisibleRectangle(
     {
       left: documentStart.x,
       top: documentStart.y,
@@ -752,7 +739,7 @@ function updateDraftRectangleRegion() {
     color: REGION_COLOR,
   })
   const { scaleX, scaleY } = getRegionScale()
-  const visibleRegion = toVisibleRectangleGeometry(draftRegion, scaleX, scaleY, props.zoomLevel)
+  const visibleRegion = toVisibleRectangle(draftRegion, scaleX, scaleY, props.zoomLevel)
 
   draftRegionNode.x(visibleRegion.x)
   draftRegionNode.y(visibleRegion.y)
@@ -820,7 +807,7 @@ function commitDraftRectangleRegion() {
 
     draftRegion = {
       ...region,
-      ...toEdgeRectangle(clampRectangleToBounds(region, getDocumentBounds())),
+      ...clampRectangleToBounds(region, getDocumentBounds()),
     }
   }
 

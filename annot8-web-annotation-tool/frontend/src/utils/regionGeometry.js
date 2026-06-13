@@ -32,25 +32,7 @@ export function normalizeRectangleEdges(rectangle) {
 }
 
 export function toEdgeRectangle(rectangle) {
-  if ('left' in rectangle && 'top' in rectangle && 'right' in rectangle && 'bottom' in rectangle) {
-    return normalizeRectangleEdges(rectangle)
-  }
-
-  if (!('x' in rectangle) || !('y' in rectangle)) {
-    return normalizeRectangleEdges({
-      left: 0,
-      top: 0,
-      right: rectangle.width,
-      bottom: rectangle.height,
-    })
-  }
-
-  return normalizeRectangleEdges({
-    left: rectangle.x,
-    top: rectangle.y,
-    right: rectangle.x + rectangle.width,
-    bottom: rectangle.y + rectangle.height,
-  })
+  return normalizeRectangleEdges(rectangle)
 }
 
 export function getRectangleWidth(rectangle) {
@@ -127,29 +109,34 @@ export function isDrawableRegion(region, minimumSize = 4) {
 }
 
 export function clampRectangleToBounds(rectangle, bounds) {
-  const konvaRectangle = toKonvaRectangle(rectangle)
-  const width = Math.min(Math.max(0, konvaRectangle.width), bounds.width)
-  const height = Math.min(Math.max(0, konvaRectangle.height), bounds.height)
-  const maxX = Math.max(0, bounds.width - width)
-  const maxY = Math.max(0, bounds.height - height)
+  const edgeRectangle = normalizeRectangleEdges(rectangle)
+  const width = Math.min(Math.max(0, getRectangleWidth(edgeRectangle)), bounds.width)
+  const height = Math.min(Math.max(0, getRectangleHeight(edgeRectangle)), bounds.height)
+
+  const maxLeft = Math.max(0, bounds.width - width)
+  const maxTop = Math.max(0, bounds.height - height)
+
+  const left = Math.round(Math.max(0, Math.min(maxLeft, edgeRectangle.left)))
+  const top = Math.round(Math.max(0, Math.min(maxTop, edgeRectangle.top)))
 
   return {
-    x: Math.round(Math.max(0, Math.min(maxX, konvaRectangle.x))),
-    y: Math.round(Math.max(0, Math.min(maxY, konvaRectangle.y))),
-    width: Math.round(width),
-    height: Math.round(height),
+    left,
+    top,
+    right: Math.round(left + width),
+    bottom: Math.round(top + height),
   }
 }
 
 export function toVisibleRectangle(region, scaleX, scaleY, zoomLevel) {
+  const rectangle = normalizeRectangleEdges(region)
   const visibleScaleX = scaleX * zoomLevel
   const visibleScaleY = scaleY * zoomLevel
 
   return {
-    x: region.x * visibleScaleX,
-    y: region.y * visibleScaleY,
-    width: region.width * visibleScaleX,
-    height: region.height * visibleScaleY,
+    x: rectangle.left * visibleScaleX,
+    y: rectangle.top * visibleScaleY,
+    width: (rectangle.right - rectangle.left) * visibleScaleX,
+    height: (rectangle.bottom - rectangle.top) * visibleScaleY,
   }
 }
 
@@ -157,12 +144,12 @@ export function toDocumentRectangle(rectangle, scaleX, scaleY, zoomLevel) {
   const visibleScaleX = scaleX * zoomLevel
   const visibleScaleY = scaleY * zoomLevel
 
-  return {
-    x: Math.round(rectangle.x / visibleScaleX),
-    y: Math.round(rectangle.y / visibleScaleY),
-    width: Math.round(rectangle.width / visibleScaleX),
-    height: Math.round(rectangle.height / visibleScaleY),
-  }
+  return normalizeRectangleEdges({
+    left: Math.round(rectangle.x / visibleScaleX),
+    top: Math.round(rectangle.y / visibleScaleY),
+    right: Math.round((rectangle.x + rectangle.width) / visibleScaleX),
+    bottom: Math.round((rectangle.y + rectangle.height) / visibleScaleY),
+  })
 }
 
 export function clampPointToBounds(point, bounds) {

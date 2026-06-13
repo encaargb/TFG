@@ -110,10 +110,10 @@ const AnnotationCanvasStub = {
           id: nextRegionId,
           pageIndex,
           type: 'rectangle',
-          x: 10,
-          y: 20,
-          width: 30,
-          height: 40,
+          left: 10,
+          top: 20,
+          right: 40,
+          bottom: 60,
           color: '#0d6efd',
           annotations: []
         })"
@@ -123,7 +123,15 @@ const AnnotationCanvasStub = {
       <button
         type="button"
         data-testid="update-region"
-        @click="$emit('update-region', { id: 'region-1', changes: { x: 99, y: 88 } })"
+        @click="$emit('update-region', {
+          id: 'region-1',
+          changes: {
+            left: 99,
+            top: 88,
+            right: 129,
+            bottom: 128
+          }
+        })"
       >
         Update region
       </button>
@@ -321,10 +329,10 @@ describe('ViewerPage', () => {
     expect(ProjectDocumentModel.regions[0]).toEqual(
       expect.objectContaining({
         id: 'region-1',
-        x: 99,
-        y: 88,
-        width: 30,
-        height: 40,
+        left: 99,
+        top: 88,
+        right: 129,
+        bottom: 128,
       })
     )
     expect(saveProjectRegionsSpy).toHaveBeenLastCalledWith('doc1', ProjectDocumentModel.regions)

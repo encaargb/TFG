@@ -10,7 +10,6 @@ import {
   getRectangleWidth,
   isDrawableRegion,
   normalizeRectangleEdges,
-  toEdgeRectangle,
   toDocumentPoints,
   toDocumentRectangle,
   toKonvaRectangle,
@@ -91,22 +90,6 @@ describe('regionGeometry', () => {
     })
   })
 
-  it('converts legacy rectangle geometry to edge coordinates', () => {
-    expect(
-      toEdgeRectangle({
-        x: 200,
-        y: 100,
-        width: 300,
-        height: 200,
-      })
-    ).toEqual({
-      left: 200,
-      top: 100,
-      right: 500,
-      bottom: 300,
-    })
-  })
-
   it('computes rectangle width and height from edge coordinates', () => {
     const rectangle = {
       left: 200,
@@ -136,11 +119,9 @@ describe('regionGeometry', () => {
   })
 
   it('detects whether a rectangle is large enough to keep', () => {
-    expect(isDrawableRegion({ width: 4, height: 4 })).toBe(true)
-    expect(isDrawableRegion({ width: 3, height: 10 })).toBe(false)
-    expect(isDrawableRegion({ width: 10, height: 3 })).toBe(false)
     expect(isDrawableRegion({ left: 10, top: 20, right: 14, bottom: 24 })).toBe(true)
     expect(isDrawableRegion({ left: 10, top: 20, right: 13, bottom: 24 })).toBe(false)
+    expect(isDrawableRegion({ left: 10, top: 20, right: 14, bottom: 23 })).toBe(false)
   })
 
   it('creates a polygon region from document points', () => {
@@ -204,49 +185,35 @@ describe('regionGeometry', () => {
   it('clamps a rectangle so it stays inside document bounds', () => {
     expect(
       clampRectangleToBounds(
-        { x: -20, y: 950, width: 300, height: 200 },
-        { width: 2000, height: 1000 }
-      )
-    ).toEqual({
-      x: 0,
-      y: 800,
-      width: 300,
-      height: 200,
-    })
-  })
-
-  it('clamps edge rectangle coordinates to legacy geometry while canvas migration is pending', () => {
-    expect(
-      clampRectangleToBounds(
         { left: -20, top: 950, right: 280, bottom: 1150 },
         { width: 2000, height: 1000 }
       )
     ).toEqual({
-      x: 0,
-      y: 800,
-      width: 300,
-      height: 200,
+      left: 0,
+      top: 800,
+      right: 300,
+      bottom: 1000,
     })
   })
 
   it('clamps oversized rectangles to the document size', () => {
     expect(
       clampRectangleToBounds(
-        { x: 100, y: 100, width: 2500, height: 1200 },
+        { left: 100, top: 100, right: 2600, bottom: 1300 },
         { width: 2000, height: 1000 }
       )
     ).toEqual({
-      x: 0,
-      y: 0,
-      width: 2000,
-      height: 1000,
+      left: 0,
+      top: 0,
+      right: 2000,
+      bottom: 1000,
     })
   })
 
-  it('converts document region coordinates to visible canvas coordinates', () => {
+  it('converts document rectangle edges to visible canvas geometry', () => {
     expect(
       toVisibleRectangle(
-        { x: 200, y: 100, width: 300, height: 200 },
+        { left: 200, top: 100, right: 500, bottom: 300 },
         0.5,
         0.5,
         1.25
@@ -259,7 +226,7 @@ describe('regionGeometry', () => {
     })
   })
 
-  it('converts visible canvas coordinates back to document coordinates', () => {
+  it('converts visible canvas geometry back to document rectangle edges', () => {
     expect(
       toDocumentRectangle(
         { x: 125, y: 62.5, width: 187.5, height: 125 },
@@ -268,10 +235,10 @@ describe('regionGeometry', () => {
         1.25
       )
     ).toEqual({
-      x: 200,
-      y: 100,
-      width: 300,
-      height: 200,
+      left: 200,
+      top: 100,
+      right: 500,
+      bottom: 300,
     })
   })
 
