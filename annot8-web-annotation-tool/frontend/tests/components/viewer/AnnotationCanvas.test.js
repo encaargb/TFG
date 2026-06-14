@@ -1240,7 +1240,7 @@ describe('AnnotationCanvas', () => {
     })
   })
 
-  it('adds a point to a selected polygon edge', async () => {
+  it('does not add a point on single click of a selected polygon edge', async () => {
     const wrapper = mountCanvas({
       selectedRegionId: 'region-1',
       regions: [polygonRegion()],
@@ -1252,6 +1252,23 @@ describe('AnnotationCanvas', () => {
 
     stage.getPointerPosition.mockReturnValue({ x: 150, y: 52 })
     polygon.trigger('click')
+
+    expect(wrapper.emitted('select-region')).toEqual([['region-1']])
+    expect(wrapper.emitted('update-region')).toBeUndefined()
+  })
+
+  it('adds a point to a selected polygon edge on double-click', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [polygonRegion()],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const polygon = getLineInstances().find((line) => line.config.id === 'region-1')
+
+    stage.getPointerPosition.mockReturnValue({ x: 150, y: 52 })
+    polygon.trigger('dblclick')
 
     expect(wrapper.emitted('update-region')[0][0]).toEqual({
       id: 'region-1',
@@ -1277,7 +1294,7 @@ describe('AnnotationCanvas', () => {
     const polygon = getLineInstances().find((line) => line.config.id === 'region-1')
 
     stage.getPointerPosition.mockReturnValue({ x: 225, y: 100 })
-    polygon.trigger('click')
+    polygon.trigger('dblclick')
 
     expect(wrapper.emitted('update-region')[0][0].changes.points).toEqual([
       { x: 200, y: 100 },
@@ -1298,7 +1315,7 @@ describe('AnnotationCanvas', () => {
     const polygon = getLineInstances().find((line) => line.config.id === 'region-1')
 
     stage.getPointerPosition.mockReturnValue({ x: 150, y: 100 })
-    polygon.trigger('click')
+    polygon.trigger('dblclick')
 
     const points = wrapper.emitted('update-region')[0][0].changes.points
 
@@ -1311,7 +1328,7 @@ describe('AnnotationCanvas', () => {
     expect(points.at(-1)).not.toEqual(points[0])
   })
 
-  it('does not add a point when clicking an unselected polygon', async () => {
+  it('does not add a point when double-clicking an unselected polygon', async () => {
     const wrapper = mountCanvas({
       selectedRegionId: null,
       regions: [polygonRegion()],
@@ -1323,12 +1340,14 @@ describe('AnnotationCanvas', () => {
 
     stage.getPointerPosition.mockReturnValue({ x: 150, y: 52 })
     polygon.trigger('click')
+    await wrapper.setProps({ selectedRegionId: 'region-1' })
+    polygon.trigger('dblclick')
 
     expect(wrapper.emitted('select-region')).toEqual([['region-1']])
     expect(wrapper.emitted('update-region')).toBeUndefined()
   })
 
-  it('does not add a point when clicking inside a selected polygon far from an edge', async () => {
+  it('does not add a point when double-clicking inside a selected polygon far from an edge', async () => {
     const wrapper = mountCanvas({
       selectedRegionId: 'region-1',
       regions: [polygonRegion()],
@@ -1339,13 +1358,13 @@ describe('AnnotationCanvas', () => {
     const polygon = getLineInstances().find((line) => line.config.id === 'region-1')
 
     stage.getPointerPosition.mockReturnValue({ x: 183, y: 83 })
-    polygon.trigger('click')
+    polygon.trigger('dblclick')
 
     expect(wrapper.emitted('select-region')).toEqual([['region-1']])
     expect(wrapper.emitted('update-region')).toBeUndefined()
   })
 
-  it('does not add a point when clicking an existing polygon vertex handle', async () => {
+  it('does not add a point when clicking or double-clicking an existing polygon vertex handle', async () => {
     const wrapper = mountCanvas({
       selectedRegionId: 'region-1',
       regions: [polygonRegion()],
@@ -1356,6 +1375,7 @@ describe('AnnotationCanvas', () => {
     const event = {}
 
     firstVertexHandle.trigger('click', event)
+    firstVertexHandle.trigger('dblclick')
 
     expect(event.cancelBubble).toBe(true)
     expect(wrapper.emitted('select-region')).toEqual([['region-1']])
@@ -1566,7 +1586,7 @@ describe('AnnotationCanvas', () => {
     })
   })
 
-  it('adds a point to the clicked segment of an already selected polyline', async () => {
+  it('does not add a point on single click of a selected polyline segment', async () => {
     const wrapper = mountCanvas({
       selectedRegionId: 'region-1',
       regions: [threePointPolylineRegion()],
@@ -1578,6 +1598,23 @@ describe('AnnotationCanvas', () => {
 
     stage.getPointerPosition.mockReturnValue({ x: 150, y: 52 })
     polyline.trigger('click')
+
+    expect(wrapper.emitted('select-region')).toEqual([['region-1']])
+    expect(wrapper.emitted('update-region')).toBeUndefined()
+  })
+
+  it('adds a point to the double-clicked segment of an already selected polyline', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [threePointPolylineRegion()],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const polyline = getLineInstances().find((line) => line.config.id === 'region-1')
+
+    stage.getPointerPosition.mockReturnValue({ x: 150, y: 52 })
+    polyline.trigger('dblclick')
 
     expect(wrapper.emitted('update-region')[0][0]).toEqual({
       id: 'region-1',
@@ -1691,7 +1728,7 @@ describe('AnnotationCanvas', () => {
     const polyline = getLineInstances().find((line) => line.config.id === 'region-1')
 
     stage.getPointerPosition.mockReturnValue({ x: 225, y: 100 })
-    polyline.trigger('click')
+    polyline.trigger('dblclick')
 
     expect(wrapper.emitted('update-region')[0][0].changes.points).toEqual([
       { x: 200, y: 100 },
@@ -1701,7 +1738,7 @@ describe('AnnotationCanvas', () => {
     ])
   })
 
-  it('does not add a point when clicking a non-selected polyline', async () => {
+  it('does not add a point when double-clicking a non-selected polyline', async () => {
     const wrapper = mountCanvas({
       selectedRegionId: null,
       regions: [threePointPolylineRegion()],
@@ -1713,12 +1750,14 @@ describe('AnnotationCanvas', () => {
 
     stage.getPointerPosition.mockReturnValue({ x: 150, y: 52 })
     polyline.trigger('click')
+    await wrapper.setProps({ selectedRegionId: 'region-1' })
+    polyline.trigger('dblclick')
 
     expect(wrapper.emitted('select-region')).toEqual([['region-1']])
     expect(wrapper.emitted('update-region')).toBeUndefined()
   })
 
-  it('does not add a point when clicking far from all selected polyline segments', async () => {
+  it('does not add a point when double-clicking far from all selected polyline segments', async () => {
     const wrapper = mountCanvas({
       selectedRegionId: 'region-1',
       regions: [threePointPolylineRegion()],
@@ -1729,7 +1768,7 @@ describe('AnnotationCanvas', () => {
     const polyline = getLineInstances().find((line) => line.config.id === 'region-1')
 
     stage.getPointerPosition.mockReturnValue({ x: 10, y: 200 })
-    polyline.trigger('click')
+    polyline.trigger('dblclick')
 
     expect(wrapper.emitted('select-region')).toEqual([['region-1']])
     expect(wrapper.emitted('update-region')).toBeUndefined()
@@ -1778,7 +1817,7 @@ describe('AnnotationCanvas', () => {
     ])
   })
 
-  it('does not add a point when clicking an existing polyline vertex handle', async () => {
+  it('does not add a point when clicking or double-clicking an existing polyline vertex handle', async () => {
     const wrapper = mountCanvas({
       selectedRegionId: 'region-1',
       regions: [threePointPolylineRegion()],
@@ -1788,6 +1827,7 @@ describe('AnnotationCanvas', () => {
     const middleVertexHandle = getCircleInstances().slice(-3)[1]
 
     middleVertexHandle.trigger('click')
+    middleVertexHandle.trigger('dblclick')
 
     expect(wrapper.emitted('select-region')).toEqual([['region-1']])
     expect(wrapper.emitted('update-region')).toBeUndefined()
@@ -1806,7 +1846,7 @@ describe('AnnotationCanvas', () => {
     stage.getPointerPosition.mockReturnValue({ x: 150, y: 52 })
     polyline.trigger('dragstart')
     polyline.trigger('dragend')
-    polyline.trigger('click')
+    polyline.trigger('dblclick')
 
     expect(wrapper.emitted('update-region')).toHaveLength(1)
     expect(wrapper.emitted('update-region')[0][0].changes.points).toEqual([
@@ -1829,7 +1869,7 @@ describe('AnnotationCanvas', () => {
     stage.getPointerPosition.mockReturnValue({ x: 150, y: 52 })
     polygon.trigger('dragstart')
     polygon.trigger('dragend')
-    polygon.trigger('click')
+    polygon.trigger('dblclick')
 
     expect(wrapper.emitted('update-region')).toHaveLength(1)
     expect(wrapper.emitted('update-region')[0][0].changes.points).toEqual([

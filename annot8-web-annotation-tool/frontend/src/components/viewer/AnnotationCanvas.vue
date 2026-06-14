@@ -91,6 +91,7 @@ let hoveredRegionId = null
 let draggedRegionId = null
 let selectedPolylinePoint = null
 let suppressPointRegionClick = false
+let suppressPointRegionDoubleClick = false
 
 let baseImageWidth = 0
 let baseImageHeight = 0
@@ -618,6 +619,22 @@ function createPointRegionNode(region) {
       return
     }
 
+    if (props.selectedRegionId !== region.id) {
+      suppressPointRegionDoubleClick = true
+    }
+
+    emit('select-region', region.id)
+  })
+
+  node.on('dblclick dbltap', () => {
+    if (props.activeTool !== 'select') return
+
+    if (suppressPointRegionClick || suppressPointRegionDoubleClick) {
+      suppressPointRegionClick = false
+      suppressPointRegionDoubleClick = false
+      return
+    }
+
     if (insertPointRegionSegmentPoint(stage.getPointerPosition())) return
 
     emit('select-region', region.id)
@@ -632,6 +649,7 @@ function createPointRegionNode(region) {
 
   node.on('dragstart', () => {
     suppressPointRegionClick = true
+    suppressPointRegionDoubleClick = true
     clearSelectedPolylinePoint()
     beginRegionDrag(region.id)
 
@@ -708,6 +726,12 @@ function createPointRegionVertexHandles(region, pointRegionNode) {
       }
 
       emit('select-region', region.id)
+    })
+
+    handle.on('dblclick dbltap', (event) => {
+      if (event) {
+        event.cancelBubble = true
+      }
     })
 
     handle.on('dragmove', () => {
@@ -1287,6 +1311,7 @@ onBeforeUnmount(() => {
   draggedRegionId = null
   selectedPolylinePoint = null
   suppressPointRegionClick = false
+  suppressPointRegionDoubleClick = false
 })
 
 defineExpose({
