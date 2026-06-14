@@ -87,6 +87,17 @@ function polylineRegion(overrides = {}) {
   }
 }
 
+function threePointPolylineRegion(overrides = {}) {
+  return polylineRegion({
+    points: [
+      { x: 200, y: 100 },
+      { x: 500, y: 100 },
+      { x: 400, y: 300 },
+    ],
+    ...overrides,
+  })
+}
+
 async function drawPointRegionWithDoubleClick(activeTool) {
   const wrapper = mountCanvas({ activeTool })
   await flushImageLoad()
@@ -1431,6 +1442,142 @@ describe('AnnotationCanvas', () => {
         ],
       },
     })
+  })
+
+  it('selects a polyline vertex handle without bubbling to the canvas', async () => {
+    mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [threePointPolylineRegion()],
+    })
+    await flushImageLoad()
+
+    const middleVertexHandle = getCircleInstances().slice(-3)[1]
+    const event = {}
+
+    middleVertexHandle.trigger('click', event)
+
+    expect(event.cancelBubble).toBe(true)
+    expect(middleVertexHandle.fill).toHaveBeenLastCalledWith('#0d6efd')
+  })
+
+  it('removes a selected polyline point with Delete', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [threePointPolylineRegion()],
+    })
+    await flushImageLoad()
+
+    const middleVertexHandle = getCircleInstances().slice(-3)[1]
+
+    middleVertexHandle.trigger('click')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }))
+
+    expect(wrapper.emitted('update-region')[0][0]).toEqual({
+      id: 'region-1',
+      changes: {
+        points: [
+          { x: 200, y: 100 },
+          { x: 400, y: 300 },
+        ],
+      },
+    })
+    expect(wrapper.emitted('delete-selected-region')).toBeUndefined()
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }))
+
+    expect(wrapper.emitted('delete-selected-region')).toEqual([[]])
+  })
+
+  it('removes a selected polyline point with Backspace', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [threePointPolylineRegion()],
+    })
+    await flushImageLoad()
+
+    const firstVertexHandle = getCircleInstances().slice(-3)[0]
+
+    firstVertexHandle.trigger('click')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace' }))
+
+    expect(wrapper.emitted('update-region')[0][0]).toEqual({
+      id: 'region-1',
+      changes: {
+        points: [
+          { x: 500, y: 100 },
+          { x: 400, y: 300 },
+        ],
+      },
+    })
+    expect(wrapper.emitted('delete-selected-region')).toBeUndefined()
+  })
+
+  it('deletes the whole polyline when deleting a selected point from a two-point polyline', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [polylineRegion()],
+    })
+    await flushImageLoad()
+
+    const firstVertexHandle = getCircleInstances().slice(-2)[0]
+
+    firstVertexHandle.trigger('click')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }))
+
+    expect(wrapper.emitted('delete-selected-region')).toEqual([[]])
+    expect(wrapper.emitted('update-region')).toBeUndefined()
+  })
+
+  it('keeps deleting the selected region when no polyline point is selected', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [threePointPolylineRegion()],
+    })
+    await flushImageLoad()
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }))
+
+    expect(wrapper.emitted('delete-selected-region')).toEqual([[]])
+    expect(wrapper.emitted('update-region')).toBeUndefined()
+  })
+
+  it('clears the selected polyline point when another region is selected', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [
+        threePointPolylineRegion(),
+        rectangleRegion({ id: 'region-2' }),
+      ],
+    })
+    await flushImageLoad()
+
+    const middleVertexHandle = getCircleInstances().slice(-3)[1]
+    const rectangle = getRectInstances().find((rect) => rect.config.id === 'region-2')
+
+    middleVertexHandle.trigger('click')
+    rectangle.trigger('click')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }))
+
+    expect(wrapper.emitted('select-region')).toEqual([['region-1'], ['region-2']])
+    expect(wrapper.emitted('delete-selected-region')).toEqual([[]])
+    expect(wrapper.emitted('update-region')).toBeUndefined()
+  })
+
+  it('keeps polygon vertex delete behavior unchanged', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [polygonRegion()],
+    })
+    await flushImageLoad()
+
+    const firstVertexHandle = getCircleInstances().slice(-3)[0]
+
+    firstVertexHandle.trigger('click')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }))
+
+    expect(wrapper.emitted('select-region')).toEqual([['region-1']])
+    expect(wrapper.emitted('delete-selected-region')).toEqual([[]])
+    expect(wrapper.emitted('update-region')).toBeUndefined()
   })
 
   it('emits clear-selected-region when Escape is pressed in select mode', async () => {
