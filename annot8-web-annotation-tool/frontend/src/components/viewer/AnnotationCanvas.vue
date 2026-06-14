@@ -89,7 +89,7 @@ let vertexHandles = []
 let imageLoadSequence = 0
 let hoveredRegionId = null
 let draggedRegionId = null
-let selectedPolylinePoint = null
+let selectedPointRegionPoint = null
 let suppressPointRegionClick = false
 let suppressPointRegionDoubleClick = false
 
@@ -168,8 +168,8 @@ function attachRegionCursorHandlers(node, regionId) {
   node.on('mouseleave', () => handleRegionMouseLeave(regionId))
 }
 
-function clearSelectedPolylinePoint() {
-  selectedPolylinePoint = null
+function clearSelectedPointRegionPoint() {
+  selectedPointRegionPoint = null
 }
 
 function getClampedDocumentPointer(pointerPosition = stage?.getPointerPosition()) {
@@ -493,7 +493,7 @@ function createRectangleRegionNode(region) {
 
   node.on('click tap', () => {
     if (props.activeTool !== 'select') return
-    clearSelectedPolylinePoint()
+    clearSelectedPointRegionPoint()
     emit('select-region', region.id)
   })
 
@@ -593,7 +593,7 @@ function createPointRegionNode(region) {
 
     if (segmentIndex === -1 || !documentPoint) return false
 
-    clearSelectedPolylinePoint()
+    clearSelectedPointRegionPoint()
     const insertIndex = segmentIndex + 1
 
     emit('update-region', {
@@ -612,7 +612,7 @@ function createPointRegionNode(region) {
 
   node.on('click tap', (event) => {
     if (props.activeTool !== 'select') return
-    clearSelectedPolylinePoint()
+    clearSelectedPointRegionPoint()
 
     if (suppressPointRegionClick) {
       suppressPointRegionClick = false
@@ -652,7 +652,7 @@ function createPointRegionNode(region) {
   node.on('dragstart', () => {
     suppressPointRegionClick = true
     suppressPointRegionDoubleClick = true
-    clearSelectedPolylinePoint()
+    clearSelectedPointRegionPoint()
     beginRegionDrag(region.id)
 
     if (props.selectedRegionId === region.id) {
@@ -695,7 +695,8 @@ function createPointRegionVertexHandles(region, pointRegionNode) {
       radius: 5,
       draggable: true,
       fill:
-        selectedPolylinePoint?.regionId === region.id && selectedPolylinePoint.pointIndex === index
+        selectedPointRegionPoint?.regionId === region.id &&
+        selectedPointRegionPoint.pointIndex === index
           ? region.color
           : '#ffffff',
       stroke: region.color,
@@ -718,13 +719,11 @@ function createPointRegionVertexHandles(region, pointRegionNode) {
         event.cancelBubble = true
       }
 
-      if (region.type === 'polyline') {
-        selectedPolylinePoint = { regionId: region.id, pointIndex: index }
+      if (region.type === 'polygon' || region.type === 'polyline') {
+        selectedPointRegionPoint = { regionId: region.id, pointIndex: index }
         vertexHandles.forEach((vertexHandle) => vertexHandle.fill('#ffffff'))
         handle.fill(region.color)
         regionLayer.draw()
-      } else {
-        clearSelectedPolylinePoint()
       }
 
       emit('select-region', region.id)
@@ -1015,10 +1014,10 @@ function beginPointRegion() {
 }
 
 function insertPolylineEndpointPoint(pointerPosition) {
-  if (props.activeTool !== 'select' || !selectedPolylinePoint) return false
+  if (props.activeTool !== 'select' || !selectedPointRegionPoint) return false
   if (!isPointerInsideVisibleDocument(pointerPosition)) return false
 
-  const { regionId, pointIndex } = selectedPolylinePoint
+  const { regionId, pointIndex } = selectedPointRegionPoint
   const region = props.regions.find((candidate) => candidate.id === regionId)
 
   if (!region || region.type !== 'polyline' || props.selectedRegionId !== region.id) return false
@@ -1035,7 +1034,7 @@ function insertPolylineEndpointPoint(pointerPosition) {
 
   if (!documentPoint) return false
 
-  clearSelectedPolylinePoint()
+  clearSelectedPointRegionPoint()
   emit('update-region', {
     id: region.id,
     changes: {
@@ -1062,7 +1061,7 @@ function handleStageClick(event) {
 
   if (insertPolylineEndpointPoint(stage.getPointerPosition())) return
 
-  clearSelectedPolylinePoint()
+  clearSelectedPointRegionPoint()
   emit('clear-selected-region')
 }
 
@@ -1105,16 +1104,18 @@ function commitDraftPointRegion() {
   }
 }
 
-function deleteSelectedPolylinePoint() {
-  if (!selectedPolylinePoint) return false
+function deleteSelectedPointRegionPoint() {
+  if (!selectedPointRegionPoint) return false
 
-  const { regionId, pointIndex } = selectedPolylinePoint
+  const { regionId, pointIndex } = selectedPointRegionPoint
   const region = props.regions.find((candidate) => candidate.id === regionId)
-  clearSelectedPolylinePoint()
+  clearSelectedPointRegionPoint()
 
-  if (!region || region.type !== 'polyline') return false
+  if (!region || !['polygon', 'polyline'].includes(region.type)) return false
 
-  if (region.points.length <= 2) {
+  const minimumPointCount = region.type === 'polygon' ? 3 : 2
+
+  if (region.points.length <= minimumPointCount) {
     emit('delete-selected-region')
     return true
   }
@@ -1155,7 +1156,7 @@ function handleKeydown(event) {
 
   if (event.key !== 'Delete' && event.key !== 'Backspace') return
 
-  if (deleteSelectedPolylinePoint()) return
+  if (deleteSelectedPointRegionPoint()) return
 
   emit('delete-selected-region')
 }
@@ -1265,8 +1266,8 @@ watch(() => props.zoomLevel, () => {
 })
 
 watch(() => props.selectedRegionId, (newSelectedRegionId) => {
-  if (selectedPolylinePoint?.regionId !== newSelectedRegionId) {
-    clearSelectedPolylinePoint()
+  if (selectedPointRegionPoint?.regionId !== newSelectedRegionId) {
+    clearSelectedPointRegionPoint()
   }
 })
 
@@ -1286,7 +1287,7 @@ watch(() => props.activeTool, (newTool, previousTool) => {
   if (previousTool === 'select' && newTool !== previousTool) {
     hoveredRegionId = null
     draggedRegionId = null
-    clearSelectedPolylinePoint()
+    clearSelectedPointRegionPoint()
     resetStageCursor()
   }
 })
@@ -1311,7 +1312,7 @@ onBeforeUnmount(() => {
   vertexHandles = []
   hoveredRegionId = null
   draggedRegionId = null
-  selectedPolylinePoint = null
+  selectedPointRegionPoint = null
   suppressPointRegionClick = false
   suppressPointRegionDoubleClick = false
 })
