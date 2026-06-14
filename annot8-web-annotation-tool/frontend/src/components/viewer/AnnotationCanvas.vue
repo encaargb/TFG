@@ -625,6 +625,7 @@ function createPointRegionNode(region) {
 
   node.on('dragstart', () => {
     suppressPointRegionClick = true
+    clearSelectedPolylinePoint()
     beginRegionDrag(region.id)
 
     if (props.selectedRegionId === region.id) {
@@ -981,6 +982,41 @@ function beginPointRegion() {
   updateDraftPointRegion()
 }
 
+function insertPolylineEndpointPoint(pointerPosition) {
+  if (props.activeTool !== 'select' || !selectedPolylinePoint) return false
+  if (!isPointerInsideVisibleDocument(pointerPosition)) return false
+
+  const { regionId, pointIndex } = selectedPolylinePoint
+  const region = props.regions.find((candidate) => candidate.id === regionId)
+
+  if (!region || region.type !== 'polyline' || props.selectedRegionId !== region.id) return false
+  if (pointIndex !== 0 && pointIndex !== region.points.length - 1) return false
+
+  const documentPoint = getDocumentCoordinates(
+    pointerPosition,
+    props.zoomLevel,
+    baseImageWidth,
+    baseImageHeight,
+    originalImageWidth,
+    originalImageHeight
+  )
+
+  if (!documentPoint) return false
+
+  clearSelectedPolylinePoint()
+  emit('update-region', {
+    id: region.id,
+    changes: {
+      points:
+        pointIndex === 0
+          ? [documentPoint, ...region.points]
+          : [...region.points, documentPoint],
+    },
+  })
+
+  return true
+}
+
 function handleStageClick(event) {
   if (event?.evt?.detail > 1) return
 
@@ -991,6 +1027,8 @@ function handleStageClick(event) {
   const clickTarget = event?.target
 
   if (clickTarget && clickTarget !== stage && clickTarget !== pageImageNode) return
+
+  if (insertPolylineEndpointPoint(stage.getPointerPosition())) return
 
   clearSelectedPolylinePoint()
   emit('clear-selected-region')
