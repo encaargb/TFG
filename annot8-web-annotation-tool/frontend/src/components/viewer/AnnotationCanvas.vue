@@ -568,7 +568,7 @@ function createPointRegionNode(region) {
 
   attachRegionCursorHandlers(node, region.id)
 
-  function insertPointRegionSegmentPoint(pointerPosition) {
+  function insertPointIntoSelectedRegionSegment(pointerPosition) {
     if (
       !['polygon', 'polyline'].includes(region.type) ||
       props.activeTool !== 'select' ||
@@ -635,7 +635,7 @@ function createPointRegionNode(region) {
       return
     }
 
-    if (insertPointRegionSegmentPoint(stage.getPointerPosition())) return
+    if (insertPointIntoSelectedRegionSegment(stage.getPointerPosition())) return
 
     emit('select-region', region.id)
   })
