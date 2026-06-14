@@ -156,6 +156,13 @@ const AnnotationCanvasStub = {
       >
         Move mouse
       </button>
+      <button
+        type="button"
+        data-testid="leave-document"
+        @click="$emit('mouse-position-change', null)"
+      >
+        Leave document
+      </button>
     </section>
   `,
 }
@@ -435,6 +442,10 @@ describe('ViewerPage', () => {
 
     expect(statusBar.text()).toContain('Tool rectangle')
     expect(statusBar.text()).toContain('Mouse 321 654')
+
+    await wrapper.find('[data-testid="leave-document"]').trigger('click')
+
+    expect(statusBar.props('mousePos')).toBe(null)
   })
 
   it('clears the selected region when switching to a drawing tool', async () => {

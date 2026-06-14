@@ -188,6 +188,18 @@ describe('AnnotationCanvas', () => {
     ]])
   })
 
+  it('clears mouse coordinates each time the pointer leaves the document', async () => {
+    const wrapper = mountCanvas()
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    stage.trigger('mouseleave')
+    stage.trigger('mouseleave')
+
+    expect(wrapper.emitted('mouse-position-change')).toEqual([[null], [null]])
+  })
+
   it('emits a new rectangle region after dragging on the canvas', async () => {
     const wrapper = mountCanvas({ activeTool: 'rectangle' })
     await flushImageLoad()

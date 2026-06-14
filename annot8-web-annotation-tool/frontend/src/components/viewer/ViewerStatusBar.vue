@@ -62,9 +62,9 @@ const selectedRegionLabel = computed(() => {
 })
 
 const mouseLabel = computed(() => {
-  if (!props.mousePos) return '\u2014'
+  if (!props.mousePos) return '(–, –)'
 
-  return `${props.mousePos.x}, ${props.mousePos.y}`
+  return `(${props.mousePos.x}, ${props.mousePos.y})`
 })
 </script>
 

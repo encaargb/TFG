@@ -35,7 +35,7 @@ describe('ViewerStatusBar', () => {
       'Tool: Polygon',
       'Selected: none',
       'Page regions: 4',
-      'Mouse: 320, 180',
+      'Mouse: (320, 180)',
       'Save: Saved',
     ])
   })
@@ -59,7 +59,7 @@ describe('ViewerStatusBar', () => {
     expect(wrapper.text()).toContain('Tool: Rectangle')
     expect(wrapper.text()).toContain('Selected: Rectangle region-3')
     expect(wrapper.text()).toContain('Page regions: 0')
-    expect(wrapper.text()).toContain('Mouse: 12, 34')
+    expect(wrapper.text()).toContain('Mouse: (12, 34)')
     expect(wrapper.text()).toContain('Save: Saving...')
   })
 
@@ -81,7 +81,7 @@ describe('ViewerStatusBar', () => {
       saveStatus: 'saved',
     })
 
-    expect(wrapper.text()).toContain('Mouse: —')
+    expect(wrapper.text()).toContain('Mouse: (–, –)')
     expect(wrapper.text()).toContain('Save: Saved')
 
     await wrapper.setProps({ saveStatus: 'saving' })

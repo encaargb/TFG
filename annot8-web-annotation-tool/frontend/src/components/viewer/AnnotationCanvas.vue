@@ -1017,6 +1017,10 @@ function handleMouseMove() {
   }
 }
 
+function handleMouseLeave() {
+  emit('mouse-position-change', null)
+}
+
 onMounted(() => {
   stage = new Konva.Stage({
     container: canvasContainer.value,
@@ -1030,6 +1034,7 @@ onMounted(() => {
   stage.add(regionLayer)
 
   stage.on('mousemove', handleMouseMove)
+  stage.on('mouseleave', handleMouseLeave)
   stage.on('mousedown', beginRectangleRegion)
   stage.on('click', handleStageClick)
   stage.on('mouseup', commitDraftRectangleRegion)
