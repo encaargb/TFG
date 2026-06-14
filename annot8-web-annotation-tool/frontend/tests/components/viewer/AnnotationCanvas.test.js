@@ -1985,6 +1985,71 @@ describe('AnnotationCanvas', () => {
     expect(secondVertexHandle.fill).toHaveBeenLastCalledWith('#0d6efd')
   })
 
+  it('selects a different polyline vertex handle when dragging starts', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [threePointPolylineRegion()],
+    })
+    await flushImageLoad()
+
+    const polyline = getLineInstances().find((line) => line.config.id === 'region-1')
+    const vertexHandles = getCircleInstances().slice(-3)
+
+    vertexHandles[0].trigger('click')
+    vertexHandles[2].trigger('mousedown')
+    vertexHandles[2].x(210)
+    vertexHandles[2].y(175)
+    vertexHandles[2].trigger('dragmove')
+    vertexHandles[2].trigger('dragend')
+
+    expect(vertexHandles[0].fill).toHaveBeenLastCalledWith('#ffffff')
+    expect(vertexHandles[2].fill).toHaveBeenLastCalledWith('#0d6efd')
+    expect(polyline.points).toHaveBeenLastCalledWith([100, 50, 250, 50, 210, 175])
+    expect(wrapper.emitted('update-region')[0][0]).toEqual({
+      id: 'region-1',
+      changes: {
+        points: [
+          { x: 200, y: 100 },
+          { x: 500, y: 100 },
+          { x: 420, y: 350 },
+        ],
+      },
+    })
+  })
+
+  it('selects a different polygon vertex handle when dragging starts', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [fourPointPolygonRegion()],
+    })
+    await flushImageLoad()
+
+    const polygon = getLineInstances().find((line) => line.config.id === 'region-1')
+    const vertexHandles = getCircleInstances().slice(-4)
+
+    vertexHandles[0].trigger('click')
+    vertexHandles[2].trigger('mousedown')
+    vertexHandles[2].x(260)
+    vertexHandles[2].y(170)
+    vertexHandles[2].trigger('dragmove')
+    vertexHandles[2].trigger('dragend')
+
+    expect(vertexHandles[0].fill).toHaveBeenLastCalledWith('#ffffff')
+    expect(vertexHandles[2].fill).toHaveBeenLastCalledWith('#0d6efd')
+    expect(polygon.points).toHaveBeenLastCalledWith([100, 50, 250, 50, 260, 170, 100, 150])
+    expect(wrapper.emitted('update-region')[0][0]).toEqual({
+      id: 'region-1',
+      changes: {
+        points: [
+          { x: 200, y: 100 },
+          { x: 500, y: 100 },
+          { x: 520, y: 340 },
+          { x: 200, y: 300 },
+        ],
+      },
+    })
+  })
+
   it('removes a selected polyline point with Delete', async () => {
     const wrapper = mountCanvas({
       selectedRegionId: 'region-1',

@@ -688,6 +688,13 @@ function createPointRegionVertexHandles(region, pointRegionNode) {
   const visiblePoints = toVisiblePoints(region.points, scaleX, scaleY, props.zoomLevel)
   const editedVisiblePoints = visiblePoints.map((point) => ({ ...point }))
 
+  function selectVertexHandle(pointIndex, handle) {
+    selectedPointRegionPoint = { regionId: region.id, pointIndex }
+    vertexHandles.forEach((vertexHandle) => vertexHandle.fill('#ffffff'))
+    handle.fill(region.color)
+    regionLayer.draw()
+  }
+
   return visiblePoints.map((point, index) => {
     const handle = new Konva.Circle({
       x: point.x,
@@ -719,13 +726,18 @@ function createPointRegionVertexHandles(region, pointRegionNode) {
         event.cancelBubble = true
       }
 
-      if (region.type === 'polygon' || region.type === 'polyline') {
-        selectedPointRegionPoint = { regionId: region.id, pointIndex: index }
-        vertexHandles.forEach((vertexHandle) => vertexHandle.fill('#ffffff'))
-        handle.fill(region.color)
-        regionLayer.draw()
+      selectVertexHandle(index, handle)
+
+      emit('select-region', region.id)
+    })
+
+    handle.on('mousedown touchstart', (event) => {
+      if (props.activeTool !== 'select') return
+      if (event) {
+        event.cancelBubble = true
       }
 
+      selectVertexHandle(index, handle)
       emit('select-region', region.id)
     })
 
