@@ -67,7 +67,7 @@ const emit = defineEmits([
 
 const REGION_COLOR = '#0d6efd'
 const POLYGON_CLOSE_DISTANCE = 8
-const POLYLINE_SEGMENT_HIT_TOLERANCE = 8
+const POINT_REGION_SEGMENT_HIT_TOLERANCE = 8
 const MIN_VISIBLE_REGION_SIZE = 4
 
 const canvasContainer = ref(null)
@@ -341,17 +341,18 @@ function getPointToSegmentDistance(point, segmentStart, segmentEnd) {
   return Math.hypot(point.x - closestPoint.x, point.y - closestPoint.y)
 }
 
-function getClosestPolylineSegmentIndex(pointerPosition, visiblePoints) {
+function getClosestPointRegionSegmentIndex(pointerPosition, visiblePoints, closed = false) {
   if (!pointerPosition) return -1
 
   let closestSegmentIndex = -1
   let closestDistance = Number.POSITIVE_INFINITY
+  const segmentCount = closed ? visiblePoints.length : visiblePoints.length - 1
 
-  for (let index = 0; index < visiblePoints.length - 1; index += 1) {
+  for (let index = 0; index < segmentCount; index += 1) {
     const distance = getPointToSegmentDistance(
       pointerPosition,
       visiblePoints[index],
-      visiblePoints[index + 1]
+      visiblePoints[(index + 1) % visiblePoints.length]
     )
 
     if (distance < closestDistance) {
@@ -360,7 +361,7 @@ function getClosestPolylineSegmentIndex(pointerPosition, visiblePoints) {
     }
   }
 
-  return closestDistance <= POLYLINE_SEGMENT_HIT_TOLERANCE ? closestSegmentIndex : -1
+  return closestDistance <= POINT_REGION_SEGMENT_HIT_TOLERANCE ? closestSegmentIndex : -1
 }
 
 function getAnchorAwareVisibleRectangle(originalRectangle, transformedRectangle) {
@@ -566,16 +567,20 @@ function createPointRegionNode(region) {
 
   attachRegionCursorHandlers(node, region.id)
 
-  function insertPolylinePoint(pointerPosition) {
+  function insertPointRegionSegmentPoint(pointerPosition) {
     if (
-      region.type !== 'polyline' ||
+      !['polygon', 'polyline'].includes(region.type) ||
       props.activeTool !== 'select' ||
       props.selectedRegionId !== region.id
     ) {
       return false
     }
 
-    const segmentIndex = getClosestPolylineSegmentIndex(pointerPosition, visiblePoints)
+    const segmentIndex = getClosestPointRegionSegmentIndex(
+      pointerPosition,
+      visiblePoints,
+      isPolygon
+    )
     const documentPoint = getDocumentCoordinates(
       pointerPosition,
       props.zoomLevel,
@@ -588,13 +593,15 @@ function createPointRegionNode(region) {
     if (segmentIndex === -1 || !documentPoint) return false
 
     clearSelectedPolylinePoint()
+    const insertIndex = segmentIndex + 1
+
     emit('update-region', {
       id: region.id,
       changes: {
         points: [
-          ...region.points.slice(0, segmentIndex + 1),
+          ...region.points.slice(0, insertIndex),
           documentPoint,
-          ...region.points.slice(segmentIndex + 1),
+          ...region.points.slice(insertIndex),
         ],
       },
     })
@@ -611,7 +618,7 @@ function createPointRegionNode(region) {
       return
     }
 
-    if (insertPolylinePoint(stage.getPointerPosition())) return
+    if (insertPointRegionSegmentPoint(stage.getPointerPosition())) return
 
     emit('select-region', region.id)
   })
@@ -687,12 +694,11 @@ function createPointRegionVertexHandles(region, pointRegionNode) {
 
     handle.on('click tap', (event) => {
       if (props.activeTool !== 'select') return
+      if (event) {
+        event.cancelBubble = true
+      }
 
       if (region.type === 'polyline') {
-        if (event) {
-          event.cancelBubble = true
-        }
-
         selectedPolylinePoint = { regionId: region.id, pointIndex: index }
         vertexHandles.forEach((vertexHandle) => vertexHandle.fill('#ffffff'))
         handle.fill(region.color)
