@@ -1444,6 +1444,143 @@ describe('AnnotationCanvas', () => {
     })
   })
 
+  it('adds a point to the clicked segment of an already selected polyline', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [threePointPolylineRegion()],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const polyline = getLineInstances().find((line) => line.config.id === 'region-1')
+
+    stage.getPointerPosition.mockReturnValue({ x: 150, y: 52 })
+    polyline.trigger('click')
+
+    expect(wrapper.emitted('update-region')[0][0]).toEqual({
+      id: 'region-1',
+      changes: {
+        points: [
+          { x: 200, y: 100 },
+          { x: 300, y: 104 },
+          { x: 500, y: 100 },
+          { x: 400, y: 300 },
+        ],
+      },
+    })
+    expect(wrapper.emitted('select-region')).toBeUndefined()
+  })
+
+  it('inserts a new polyline point between the correct segment endpoints', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [threePointPolylineRegion()],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const polyline = getLineInstances().find((line) => line.config.id === 'region-1')
+
+    stage.getPointerPosition.mockReturnValue({ x: 225, y: 100 })
+    polyline.trigger('click')
+
+    expect(wrapper.emitted('update-region')[0][0].changes.points).toEqual([
+      { x: 200, y: 100 },
+      { x: 500, y: 100 },
+      { x: 450, y: 200 },
+      { x: 400, y: 300 },
+    ])
+  })
+
+  it('does not add a point when clicking a non-selected polyline', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: null,
+      regions: [threePointPolylineRegion()],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const polyline = getLineInstances().find((line) => line.config.id === 'region-1')
+
+    stage.getPointerPosition.mockReturnValue({ x: 150, y: 52 })
+    polyline.trigger('click')
+
+    expect(wrapper.emitted('select-region')).toEqual([['region-1']])
+    expect(wrapper.emitted('update-region')).toBeUndefined()
+  })
+
+  it('does not add a point when clicking far from all selected polyline segments', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [threePointPolylineRegion()],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const polyline = getLineInstances().find((line) => line.config.id === 'region-1')
+
+    stage.getPointerPosition.mockReturnValue({ x: 10, y: 200 })
+    polyline.trigger('click')
+
+    expect(wrapper.emitted('select-region')).toEqual([['region-1']])
+    expect(wrapper.emitted('update-region')).toBeUndefined()
+  })
+
+  it('does not add a point when clicking an existing polyline vertex handle', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [threePointPolylineRegion()],
+    })
+    await flushImageLoad()
+
+    const middleVertexHandle = getCircleInstances().slice(-3)[1]
+
+    middleVertexHandle.trigger('click')
+
+    expect(wrapper.emitted('select-region')).toEqual([['region-1']])
+    expect(wrapper.emitted('update-region')).toBeUndefined()
+  })
+
+  it('does not add a point after dragging the selected polyline', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [threePointPolylineRegion()],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const polyline = getLineInstances().find((line) => line.config.id === 'region-1')
+
+    stage.getPointerPosition.mockReturnValue({ x: 150, y: 52 })
+    polyline.trigger('dragstart')
+    polyline.trigger('dragend')
+    polyline.trigger('click')
+
+    expect(wrapper.emitted('update-region')).toHaveLength(1)
+    expect(wrapper.emitted('update-region')[0][0].changes.points).toEqual([
+      { x: 200, y: 100 },
+      { x: 500, y: 100 },
+      { x: 400, y: 300 },
+    ])
+  })
+
+  it('keeps polygon segment click behavior unchanged', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [polygonRegion()],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const polygon = getLineInstances().find((line) => line.config.id === 'region-1')
+
+    stage.getPointerPosition.mockReturnValue({ x: 150, y: 52 })
+    polygon.trigger('click')
+
+    expect(wrapper.emitted('select-region')).toEqual([['region-1']])
+    expect(wrapper.emitted('update-region')).toBeUndefined()
+  })
+
   it('selects a polyline vertex handle without bubbling to the canvas', async () => {
     mountCanvas({
       selectedRegionId: 'region-1',

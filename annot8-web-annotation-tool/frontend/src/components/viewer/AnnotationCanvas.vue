@@ -67,6 +67,7 @@ const emit = defineEmits([
 
 const REGION_COLOR = '#0d6efd'
 const POLYGON_CLOSE_DISTANCE = 8
+const POLYLINE_SEGMENT_HIT_TOLERANCE = 8
 const MIN_VISIBLE_REGION_SIZE = 4
 
 const canvasContainer = ref(null)
@@ -89,6 +90,7 @@ let imageLoadSequence = 0
 let hoveredRegionId = null
 let draggedRegionId = null
 let selectedPolylinePoint = null
+let suppressPointRegionClick = false
 
 let baseImageWidth = 0
 let baseImageHeight = 0
@@ -317,6 +319,50 @@ function clampValue(value, minimum, maximum) {
   return Math.max(minimum, Math.min(maximum, value))
 }
 
+function getPointToSegmentDistance(point, segmentStart, segmentEnd) {
+  const segmentX = segmentEnd.x - segmentStart.x
+  const segmentY = segmentEnd.y - segmentStart.y
+  const segmentLengthSquared = segmentX ** 2 + segmentY ** 2
+
+  if (segmentLengthSquared === 0) {
+    return Math.hypot(point.x - segmentStart.x, point.y - segmentStart.y)
+  }
+
+  const projection = (
+    ((point.x - segmentStart.x) * segmentX + (point.y - segmentStart.y) * segmentY) /
+    segmentLengthSquared
+  )
+  const clampedProjection = clampValue(projection, 0, 1)
+  const closestPoint = {
+    x: segmentStart.x + clampedProjection * segmentX,
+    y: segmentStart.y + clampedProjection * segmentY,
+  }
+
+  return Math.hypot(point.x - closestPoint.x, point.y - closestPoint.y)
+}
+
+function getClosestPolylineSegmentIndex(pointerPosition, visiblePoints) {
+  if (!pointerPosition) return -1
+
+  let closestSegmentIndex = -1
+  let closestDistance = Number.POSITIVE_INFINITY
+
+  for (let index = 0; index < visiblePoints.length - 1; index += 1) {
+    const distance = getPointToSegmentDistance(
+      pointerPosition,
+      visiblePoints[index],
+      visiblePoints[index + 1]
+    )
+
+    if (distance < closestDistance) {
+      closestDistance = distance
+      closestSegmentIndex = index
+    }
+  }
+
+  return closestDistance <= POLYLINE_SEGMENT_HIT_TOLERANCE ? closestSegmentIndex : -1
+}
+
 function getAnchorAwareVisibleRectangle(originalRectangle, transformedRectangle) {
   const anchor = transformer?.getActiveAnchor?.()
 
@@ -520,9 +566,53 @@ function createPointRegionNode(region) {
 
   attachRegionCursorHandlers(node, region.id)
 
+  function insertPolylinePoint(pointerPosition) {
+    if (
+      region.type !== 'polyline' ||
+      props.activeTool !== 'select' ||
+      props.selectedRegionId !== region.id
+    ) {
+      return false
+    }
+
+    const segmentIndex = getClosestPolylineSegmentIndex(pointerPosition, visiblePoints)
+    const documentPoint = getDocumentCoordinates(
+      pointerPosition,
+      props.zoomLevel,
+      baseImageWidth,
+      baseImageHeight,
+      originalImageWidth,
+      originalImageHeight
+    )
+
+    if (segmentIndex === -1 || !documentPoint) return false
+
+    clearSelectedPolylinePoint()
+    emit('update-region', {
+      id: region.id,
+      changes: {
+        points: [
+          ...region.points.slice(0, segmentIndex + 1),
+          documentPoint,
+          ...region.points.slice(segmentIndex + 1),
+        ],
+      },
+    })
+
+    return true
+  }
+
   node.on('click tap', () => {
     if (props.activeTool !== 'select') return
     clearSelectedPolylinePoint()
+
+    if (suppressPointRegionClick) {
+      suppressPointRegionClick = false
+      return
+    }
+
+    if (insertPolylinePoint(stage.getPointerPosition())) return
+
     emit('select-region', region.id)
   })
 
@@ -534,6 +624,7 @@ function createPointRegionNode(region) {
   })
 
   node.on('dragstart', () => {
+    suppressPointRegionClick = true
     beginRegionDrag(region.id)
 
     if (props.selectedRegionId === region.id) {
@@ -1151,6 +1242,7 @@ onBeforeUnmount(() => {
   hoveredRegionId = null
   draggedRegionId = null
   selectedPolylinePoint = null
+  suppressPointRegionClick = false
 })
 
 defineExpose({
