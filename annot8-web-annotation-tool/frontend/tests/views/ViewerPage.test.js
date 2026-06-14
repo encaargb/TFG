@@ -133,6 +133,41 @@ const AnnotationCanvasStub = {
       </button>
       <button
         type="button"
+        data-testid="add-polygon-region"
+        @click="$emit('add-region', {
+          id: nextRegionId,
+          pageIndex,
+          type: 'polygon',
+          points: [
+            { x: 10, y: 20 },
+            { x: 40, y: 20 },
+            { x: 25, y: 60 }
+          ],
+          color: '#0d6efd',
+          annotations: []
+        })"
+      >
+        Add polygon
+      </button>
+      <button
+        type="button"
+        data-testid="add-polyline-region"
+        @click="$emit('add-region', {
+          id: nextRegionId,
+          pageIndex,
+          type: 'polyline',
+          points: [
+            { x: 10, y: 20 },
+            { x: 40, y: 60 }
+          ],
+          color: '#0d6efd',
+          annotations: []
+        })"
+      >
+        Add polyline
+      </button>
+      <button
+        type="button"
         data-testid="update-region"
         @click="$emit('update-region', {
           id: 'region-1',
@@ -330,8 +365,15 @@ describe('ViewerPage', () => {
     expect(getStub(wrapper, ViewerStatusBarStub).props('saveStatus')).toBe('saved')
     expect(getStub(wrapper, ViewerToolbarStub).props()).toEqual(
       expect.objectContaining({
+        activeTool: 'select',
         regionCount: 1,
         hasSelectedRegion: false,
+      })
+    )
+    expect(getStub(wrapper, AnnotationCanvasStub).props()).toEqual(
+      expect.objectContaining({
+        activeTool: 'select',
+        selectedRegionId: null,
       })
     )
     expect(getStub(wrapper, ViewerStatusBarStub).props()).toEqual(
@@ -358,6 +400,61 @@ describe('ViewerPage', () => {
     expect(getStub(wrapper, ViewerToolbarStub).props('hasSelectedRegion')).toBe(false)
     expect(getStub(wrapper, AnnotationCanvasStub).props('selectedRegionId')).toBe(null)
     expect(getStub(wrapper, ViewerStatusBarStub).props('selectedRegion')).toBe(null)
+  })
+
+  it('returns to select mode without selecting new polygon and polyline regions', async () => {
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
+
+    await wrapper.find('[data-testid="tool-rectangle"]').trigger('click')
+    await wrapper.find('[data-testid="add-polygon-region"]').trigger('click')
+
+    expect(ProjectDocumentModel.regions).toEqual([
+      expect.objectContaining({
+        id: 'region-1',
+        type: 'polygon',
+      }),
+    ])
+    expect(getStub(wrapper, ViewerToolbarStub).props()).toEqual(
+      expect.objectContaining({
+        activeTool: 'select',
+        hasSelectedRegion: false,
+      })
+    )
+    expect(getStub(wrapper, AnnotationCanvasStub).props()).toEqual(
+      expect.objectContaining({
+        activeTool: 'select',
+        selectedRegionId: null,
+        nextRegionId: 'region-2',
+      })
+    )
+
+    await wrapper.find('[data-testid="tool-rectangle"]').trigger('click')
+    await wrapper.find('[data-testid="add-polyline-region"]').trigger('click')
+
+    expect(ProjectDocumentModel.regions).toEqual([
+      expect.objectContaining({
+        id: 'region-1',
+        type: 'polygon',
+      }),
+      expect.objectContaining({
+        id: 'region-2',
+        type: 'polyline',
+      }),
+    ])
+    expect(getStub(wrapper, ViewerToolbarStub).props()).toEqual(
+      expect.objectContaining({
+        activeTool: 'select',
+        hasSelectedRegion: false,
+      })
+    )
+    expect(getStub(wrapper, AnnotationCanvasStub).props()).toEqual(
+      expect.objectContaining({
+        activeTool: 'select',
+        selectedRegionId: null,
+        nextRegionId: 'region-3',
+      })
+    )
   })
 
   it('updates, deletes, and persists region state from child component events', async () => {

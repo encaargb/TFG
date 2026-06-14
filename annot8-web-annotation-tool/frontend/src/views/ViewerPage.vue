@@ -138,6 +138,8 @@ function addRegion(region) {
   regions.value.push(region)
   ProjectDocumentModel.regions = regions.value
   persistRegions()
+  activeTool.value = 'select'
+  selectedRegionId.value = null
 }
 
 function updateRegion({ id, changes }) {
