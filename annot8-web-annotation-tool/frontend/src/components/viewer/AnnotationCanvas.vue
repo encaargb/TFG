@@ -610,7 +610,7 @@ function createPointRegionNode(region) {
     return true
   }
 
-  node.on('click tap', () => {
+  node.on('click tap', (event) => {
     if (props.activeTool !== 'select') return
     clearSelectedPolylinePoint()
 
@@ -621,6 +621,8 @@ function createPointRegionNode(region) {
 
     if (props.selectedRegionId !== region.id) {
       suppressPointRegionDoubleClick = true
+    } else if ((event?.evt?.detail ?? 1) <= 1) {
+      suppressPointRegionDoubleClick = false
     }
 
     emit('select-region', region.id)

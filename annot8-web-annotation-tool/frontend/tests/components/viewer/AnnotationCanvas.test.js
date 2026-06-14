@@ -1283,6 +1283,36 @@ describe('AnnotationCanvas', () => {
     })
   })
 
+  it('adds a point on the first double-click after selecting a polygon', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: null,
+      regions: [polygonRegion()],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const polygon = getLineInstances().find((line) => line.config.id === 'region-1')
+
+    polygon.trigger('click', { evt: { detail: 1 } })
+    await wrapper.setProps({ selectedRegionId: 'region-1' })
+
+    stage.getPointerPosition.mockReturnValue({ x: 150, y: 52 })
+    polygon.trigger('click', { evt: { detail: 1 } })
+    polygon.trigger('dblclick')
+
+    expect(wrapper.emitted('update-region')[0][0]).toEqual({
+      id: 'region-1',
+      changes: {
+        points: [
+          { x: 200, y: 100 },
+          { x: 300, y: 104 },
+          { x: 500, y: 100 },
+          { x: 400, y: 300 },
+        ],
+      },
+    })
+  })
+
   it('inserts a selected polygon edge point at the correct normal segment position', async () => {
     const wrapper = mountCanvas({
       selectedRegionId: 'region-1',
@@ -1339,11 +1369,12 @@ describe('AnnotationCanvas', () => {
     const polygon = getLineInstances().find((line) => line.config.id === 'region-1')
 
     stage.getPointerPosition.mockReturnValue({ x: 150, y: 52 })
-    polygon.trigger('click')
+    polygon.trigger('click', { evt: { detail: 1 } })
     await wrapper.setProps({ selectedRegionId: 'region-1' })
+    polygon.trigger('click', { evt: { detail: 2 } })
     polygon.trigger('dblclick')
 
-    expect(wrapper.emitted('select-region')).toEqual([['region-1']])
+    expect(wrapper.emitted('select-region')).toEqual([['region-1'], ['region-1']])
     expect(wrapper.emitted('update-region')).toBeUndefined()
   })
 
@@ -1630,6 +1661,36 @@ describe('AnnotationCanvas', () => {
     expect(wrapper.emitted('select-region')).toBeUndefined()
   })
 
+  it('adds a point on the first double-click after selecting a polyline', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: null,
+      regions: [threePointPolylineRegion()],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const polyline = getLineInstances().find((line) => line.config.id === 'region-1')
+
+    polyline.trigger('click', { evt: { detail: 1 } })
+    await wrapper.setProps({ selectedRegionId: 'region-1' })
+
+    stage.getPointerPosition.mockReturnValue({ x: 150, y: 52 })
+    polyline.trigger('click', { evt: { detail: 1 } })
+    polyline.trigger('dblclick')
+
+    expect(wrapper.emitted('update-region')[0][0]).toEqual({
+      id: 'region-1',
+      changes: {
+        points: [
+          { x: 200, y: 100 },
+          { x: 300, y: 104 },
+          { x: 500, y: 100 },
+          { x: 400, y: 300 },
+        ],
+      },
+    })
+  })
+
   it('adds a point before the first point when the first polyline endpoint is selected', async () => {
     const wrapper = mountCanvas({
       selectedRegionId: 'region-1',
@@ -1749,11 +1810,12 @@ describe('AnnotationCanvas', () => {
     const polyline = getLineInstances().find((line) => line.config.id === 'region-1')
 
     stage.getPointerPosition.mockReturnValue({ x: 150, y: 52 })
-    polyline.trigger('click')
+    polyline.trigger('click', { evt: { detail: 1 } })
     await wrapper.setProps({ selectedRegionId: 'region-1' })
+    polyline.trigger('click', { evt: { detail: 2 } })
     polyline.trigger('dblclick')
 
-    expect(wrapper.emitted('select-region')).toEqual([['region-1']])
+    expect(wrapper.emitted('select-region')).toEqual([['region-1'], ['region-1']])
     expect(wrapper.emitted('update-region')).toBeUndefined()
   })
 
