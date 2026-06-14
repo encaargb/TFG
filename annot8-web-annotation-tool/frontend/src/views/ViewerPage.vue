@@ -33,9 +33,15 @@ const zoomPercentage = computed(() => getZoomPercentage(zoomLevel.value))
 const currentPageRegions = computed(() =>
   regions.value.filter((region) => region.pageIndex === selectedIndex.value)
 )
+const currentPageRegionCount = computed(() => currentPageRegions.value.length)
+const selectedRegion = computed(
+  () => regions.value.find((region) => region.id === selectedRegionId.value) ?? null
+)
 const nextRegionId = computed(() => `region-${regionSequence.value + 1}`)
 
-const mousePos = ref({ x: 0, y: 0 })
+const mousePos = ref(null)
+const toolbarMousePos = computed(() => mousePos.value ?? { x: 0, y: 0 })
+const saveStatus = ref('saved')
 
 // Page changes always return to the default zoom so every page starts from
 // a predictable view state.
@@ -95,9 +101,16 @@ function clearSelectedRegion() {
 // Saves the whole region list. The mock API intentionally stores a full
 // replacement instead of individual region patches.
 function persistRegions() {
-  void saveProjectRegions(documentId.value, regions.value).catch((error) => {
-    console.error(error)
-  })
+  saveStatus.value = 'saving'
+
+  void saveProjectRegions(documentId.value, regions.value)
+    .then(() => {
+      saveStatus.value = 'saved'
+    })
+    .catch((error) => {
+      saveStatus.value = 'error'
+      console.error(error)
+    })
 }
 
 // Keeps generated region ids increasing after data is loaded from the backend.
@@ -172,13 +185,13 @@ onMounted(() => {
         :selected-index="selectedIndex"
         :total-pages="pages.length"
         :active-tool="activeTool"
-        :region-count="currentPageRegions.length"
+        :region-count="currentPageRegionCount"
         :has-selected-region="Boolean(selectedRegionId)"
         :zoom-level="zoomLevel"
         :min-zoom="MIN_ZOOM"
         :max-zoom="MAX_ZOOM"
         :zoom-percentage="zoomPercentage"
-        :mouse-pos="mousePos"
+        :mouse-pos="toolbarMousePos"
         @previous-page="goToPreviousPage"
         @next-page="goToNextPage"
         @set-active-tool="setActiveTool"
@@ -209,8 +222,10 @@ onMounted(() => {
         :total-pages="pages.length"
         :zoom-percentage="zoomPercentage"
         :active-tool="activeTool"
-        :region-count="currentPageRegions.length"
+        :selected-region="selectedRegion"
+        :current-page-region-count="currentPageRegionCount"
         :mouse-pos="mousePos"
+        :save-status="saveStatus"
       />
     </main>
   </div>

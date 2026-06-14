@@ -1,5 +1,7 @@
 <script setup>
-defineProps({
+import { computed } from 'vue'
+
+const props = defineProps({
   selectedIndex: {
     type: Number,
     required: true,
@@ -20,15 +22,49 @@ defineProps({
     required: true,
     validator: (value) => ['select', 'rectangle', 'polygon', 'polyline'].includes(value),
   },
-  regionCount: {
+  selectedRegion: {
+    type: Object,
+    default: null,
+  },
+  currentPageRegionCount: {
     type: Number,
     required: true,
     validator: (value) => Number.isFinite(value) && value >= 0,
   },
   mousePos: {
     type: Object,
-    required: true,
+    default: null,
   },
+  saveStatus: {
+    type: String,
+    required: true,
+    validator: (value) => ['saved', 'saving', 'error'].includes(value),
+  },
+})
+
+const toolLabels = {
+  select: 'Select',
+  rectangle: 'Rectangle',
+  polygon: 'Polygon',
+  polyline: 'Polyline',
+}
+
+const saveLabels = {
+  saved: 'Saved',
+  saving: 'Saving...',
+  error: 'Save error',
+}
+
+const selectedRegionLabel = computed(() => {
+  if (!props.selectedRegion) return 'none'
+
+  return `${toolLabels[props.selectedRegion.type] ?? props.selectedRegion.type} ${props.selectedRegion.id}`
+})
+
+const mouseLabel = computed(() => {
+  if (!props.mousePos) return '\u2014'
+
+  return `${props.mousePos.x}, ${props.mousePos.y}`
 })
 </script>
 
@@ -42,13 +78,19 @@ defineProps({
         Zoom {{ zoomPercentage }}%
       </span>
       <span class="status-item">
-        Tool {{ activeTool }}
+        Tool: {{ toolLabels[activeTool] }}
       </span>
       <span class="status-item">
-        Regions {{ regionCount }}
+        Selected: {{ selectedRegionLabel }}
+      </span>
+      <span class="status-item">
+        Page regions: {{ currentPageRegionCount }}
       </span>
       <span class="status-item status-coords ms-md-auto">
-        X {{ mousePos.x }} · Y {{ mousePos.y }}
+        Mouse: {{ mouseLabel }}
+      </span>
+      <span class="status-item">
+        Save: {{ saveLabels[saveStatus] }}
       </span>
     </div>
   </footer>

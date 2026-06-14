@@ -9,25 +9,35 @@ function mountStatusBar(props = {}) {
       totalPages: 7,
       zoomPercentage: 125,
       activeTool: 'polygon',
-      regionCount: 4,
+      selectedRegion: null,
+      currentPageRegionCount: 4,
       mousePos: { x: 320, y: 180 },
+      saveStatus: 'saved',
       ...props,
     },
   })
 }
 
+function statusItems(wrapper) {
+  return wrapper.findAll('.status-item').map((item) => item.text())
+}
+
 describe('ViewerStatusBar', () => {
-  it('displays the current viewer status', () => {
+  it('displays all current viewer status items in order', () => {
     const wrapper = mountStatusBar()
 
     const statusBar = wrapper.find('.status-bar')
 
     expect(statusBar.exists()).toBe(true)
-    expect(statusBar.text()).toContain('Page 3 / 7')
-    expect(statusBar.text()).toContain('Zoom 125%')
-    expect(statusBar.text()).toContain('Tool polygon')
-    expect(statusBar.text()).toContain('Regions 4')
-    expect(statusBar.text()).toContain('X 320 · Y 180')
+    expect(statusItems(wrapper)).toEqual([
+      'Page 3 / 7',
+      'Zoom 125%',
+      'Tool: Polygon',
+      'Selected: none',
+      'Page regions: 4',
+      'Mouse: 320, 180',
+      'Save: Saved',
+    ])
   })
 
   it('updates displayed status from prop changes', async () => {
@@ -38,15 +48,47 @@ describe('ViewerStatusBar', () => {
       totalPages: 2,
       zoomPercentage: 75,
       activeTool: 'rectangle',
-      regionCount: 0,
+      selectedRegion: { id: 'region-3', type: 'rectangle' },
+      currentPageRegionCount: 0,
       mousePos: { x: 12, y: 34 },
+      saveStatus: 'saving',
     })
 
     expect(wrapper.text()).toContain('Page 1 / 2')
     expect(wrapper.text()).toContain('Zoom 75%')
-    expect(wrapper.text()).toContain('Tool rectangle')
-    expect(wrapper.text()).toContain('Regions 0')
-    expect(wrapper.text()).toContain('X 12 · Y 34')
+    expect(wrapper.text()).toContain('Tool: Rectangle')
+    expect(wrapper.text()).toContain('Selected: Rectangle region-3')
+    expect(wrapper.text()).toContain('Page regions: 0')
+    expect(wrapper.text()).toContain('Mouse: 12, 34')
+    expect(wrapper.text()).toContain('Save: Saving...')
+  })
+
+  it.each([
+    ['rectangle', 'Rectangle region-3'],
+    ['polygon', 'Polygon region-3'],
+    ['polyline', 'Polyline region-3'],
+  ])('displays the selected %s region label', (type, label) => {
+    const wrapper = mountStatusBar({
+      selectedRegion: { id: 'region-3', type },
+    })
+
+    expect(wrapper.text()).toContain(`Selected: ${label}`)
+  })
+
+  it('displays missing mouse position and save status labels', async () => {
+    const wrapper = mountStatusBar({
+      mousePos: null,
+      saveStatus: 'saved',
+    })
+
+    expect(wrapper.text()).toContain('Mouse: —')
+    expect(wrapper.text()).toContain('Save: Saved')
+
+    await wrapper.setProps({ saveStatus: 'saving' })
+    expect(wrapper.text()).toContain('Save: Saving...')
+
+    await wrapper.setProps({ saveStatus: 'error' })
+    expect(wrapper.text()).toContain('Save: Save error')
   })
 
   it('warns when activeTool is outside the supported viewer tools', () => {

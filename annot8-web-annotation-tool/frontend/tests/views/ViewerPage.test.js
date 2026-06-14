@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import ViewerPage from '../../src/views/ViewerPage.vue'
 import { ProjectDocumentModel } from '../../src/models/ProjectDocumentModel'
 import * as documentApi from '../../src/services/documentApi'
@@ -63,14 +63,25 @@ const ViewerToolbarStub = {
 
 const ViewerStatusBarStub = {
   name: 'ViewerStatusBar',
-  props: ['selectedIndex', 'totalPages', 'zoomPercentage', 'activeTool', 'regionCount', 'mousePos'],
+  props: [
+    'selectedIndex',
+    'totalPages',
+    'zoomPercentage',
+    'activeTool',
+    'selectedRegion',
+    'currentPageRegionCount',
+    'mousePos',
+    'saveStatus',
+  ],
   template: `
     <footer class="viewer-status-bar-stub">
       Page {{ selectedIndex + 1 }} / {{ totalPages }}
       Zoom {{ zoomPercentage }}%
       Tool {{ activeTool }}
-      Regions {{ regionCount }}
-      X {{ mousePos.x }} Y {{ mousePos.y }}
+      Selected {{ selectedRegion ? selectedRegion.id : 'none' }}
+      Page regions {{ currentPageRegionCount }}
+      Mouse {{ mousePos ? mousePos.x : '-' }} {{ mousePos ? mousePos.y : '-' }}
+      Save {{ saveStatus }}
     </footer>
   `,
 }
@@ -225,7 +236,14 @@ describe('ViewerPage', () => {
     expect(statusBar.text()).toContain('Page 1 / 15')
     expect(statusBar.text()).toContain('Zoom 100%')
     expect(statusBar.text()).toContain('Tool select')
-    expect(statusBar.text()).toContain('Regions 0')
+    expect(statusBar.props()).toEqual(
+      expect.objectContaining({
+        selectedRegion: null,
+        currentPageRegionCount: 0,
+        mousePos: null,
+        saveStatus: 'saved',
+      })
+    )
   })
 
   it('wires sidebar page selection and collapse events to parent state', async () => {
@@ -243,6 +261,7 @@ describe('ViewerPage', () => {
       })
     )
     expect(getStub(wrapper, ViewerStatusBarStub).text()).toContain('Page 5 / 15')
+    expect(getStub(wrapper, ViewerStatusBarStub).props('currentPageRegionCount')).toBe(0)
 
     await wrapper.find('[data-testid="toggle-sidebar"]').trigger('click')
 
@@ -300,10 +319,18 @@ describe('ViewerPage', () => {
       }),
     ])
     expect(saveProjectRegionsSpy).toHaveBeenLastCalledWith('doc1', ProjectDocumentModel.regions)
+    await flushPromises()
+    expect(getStub(wrapper, ViewerStatusBarStub).props('saveStatus')).toBe('saved')
     expect(getStub(wrapper, ViewerToolbarStub).props()).toEqual(
       expect.objectContaining({
         regionCount: 1,
         hasSelectedRegion: false,
+      })
+    )
+    expect(getStub(wrapper, ViewerStatusBarStub).props()).toEqual(
+      expect.objectContaining({
+        selectedRegion: null,
+        currentPageRegionCount: 1,
       })
     )
     expect(getStub(wrapper, AnnotationCanvasStub).props('nextRegionId')).toBe('region-2')
@@ -312,11 +339,18 @@ describe('ViewerPage', () => {
 
     expect(getStub(wrapper, ViewerToolbarStub).props('hasSelectedRegion')).toBe(true)
     expect(getStub(wrapper, AnnotationCanvasStub).props('selectedRegionId')).toBe('region-1')
+    expect(getStub(wrapper, ViewerStatusBarStub).props('selectedRegion')).toEqual(
+      expect.objectContaining({
+        id: 'region-1',
+        type: 'rectangle',
+      })
+    )
 
     await wrapper.find('[data-testid="clear-region"]').trigger('click')
 
     expect(getStub(wrapper, ViewerToolbarStub).props('hasSelectedRegion')).toBe(false)
     expect(getStub(wrapper, AnnotationCanvasStub).props('selectedRegionId')).toBe(null)
+    expect(getStub(wrapper, ViewerStatusBarStub).props('selectedRegion')).toBe(null)
   })
 
   it('updates, deletes, and persists region state from child component events', async () => {
@@ -348,6 +382,12 @@ describe('ViewerPage', () => {
         hasSelectedRegion: false,
       })
     )
+    expect(getStub(wrapper, ViewerStatusBarStub).props()).toEqual(
+      expect.objectContaining({
+        selectedRegion: null,
+        currentPageRegionCount: 0,
+      })
+    )
   })
 
   it('deletes the selected region from toolbar delete events', async () => {
@@ -368,6 +408,22 @@ describe('ViewerPage', () => {
     )
   })
 
+  it('sets save status to error when persistence fails', async () => {
+    const error = new Error('save failed')
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    saveProjectRegionsSpy.mockRejectedValueOnce(error)
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
+
+    await wrapper.find('[data-testid="add-region"]').trigger('click')
+
+    await flushPromises()
+    expect(getStub(wrapper, ViewerStatusBarStub).props('saveStatus')).toBe('error')
+    expect(consoleErrorSpy).toHaveBeenCalledWith(error)
+
+    consoleErrorSpy.mockRestore()
+  })
+
   it('updates status information from canvas mouse-position events', async () => {
     const wrapper = mountViewerPage()
     await flushMountedFetch()
@@ -378,7 +434,7 @@ describe('ViewerPage', () => {
     const statusBar = getStub(wrapper, ViewerStatusBarStub)
 
     expect(statusBar.text()).toContain('Tool rectangle')
-    expect(statusBar.text()).toContain('X 321 Y 654')
+    expect(statusBar.text()).toContain('Mouse 321 654')
   })
 
   it('clears the selected region when switching to a drawing tool', async () => {
