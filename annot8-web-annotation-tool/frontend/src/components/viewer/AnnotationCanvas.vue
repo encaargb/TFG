@@ -21,6 +21,19 @@ import {
   toVisiblePoints,
   toVisibleRectangle,
 } from '../../utils/regionGeometry'
+import {
+  AUTO_SCROLL_EDGE_THRESHOLD,
+  AUTO_SCROLL_STEP,
+  MIN_VISIBLE_RECTANGLE_SIZE,
+  MIN_VISIBLE_SEGMENT_LENGTH,
+  POINT_REGION_DRAG_POINT_DISTANCE,
+  POINT_REGION_SEGMENT_HIT_TOLERANCE,
+  POINT_REGION_VERTEX_HANDLE_RADIUS,
+  POLYGON_CLOSE_DISTANCE,
+  RECTANGLE_TRANSFORMER_ANCHOR_CORNER_RADIUS,
+  RECTANGLE_TRANSFORMER_ANCHOR_SIZE,
+  REGION_COLOR,
+} from './annotationCanvasConstants'
 
 const props = defineProps({
   selectedPage: {
@@ -64,18 +77,6 @@ const emit = defineEmits([
   'delete-selected-region',
   'mouse-position-change',
 ])
-
-const REGION_COLOR = '#0d6efd'
-const POLYGON_CLOSE_DISTANCE = 8
-const POINT_REGION_SEGMENT_HIT_TOLERANCE = 8
-const POINT_REGION_DRAG_POINT_DISTANCE = 8
-const MIN_VISIBLE_SEGMENT_LENGTH = 4
-const MIN_VISIBLE_RECTANGLE_SIZE = 4
-const POINT_REGION_VERTEX_HANDLE_RADIUS = 4
-const RECTANGLE_TRANSFORMER_ANCHOR_SIZE = 8
-const RECTANGLE_TRANSFORMER_ANCHOR_CORNER_RADIUS = 4
-const AUTO_SCROLL_EDGE_THRESHOLD = 32
-const AUTO_SCROLL_STEP = 12
 
 const canvasContainer = ref(null)
 const canvasWrapper = ref(null)
