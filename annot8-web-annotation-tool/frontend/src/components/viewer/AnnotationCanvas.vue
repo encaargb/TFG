@@ -69,7 +69,8 @@ const REGION_COLOR = '#0d6efd'
 const POLYGON_CLOSE_DISTANCE = 8
 const POINT_REGION_SEGMENT_HIT_TOLERANCE = 8
 const POINT_REGION_DRAG_POINT_DISTANCE = 8
-const MIN_VISIBLE_REGION_SIZE = 4
+const MIN_VISIBLE_SEGMENT_LENGTH = 4
+const MIN_VISIBLE_RECTANGLE_SIZE = 4
 
 const canvasContainer = ref(null)
 const canvasWrapper = ref(null)
@@ -277,15 +278,15 @@ function clampVisibleRectangle(rectangle, minimumSize = 0) {
 
 function clampTransformerBox(oldBox, newBox) {
   if (
-    newBox.width < MIN_VISIBLE_REGION_SIZE ||
-    newBox.height < MIN_VISIBLE_REGION_SIZE
+    newBox.width < MIN_VISIBLE_RECTANGLE_SIZE ||
+    newBox.height < MIN_VISIBLE_RECTANGLE_SIZE
   ) {
     return oldBox
   }
 
   return {
     ...newBox,
-    ...clampVisibleRectangle(newBox, MIN_VISIBLE_REGION_SIZE),
+    ...clampVisibleRectangle(newBox, MIN_VISIBLE_RECTANGLE_SIZE),
   }
 }
 
@@ -333,7 +334,7 @@ function showActiveEditHandles() {
 function syncTransformedRectangleNode(node) {
   const visibleRectangle = clampVisibleRectangle(
     getNodeVisibleRectangle(node),
-    MIN_VISIBLE_REGION_SIZE
+    MIN_VISIBLE_RECTANGLE_SIZE
   )
   applyVisibleRectangleToNode(node, visibleRectangle)
 
@@ -393,7 +394,7 @@ function getAnchorAwareVisibleRectangle(originalRectangle, transformedRectangle)
   const anchor = transformer?.getActiveAnchor?.()
 
   if (!anchor) {
-    return clampVisibleRectangle(transformedRectangle, MIN_VISIBLE_REGION_SIZE)
+    return clampVisibleRectangle(transformedRectangle, MIN_VISIBLE_RECTANGLE_SIZE)
   }
 
   const bounds = getVisibleBounds()
@@ -406,25 +407,25 @@ function getAnchorAwareVisibleRectangle(originalRectangle, transformedRectangle)
   let bottom = original.y + original.height
 
   if (anchor.includes('left')) {
-    left = clampValue(transformed.x, 0, right - MIN_VISIBLE_REGION_SIZE)
+    left = clampValue(transformed.x, 0, right - MIN_VISIBLE_RECTANGLE_SIZE)
   }
 
   if (anchor.includes('right')) {
     right = clampValue(
       transformed.x + transformed.width,
-      left + MIN_VISIBLE_REGION_SIZE,
+      left + MIN_VISIBLE_RECTANGLE_SIZE,
       bounds.width
     )
   }
 
   if (anchor.includes('top')) {
-    top = clampValue(transformed.y, 0, bottom - MIN_VISIBLE_REGION_SIZE)
+    top = clampValue(transformed.y, 0, bottom - MIN_VISIBLE_RECTANGLE_SIZE)
   }
 
   if (anchor.includes('bottom')) {
     bottom = clampValue(
       transformed.y + transformed.height,
-      top + MIN_VISIBLE_REGION_SIZE,
+      top + MIN_VISIBLE_RECTANGLE_SIZE,
       bounds.height
     )
   }
@@ -972,6 +973,24 @@ function isPointerNearFirstPolygonPoint(pointerPosition) {
   return distance <= POLYGON_CLOSE_DISTANCE
 }
 
+function isDraftPointRegionSegmentTooShort(documentPoint) {
+  if (draftPointRegionPoints.length === 0) return false
+
+  const { scaleX, scaleY } = getRegionScale()
+  const [previousVisiblePoint, nextVisiblePoint] = toVisiblePoints(
+    [draftPointRegionPoints.at(-1), documentPoint],
+    scaleX,
+    scaleY,
+    props.zoomLevel
+  )
+  const distance = Math.hypot(
+    nextVisiblePoint.x - previousVisiblePoint.x,
+    nextVisiblePoint.y - previousVisiblePoint.y
+  )
+
+  return distance < MIN_VISIBLE_SEGMENT_LENGTH
+}
+
 function commitDraftRectangleRegion() {
   if (!stage || !draftRegionNode || !draftRegionStart) return
 
@@ -1028,6 +1047,8 @@ function addDraftPointRegionPoint(pointerPosition, shouldClearSelection = true) 
     commitDraftPointRegion()
     return true
   }
+
+  if (isDraftPointRegionSegmentTooShort(documentPoint)) return false
 
   if (shouldClearSelection) {
     emit('clear-selected-region')

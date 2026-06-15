@@ -1214,6 +1214,67 @@ describe('AnnotationCanvas', () => {
     )
   })
 
+  it('does not add a second polygon point when the visible segment is below 4 px', async () => {
+    const wrapper = mountCanvas({ activeTool: 'polygon' })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousedown')
+    stage.trigger('mouseup')
+    stage.trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 103, y: 50 })
+    stage.trigger('mousedown')
+    stage.trigger('mouseup')
+    stage.trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 50 })
+    stage.trigger('mousedown')
+    stage.trigger('mouseup')
+    stage.trigger('click')
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+
+    expect(wrapper.emitted('add-region')).toBeUndefined()
+  })
+
+  it('adds a polygon point when the visible segment is at least 4 px', async () => {
+    const wrapper = mountCanvas({ activeTool: 'polygon' })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousedown')
+    stage.trigger('mouseup')
+    stage.trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 104, y: 50 })
+    stage.trigger('mousedown')
+    stage.trigger('mouseup')
+    stage.trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 150 })
+    stage.trigger('mousedown')
+    stage.trigger('mouseup')
+    stage.trigger('click')
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+
+    expect(wrapper.emitted('add-region')[0][0]).toEqual(
+      expect.objectContaining({
+        type: 'polygon',
+        points: [
+          { x: 200, y: 100 },
+          { x: 208, y: 100 },
+          { x: 500, y: 300 },
+        ],
+      })
+    )
+  })
+
   it('clamps the point-region draft preview inside page bounds', async () => {
     mountCanvas({ activeTool: 'polygon' })
     await flushImageLoad()
@@ -1706,6 +1767,69 @@ describe('AnnotationCanvas', () => {
         points: [
           { x: 200, y: 100 },
           { x: 500, y: 100 },
+        ],
+      })
+    )
+  })
+
+  it('does not add a second polyline point when the visible segment is below 4 px', async () => {
+    const wrapper = mountCanvas({ activeTool: 'polyline' })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousedown')
+    stage.trigger('mouseup')
+    stage.trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 103, y: 50 })
+    stage.trigger('mousedown')
+    stage.trigger('mouseup')
+    stage.trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 50 })
+    stage.trigger('mousedown')
+    stage.trigger('mouseup')
+    stage.trigger('click')
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+
+    expect(wrapper.emitted('add-region')[0][0]).toEqual(
+      expect.objectContaining({
+        type: 'polyline',
+        points: [
+          { x: 200, y: 100 },
+          { x: 500, y: 100 },
+        ],
+      })
+    )
+  })
+
+  it('adds a polyline point when the visible segment is at least 4 px', async () => {
+    const wrapper = mountCanvas({ activeTool: 'polyline' })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousedown')
+    stage.trigger('mouseup')
+    stage.trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 104, y: 50 })
+    stage.trigger('mousedown')
+    stage.trigger('mouseup')
+    stage.trigger('click')
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+
+    expect(wrapper.emitted('add-region')[0][0]).toEqual(
+      expect.objectContaining({
+        type: 'polyline',
+        points: [
+          { x: 200, y: 100 },
+          { x: 208, y: 100 },
         ],
       })
     )
