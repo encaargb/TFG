@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  clampVisiblePointRegionDelta,
   getClosestPointRegionSegmentIndex,
   getPointToSegmentDistance,
+  getVisiblePointRegionBounds,
 } from '../../src/components/viewer/pointRegionCanvasGeometry'
 
 describe('pointRegionCanvasGeometry', () => {
@@ -57,5 +59,51 @@ describe('pointRegionCanvasGeometry', () => {
       false,
       2
     )).toBe(-1)
+  })
+
+  it('calculates visible bounds from point-region points', () => {
+    expect(getVisiblePointRegionBounds([
+      { x: 20, y: 30 },
+      { x: 5, y: 40 },
+      { x: 15, y: 10 },
+    ])).toEqual({
+      minX: 5,
+      minY: 10,
+      maxX: 20,
+      maxY: 40,
+    })
+  })
+
+  it('clamps a positive drag delta so the point region stays inside bounds', () => {
+    expect(clampVisiblePointRegionDelta(
+      [
+        { x: 80, y: 70 },
+        { x: 95, y: 90 },
+      ],
+      { x: 20, y: 20 },
+      { width: 100, height: 100 }
+    )).toEqual({ x: 5, y: 10 })
+  })
+
+  it('clamps a negative drag delta so the point region stays inside bounds', () => {
+    expect(clampVisiblePointRegionDelta(
+      [
+        { x: 5, y: 8 },
+        { x: 20, y: 30 },
+      ],
+      { x: -20, y: -20 },
+      { width: 100, height: 100 }
+    )).toEqual({ x: -5, y: -8 })
+  })
+
+  it('allows a valid drag delta that keeps the point region inside bounds', () => {
+    expect(clampVisiblePointRegionDelta(
+      [
+        { x: 20, y: 20 },
+        { x: 40, y: 40 },
+      ],
+      { x: 10, y: -10 },
+      { width: 100, height: 100 }
+    )).toEqual({ x: 10, y: -10 })
   })
 })

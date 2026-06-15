@@ -12,6 +12,7 @@ import {
 } from '../../utils/pointRegionValidation'
 import {
   clampValue,
+  clampVisiblePointRegionDelta,
   getClosestPointRegionSegmentIndex,
 } from './pointRegionCanvasGeometry'
 import {
@@ -321,28 +322,6 @@ function syncResizedRectangleNode(node, region, scaleX, scaleY) {
   return visibleRectangle
 }
 
-function getVisiblePolygonBounds(points) {
-  const xs = points.map((point) => point.x)
-  const ys = points.map((point) => point.y)
-
-  return {
-    minX: Math.min(...xs),
-    minY: Math.min(...ys),
-    maxX: Math.max(...xs),
-    maxY: Math.max(...ys),
-  }
-}
-
-function clampVisiblePolygonDelta(points, delta) {
-  const bounds = getVisibleBounds()
-  const polygonBounds = getVisiblePolygonBounds(points)
-
-  return {
-    x: Math.max(-polygonBounds.minX, Math.min(bounds.width - polygonBounds.maxX, delta.x)),
-    y: Math.max(-polygonBounds.minY, Math.min(bounds.height - polygonBounds.maxY, delta.y)),
-  }
-}
-
 function getTransformedRectangleEdges(originalRegion, transformedRectangle) {
   const originalRectangle = toEdgeRectangle(originalRegion)
   const nextRectangle = toEdgeRectangle(transformedRectangle)
@@ -468,7 +447,11 @@ function createPointRegionNode(region) {
     stroke: region.color,
     strokeWidth: props.selectedRegionId === region.id ? 3 : 2,
     strokeScaleEnabled: false,
-    dragBoundFunc: (position) => clampVisiblePolygonDelta(visiblePoints, position),
+    dragBoundFunc: (position) => clampVisiblePointRegionDelta(
+      visiblePoints,
+      position,
+      getVisibleBounds()
+    ),
   })
 
   attachRegionCursorHandlers(node, region.id)
@@ -554,7 +537,11 @@ function createPointRegionNode(region) {
 
   node.on('dragmove', (event) => {
     autoScrollCanvasWrapper(event)
-    const delta = clampVisiblePolygonDelta(visiblePoints, { x: node.x(), y: node.y() })
+    const delta = clampVisiblePointRegionDelta(
+      visiblePoints,
+      { x: node.x(), y: node.y() },
+      getVisibleBounds()
+    )
     node.x(delta.x)
     node.y(delta.y)
     regionLayer.draw()
@@ -572,7 +559,11 @@ function createPointRegionNode(region) {
   })
 
   node.on('dragend', () => {
-    const delta = clampVisiblePolygonDelta(visiblePoints, { x: node.x(), y: node.y() })
+    const delta = clampVisiblePointRegionDelta(
+      visiblePoints,
+      { x: node.x(), y: node.y() },
+      getVisibleBounds()
+    )
     const movedVisiblePoints = visiblePoints.map((point) => ({
       x: point.x + delta.x,
       y: point.y + delta.y,

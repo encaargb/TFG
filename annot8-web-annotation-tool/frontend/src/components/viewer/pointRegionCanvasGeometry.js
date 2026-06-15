@@ -51,3 +51,30 @@ export function getClosestPointRegionSegmentIndex(
 
   return closestDistance <= hitTolerance ? closestSegmentIndex : -1
 }
+
+export function getVisiblePointRegionBounds(points) {
+  const xs = points.map((point) => point.x)
+  const ys = points.map((point) => point.y)
+
+  return {
+    minX: Math.min(...xs),
+    minY: Math.min(...ys),
+    maxX: Math.max(...xs),
+    maxY: Math.max(...ys),
+  }
+}
+
+export function clampVisiblePointRegionDelta(points, delta, bounds) {
+  const pointRegionBounds = getVisiblePointRegionBounds(points)
+
+  return {
+    x: Math.max(
+      -pointRegionBounds.minX,
+      Math.min(bounds.width - pointRegionBounds.maxX, delta.x)
+    ),
+    y: Math.max(
+      -pointRegionBounds.minY,
+      Math.min(bounds.height - pointRegionBounds.maxY, delta.y)
+    ),
+  }
+}
