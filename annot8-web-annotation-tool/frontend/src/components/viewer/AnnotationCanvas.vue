@@ -673,17 +673,21 @@ function createPointRegionNode(region) {
 
     if (segmentIndex === -1 || !documentPoint) return false
 
-    clearSelectedPointRegionPoint()
     const insertIndex = segmentIndex + 1
+    const points = [
+      ...region.points.slice(0, insertIndex),
+      documentPoint,
+      ...region.points.slice(insertIndex),
+    ]
+
+    if (!hasValidPointRegionSegments(points, region.type)) return false
+
+    clearSelectedPointRegionPoint()
 
     emit('update-region', {
       id: region.id,
       changes: {
-        points: [
-          ...region.points.slice(0, insertIndex),
-          documentPoint,
-          ...region.points.slice(insertIndex),
-        ],
+        points,
       },
     })
 
@@ -876,10 +880,14 @@ function createPointRegionVertexHandles(region, pointRegionNode) {
         props.zoomLevel
       )
 
-      emit('update-region', {
-        id: region.id,
-        changes: clampPolygonToBounds({ points: documentPoints }, getDocumentBounds()),
-      })
+      if (hasValidPointRegionSegments(documentPoints, region.type)) {
+        emit('update-region', {
+          id: region.id,
+          changes: clampPolygonToBounds({ points: documentPoints }, getDocumentBounds()),
+        })
+      } else {
+        renderRegions()
+      }
 
       isHandleDragging = false
       isVertexHandleDragging = false
@@ -1083,6 +1091,33 @@ function isDraftPointRegionSegmentTooShort(documentPoint) {
   return distance < MIN_VISIBLE_SEGMENT_LENGTH
 }
 
+function getPointRegionMinimumPointCount(type) {
+  return type === 'polygon' ? 3 : 2
+}
+
+function hasValidVisiblePointRegionSegments(visiblePoints, type) {
+  if (visiblePoints.length < getPointRegionMinimumPointCount(type)) return false
+
+  const segmentCount = type === 'polygon' ? visiblePoints.length : visiblePoints.length - 1
+
+  for (let index = 0; index < segmentCount; index += 1) {
+    const start = visiblePoints[index]
+    const end = visiblePoints[(index + 1) % visiblePoints.length]
+    const distance = Math.hypot(end.x - start.x, end.y - start.y)
+
+    if (distance < MIN_VISIBLE_SEGMENT_LENGTH) return false
+  }
+
+  return true
+}
+
+function hasValidPointRegionSegments(points, type) {
+  const { scaleX, scaleY } = getRegionScale()
+  const visiblePoints = toVisiblePoints(points, scaleX, scaleY, props.zoomLevel)
+
+  return hasValidVisiblePointRegionSegments(visiblePoints, type)
+}
+
 function commitDraftRectangleRegion() {
   if (!stage || !draftRegionNode || !draftRegionStart) return
 
@@ -1233,14 +1268,18 @@ function insertPolylineEndpointPoint(pointerPosition) {
 
   if (!documentPoint) return false
 
+  const points =
+    pointIndex === 0
+      ? [documentPoint, ...region.points]
+      : [...region.points, documentPoint]
+
+  if (!hasValidPointRegionSegments(points, region.type)) return false
+
   clearSelectedPointRegionPoint()
   emit('update-region', {
     id: region.id,
     changes: {
-      points:
-        pointIndex === 0
-          ? [documentPoint, ...region.points]
-          : [...region.points, documentPoint],
+      points,
     },
   })
 
@@ -1320,7 +1359,10 @@ function commitDraftPointRegion() {
   skipNextPointRegionClickPosition = null
   pointRegionDragStart = null
 
-  if (isDrawableRegion(draftRegion)) {
+  if (
+    isDrawableRegion(draftRegion) &&
+    hasValidPointRegionSegments(draftRegion.points, draftRegion.type)
+  ) {
     emit('add-region', draftRegion)
   } else {
     renderRegions()
@@ -1336,7 +1378,7 @@ function deleteSelectedPointRegionPoint() {
 
   if (!region || !['polygon', 'polyline'].includes(region.type)) return false
 
-  const minimumPointCount = region.type === 'polygon' ? 3 : 2
+  const minimumPointCount = getPointRegionMinimumPointCount(region.type)
 
   if (region.points.length <= minimumPointCount) {
     emit('delete-selected-region')

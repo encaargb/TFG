@@ -1589,6 +1589,44 @@ describe('AnnotationCanvas', () => {
     })
   })
 
+  it('does not commit a polygon vertex drag that creates a segment below 4 visible px', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [polygonRegion()],
+    })
+    await flushImageLoad()
+
+    const polygon = getLineInstances().find((line) => line.config.id === 'region-1')
+    const middleVertexHandle = getCircleInstances().slice(-3)[1]
+
+    middleVertexHandle.x(103)
+    middleVertexHandle.y(50)
+    middleVertexHandle.trigger('dragmove')
+
+    expect(polygon.points).toHaveBeenLastCalledWith([100, 50, 103, 50, 200, 150])
+
+    middleVertexHandle.trigger('dragend')
+
+    expect(wrapper.emitted('update-region')).toBeUndefined()
+  })
+
+  it('does not commit a polygon vertex drag that makes the closing segment below 4 visible px', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [polygonRegion()],
+    })
+    await flushImageLoad()
+
+    const lastVertexHandle = getCircleInstances().slice(-3).at(-1)
+
+    lastVertexHandle.x(103)
+    lastVertexHandle.y(50)
+    lastVertexHandle.trigger('dragmove')
+    lastVertexHandle.trigger('dragend')
+
+    expect(wrapper.emitted('update-region')).toBeUndefined()
+  })
+
   it('hides and restores selected polygon vertex handles while dragging the whole region', async () => {
     mountCanvas({
       selectedRegionId: 'region-1',
@@ -1653,6 +1691,22 @@ describe('AnnotationCanvas', () => {
         ],
       },
     })
+  })
+
+  it('does not insert a polygon segment point that would create a segment below 4 visible px', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [polygonRegion()],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const polygon = getLineInstances().find((line) => line.config.id === 'region-1')
+
+    stage.getPointerPosition.mockReturnValue({ x: 101, y: 50 })
+    polygon.trigger('dblclick')
+
+    expect(wrapper.emitted('update-region')).toBeUndefined()
   })
 
   it('adds a point on the first double-click after selecting a polygon', async () => {
@@ -1728,6 +1782,27 @@ describe('AnnotationCanvas', () => {
       { x: 300, y: 200 },
     ])
     expect(points.at(-1)).not.toEqual(points[0])
+  })
+
+  it('allows polygon segment insertion when resulting segments are at least 4 visible px', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [polygonRegion()],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const polygon = getLineInstances().find((line) => line.config.id === 'region-1')
+
+    stage.getPointerPosition.mockReturnValue({ x: 104, y: 50 })
+    polygon.trigger('dblclick')
+
+    expect(wrapper.emitted('update-region')[0][0].changes.points).toEqual([
+      { x: 200, y: 100 },
+      { x: 208, y: 100 },
+      { x: 500, y: 100 },
+      { x: 400, y: 300 },
+    ])
   })
 
   it('does not add a point when double-clicking an unselected polygon', async () => {
@@ -2102,6 +2177,27 @@ describe('AnnotationCanvas', () => {
     })
   })
 
+  it('does not commit a polyline vertex drag that creates a segment below 4 visible px', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [threePointPolylineRegion()],
+    })
+    await flushImageLoad()
+
+    const polyline = getLineInstances().find((line) => line.config.id === 'region-1')
+    const middleVertexHandle = getCircleInstances().slice(-3)[1]
+
+    middleVertexHandle.x(103)
+    middleVertexHandle.y(50)
+    middleVertexHandle.trigger('dragmove')
+
+    expect(polyline.points).toHaveBeenLastCalledWith([100, 50, 103, 50, 200, 150])
+
+    middleVertexHandle.trigger('dragend')
+
+    expect(wrapper.emitted('update-region')).toBeUndefined()
+  })
+
   it('hides and restores selected polyline vertex handles while dragging the whole region', async () => {
     mountCanvas({
       selectedRegionId: 'region-1',
@@ -2198,6 +2294,22 @@ describe('AnnotationCanvas', () => {
     expect(wrapper.emitted('select-region')).toBeUndefined()
   })
 
+  it('does not insert a polyline segment point that would create a segment below 4 visible px', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [threePointPolylineRegion()],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const polyline = getLineInstances().find((line) => line.config.id === 'region-1')
+
+    stage.getPointerPosition.mockReturnValue({ x: 101, y: 50 })
+    polyline.trigger('dblclick')
+
+    expect(wrapper.emitted('update-region')).toBeUndefined()
+  })
+
   it('adds a point on the first double-click after selecting a polyline', async () => {
     const wrapper = mountCanvas({
       selectedRegionId: null,
@@ -2253,6 +2365,45 @@ describe('AnnotationCanvas', () => {
         ],
       },
     })
+  })
+
+  it('does not extend a selected polyline endpoint when the new segment is below 4 visible px', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [threePointPolylineRegion()],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const firstVertexHandle = getCircleInstances().slice(-3)[0]
+
+    firstVertexHandle.trigger('click')
+    stage.getPointerPosition.mockReturnValue({ x: 99, y: 50 })
+    stage.trigger('click')
+
+    expect(wrapper.emitted('update-region')).toBeUndefined()
+  })
+
+  it('allows selected polyline endpoint extension at 4 visible px', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [threePointPolylineRegion()],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const firstVertexHandle = getCircleInstances().slice(-3)[0]
+
+    firstVertexHandle.trigger('click')
+    stage.getPointerPosition.mockReturnValue({ x: 96, y: 50 })
+    stage.trigger('click')
+
+    expect(wrapper.emitted('update-region')[0][0].changes.points).toEqual([
+      { x: 192, y: 100 },
+      { x: 200, y: 100 },
+      { x: 500, y: 100 },
+      { x: 400, y: 300 },
+    ])
   })
 
   it('adds a point after the last point when the last polyline endpoint is selected', async () => {
