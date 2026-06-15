@@ -1407,6 +1407,53 @@ describe('AnnotationCanvas', () => {
     )
   })
 
+  it('sets the grab cursor when hovering a polygon vertex handle', async () => {
+    mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [polygonRegion()],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const vertexHandle = getCircleInstances().slice(-3)[0]
+
+    vertexHandle.trigger('mouseenter')
+
+    expect(stage.container().style.cursor).toBe('grab')
+  })
+
+  it('sets the grabbing cursor when dragging a polygon vertex handle', async () => {
+    mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [polygonRegion()],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const vertexHandle = getCircleInstances().slice(-3)[0]
+
+    vertexHandle.trigger('mouseenter')
+    vertexHandle.trigger('dragstart')
+
+    expect(stage.container().style.cursor).toBe('grabbing')
+  })
+
+  it('resets the cursor when leaving a polygon vertex handle', async () => {
+    mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [polygonRegion()],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const vertexHandle = getCircleInstances().slice(-3)[0]
+
+    vertexHandle.trigger('mouseenter')
+    vertexHandle.trigger('mouseleave')
+
+    expect(stage.container().style.cursor).toBe('default')
+  })
+
   it('updates the last polygon vertex after finishing with double click', async () => {
     const wrapper = await drawPointRegionWithDoubleClick('polygon')
     const region = wrapper.emitted('add-region')[0][0]

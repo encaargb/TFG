@@ -724,6 +724,9 @@ function createPointRegionVertexHandles(region, pointRegionNode) {
   }
 
   return visiblePoints.map((point, index) => {
+    let isHandleHovered = false
+    let isHandleDragging = false
+
     const handle = new Konva.Circle({
       x: point.x,
       y: point.y,
@@ -748,6 +751,20 @@ function createPointRegionVertexHandles(region, pointRegionNode) {
       },
     })
 
+    handle.on('mouseenter', () => {
+      if (props.activeTool !== 'select') return
+
+      isHandleHovered = true
+      setStageCursor('grab')
+    })
+
+    handle.on('mouseleave', () => {
+      isHandleHovered = false
+      if (isHandleDragging) return
+
+      resetStageCursor()
+    })
+
     handle.on('click tap', (event) => {
       if (props.activeTool !== 'select') return
       if (event) {
@@ -767,6 +784,13 @@ function createPointRegionVertexHandles(region, pointRegionNode) {
 
       selectVertexHandle(index, handle)
       emit('select-region', region.id)
+    })
+
+    handle.on('dragstart', () => {
+      if (props.activeTool !== 'select') return
+
+      isHandleDragging = true
+      setStageCursor('grabbing')
     })
 
     handle.on('dblclick dbltap', (event) => {
@@ -801,6 +825,15 @@ function createPointRegionVertexHandles(region, pointRegionNode) {
         id: region.id,
         changes: clampPolygonToBounds({ points: documentPoints }, getDocumentBounds()),
       })
+
+      isHandleDragging = false
+
+      if (props.activeTool === 'select' && isHandleHovered) {
+        setStageCursor('grab')
+        return
+      }
+
+      resetStageCursor()
     })
 
     return handle
