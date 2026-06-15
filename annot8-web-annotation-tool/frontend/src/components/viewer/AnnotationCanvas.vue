@@ -15,6 +15,12 @@ import {
   getClosestPointRegionSegmentIndex,
 } from './pointRegionCanvasGeometry'
 import {
+  applyVisibleRectangleToNode,
+  clampVisibleRectangle,
+  getNodeVisibleRectangle,
+  normalizeVisibleRectangle,
+} from './rectangleCanvasGeometry'
+import {
   clampPointToBounds,
   clampPolygonToBounds,
   clampRectangleToBounds,
@@ -311,34 +317,6 @@ function getVisibleBounds() {
   return getVisibleDimensions(baseImageWidth, baseImageHeight, props.zoomLevel)
 }
 
-function normalizeVisibleRectangle(rectangle) {
-  const x = rectangle.width < 0 ? rectangle.x + rectangle.width : rectangle.x
-  const y = rectangle.height < 0 ? rectangle.y + rectangle.height : rectangle.y
-
-  return {
-    x,
-    y,
-    width: Math.abs(rectangle.width),
-    height: Math.abs(rectangle.height),
-  }
-}
-
-function clampVisibleRectangle(rectangle, minimumSize = 0) {
-  const bounds = getVisibleBounds()
-  const normalizedRectangle = normalizeVisibleRectangle(rectangle)
-  const width = Math.min(Math.max(minimumSize, normalizedRectangle.width), bounds.width)
-  const height = Math.min(Math.max(minimumSize, normalizedRectangle.height), bounds.height)
-  const maxX = Math.max(0, bounds.width - width)
-  const maxY = Math.max(0, bounds.height - height)
-
-  return {
-    x: Math.max(0, Math.min(maxX, normalizedRectangle.x)),
-    y: Math.max(0, Math.min(maxY, normalizedRectangle.y)),
-    width,
-    height,
-  }
-}
-
 function clampTransformerBox(oldBox, newBox) {
   if (
     newBox.width < MIN_VISIBLE_RECTANGLE_SIZE ||
@@ -349,30 +327,8 @@ function clampTransformerBox(oldBox, newBox) {
 
   return {
     ...newBox,
-    ...clampVisibleRectangle(newBox, MIN_VISIBLE_RECTANGLE_SIZE),
+    ...clampVisibleRectangle(newBox, getVisibleBounds(), MIN_VISIBLE_RECTANGLE_SIZE),
   }
-}
-
-function getNodeVisibleRectangle(node) {
-  const scaleXNode = typeof node.scaleX === 'function' ? node.scaleX() : 1
-  const scaleYNode = typeof node.scaleY === 'function' ? node.scaleY() : 1
-
-  return {
-    x: node.x(),
-    y: node.y(),
-    width: node.width() * scaleXNode,
-    height: node.height() * scaleYNode,
-  }
-}
-
-function applyVisibleRectangleToNode(node, rectangle) {
-  node.x(rectangle.x)
-  node.y(rectangle.y)
-  node.width(rectangle.width)
-  node.height(rectangle.height)
-
-  if (typeof node.scaleX === 'function') node.scaleX(1)
-  if (typeof node.scaleY === 'function') node.scaleY(1)
 }
 
 function setNodeVisibility(nodes, isVisible) {
@@ -397,6 +353,7 @@ function showActiveEditHandles() {
 function syncTransformedRectangleNode(node) {
   const visibleRectangle = clampVisibleRectangle(
     getNodeVisibleRectangle(node),
+    getVisibleBounds(),
     MIN_VISIBLE_RECTANGLE_SIZE
   )
   applyVisibleRectangleToNode(node, visibleRectangle)
@@ -408,7 +365,11 @@ function getAnchorAwareVisibleRectangle(originalRectangle, transformedRectangle)
   const anchor = transformer?.getActiveAnchor?.()
 
   if (!anchor) {
-    return clampVisibleRectangle(transformedRectangle, MIN_VISIBLE_RECTANGLE_SIZE)
+    return clampVisibleRectangle(
+      transformedRectangle,
+      getVisibleBounds(),
+      MIN_VISIBLE_RECTANGLE_SIZE
+    )
   }
 
   const bounds = getVisibleBounds()
@@ -514,12 +475,15 @@ function createRectangleRegionNode(region) {
     strokeWidth: props.selectedRegionId === region.id ? 3 : 2,
     strokeScaleEnabled: false,
     dragBoundFunc: (position) => {
-      const clamped = clampVisibleRectangle({
-        x: position.x,
-        y: position.y,
-        width: node.width(),
-        height: node.height(),
-      })
+      const clamped = clampVisibleRectangle(
+        {
+          x: position.x,
+          y: position.y,
+          width: node.width(),
+          height: node.height(),
+        },
+        getVisibleBounds()
+      )
 
       return {
         x: clamped.x,
@@ -538,7 +502,10 @@ function createRectangleRegionNode(region) {
 
   node.on('dragmove', (event) => {
     autoScrollCanvasWrapper(event)
-    applyVisibleRectangleToNode(node, clampVisibleRectangle(getNodeVisibleRectangle(node)))
+    applyVisibleRectangleToNode(
+      node,
+      clampVisibleRectangle(getNodeVisibleRectangle(node), getVisibleBounds())
+    )
     regionLayer.draw()
   })
 
