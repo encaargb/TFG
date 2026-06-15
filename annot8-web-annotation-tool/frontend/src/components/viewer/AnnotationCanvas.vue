@@ -21,6 +21,7 @@ import {
   normalizeVisibleRectangle,
 } from './rectangleCanvasGeometry'
 import { useCanvasAutoScroll } from './useCanvasAutoScroll'
+import { useCanvasCursor } from './useCanvasCursor'
 import {
   clampPointToBounds,
   clampPolygonToBounds,
@@ -111,8 +112,6 @@ let skipNextPointRegionClickPosition = null
 let pointRegionDragStart = null
 let vertexHandles = []
 let imageLoadSequence = 0
-let hoveredRegionId = null
-let draggedRegionId = null
 let isVertexHandleDragging = false
 let selectedPointRegionPoint = null
 let suppressPointRegionClick = false
@@ -137,84 +136,23 @@ function getDocumentBounds() {
   }
 }
 
-function setStageCursor(cursor) {
-  const container = stage?.container?.()
-
-  if (container) {
-    container.style.cursor = cursor
-  }
-}
-
-function resetStageCursor() {
-  setStageCursor('default')
-}
-
-function handleRegionMouseEnter(regionId) {
-  hoveredRegionId = regionId
-
-  if (props.activeTool === 'select' && !draggedRegionId) {
-    setStageCursor('grab')
-  }
-}
-
-function handleRegionMouseLeave(regionId) {
-  if (hoveredRegionId === regionId) {
-    hoveredRegionId = null
-  }
-
-  if (!draggedRegionId) {
-    resetStageCursor()
-  }
-}
-
-function beginRegionDrag(regionId) {
-  draggedRegionId = regionId
-
-  if (props.activeTool === 'select') {
-    setStageCursor('grabbing')
-  }
-}
-
-function endRegionDrag(regionId) {
-  if (draggedRegionId === regionId) {
-    draggedRegionId = null
-  }
-
-  if (props.activeTool === 'select' && hoveredRegionId === regionId) {
-    setStageCursor('grab')
-    return
-  }
-
-  resetStageCursor()
-}
-
-function attachRegionCursorHandlers(node, regionId) {
-  node.on('mouseenter', () => handleRegionMouseEnter(regionId))
-  node.on('mouseleave', () => handleRegionMouseLeave(regionId))
-}
-
-function getNodeRegionId(node) {
-  return typeof node?.id === 'function' ? node.id() : node?.config?.id
-}
-
-function resetStaleRegionCursor(event) {
-  if (props.activeTool !== 'select' || draggedRegionId || !hoveredRegionId) return
-
-  const targetRegionId = getNodeRegionId(event?.target)
-
-  if (targetRegionId === hoveredRegionId) return
-  if (currentPageRegions.value.some((region) => region.id === targetRegionId)) {
-    hoveredRegionId = targetRegionId
-    setStageCursor('grab')
-    return
-  }
-
-  hoveredRegionId = null
-  resetStageCursor()
-}
+const {
+  getDraggedRegionId,
+  setStageCursor,
+  resetStageCursor,
+  beginRegionDrag,
+  endRegionDrag,
+  attachRegionCursorHandlers,
+  resetStaleRegionCursor,
+  clearRegionCursorState,
+} = useCanvasCursor({
+  getStage: () => stage,
+  getActiveTool: () => props.activeTool,
+  getCurrentPageRegions: () => currentPageRegions.value,
+})
 
 function hasActiveCanvasInteraction() {
-  return Boolean(draftRegionNode || draggedRegionId || isVertexHandleDragging)
+  return Boolean(draftRegionNode || getDraggedRegionId() || isVertexHandleDragging)
 }
 
 const { autoScrollCanvasWrapper } = useCanvasAutoScroll({
@@ -1421,8 +1359,7 @@ watch(() => props.activeTool, (newTool, previousTool) => {
   }
 
   if (previousTool === 'select' && newTool !== previousTool) {
-    hoveredRegionId = null
-    draggedRegionId = null
+    clearRegionCursorState()
     isVertexHandleDragging = false
     clearSelectedPointRegionPoint()
     resetStageCursor()
@@ -1450,8 +1387,7 @@ onBeforeUnmount(() => {
   skipNextPointRegionClickPosition = null
   pointRegionDragStart = null
   vertexHandles = []
-  hoveredRegionId = null
-  draggedRegionId = null
+  clearRegionCursorState()
   isVertexHandleDragging = false
   selectedPointRegionPoint = null
   suppressPointRegionClick = false
