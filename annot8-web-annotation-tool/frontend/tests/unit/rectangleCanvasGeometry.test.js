@@ -6,6 +6,7 @@ import {
   getAnchorAwareVisibleRectangle,
   getNodeVisibleRectangle,
   getTransformedRectangleEdges,
+  hasValidVisibleRectangleSize,
   normalizeVisibleRectangle,
 } from '../../src/components/viewer/rectangleCanvasGeometry'
 
@@ -61,6 +62,21 @@ describe('rectangleCanvasGeometry', () => {
       width: 4,
       height: 4,
     })
+  })
+
+  it('validates rectangle size in visible coordinates', () => {
+    expect(hasValidVisibleRectangleSize(
+      { x: 10, y: 20, width: 4, height: 4 },
+      4
+    )).toBe(true)
+    expect(hasValidVisibleRectangleSize(
+      { x: 10, y: 20, width: 3, height: 4 },
+      4
+    )).toBe(false)
+    expect(hasValidVisibleRectangleSize(
+      { x: 10, y: 20, width: 4, height: 3 },
+      4
+    )).toBe(false)
   })
 
   it('reads a visible rectangle from a scaled node', () => {

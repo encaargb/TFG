@@ -508,6 +508,28 @@ describe('AnnotationCanvas', () => {
     expect(wrapper.emitted('select-region')).toBeUndefined()
   })
 
+  it('emits a rectangle that reaches the minimum visible size at high zoom', async () => {
+    const wrapper = mountCanvas({ activeTool: 'rectangle', zoomLevel: 10 })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousedown')
+
+    stage.getPointerPosition.mockReturnValue({ x: 104, y: 54 })
+    stage.trigger('mousemove')
+    stage.trigger('mouseup')
+
+    expect(wrapper.emitted('add-region')[0][0]).toEqual(
+      expect.objectContaining({
+        left: 20,
+        top: 10,
+        right: 21,
+        bottom: 11,
+      })
+    )
+  })
+
   it('cancels an active rectangle draft with Escape', async () => {
     const wrapper = mountCanvas({ activeTool: 'rectangle' })
     await flushImageLoad()

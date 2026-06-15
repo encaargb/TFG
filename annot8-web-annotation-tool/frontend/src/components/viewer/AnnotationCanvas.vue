@@ -21,6 +21,7 @@ import {
   getAnchorAwareVisibleRectangle,
   getNodeVisibleRectangle,
   getTransformedRectangleEdges,
+  hasValidVisibleRectangleSize,
 } from './rectangleCanvasGeometry'
 import { useCanvasAutoScroll } from './useCanvasAutoScroll'
 import { useCanvasCursor } from './useCanvasCursor'
@@ -841,6 +842,13 @@ function hasValidPointRegionSegments(points, type) {
   return hasValidVisiblePointRegionSegments(visiblePoints, type, MIN_VISIBLE_SEGMENT_LENGTH)
 }
 
+function hasValidDraftRectangleSize(region) {
+  const { scaleX, scaleY } = getRegionScale()
+  const visibleRectangle = toVisibleRectangle(region, scaleX, scaleY, props.zoomLevel)
+
+  return hasValidVisibleRectangleSize(visibleRectangle, MIN_VISIBLE_RECTANGLE_SIZE)
+}
+
 function commitDraftRectangleRegion() {
   if (!stage || !draftRegionNode || !draftRegionStart) return
 
@@ -867,7 +875,7 @@ function commitDraftRectangleRegion() {
   draftRegionNode = null
   draftRegionStart = null
 
-  if (draftRegion && isDrawableRegion(draftRegion)) {
+  if (draftRegion && hasValidDraftRectangleSize(draftRegion)) {
     emit('add-region', draftRegion)
   } else {
     renderRegions()

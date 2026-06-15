@@ -31,6 +31,15 @@ export function clampVisibleRectangle(rectangle, bounds, minimumSize = 0) {
   }
 }
 
+export function hasValidVisibleRectangleSize(rectangle, minimumSize) {
+  const normalizedRectangle = normalizeVisibleRectangle(rectangle)
+
+  return (
+    normalizedRectangle.width >= minimumSize &&
+    normalizedRectangle.height >= minimumSize
+  )
+}
+
 export function getNodeVisibleRectangle(node) {
   const scaleXNode = typeof node.scaleX === 'function' ? node.scaleX() : 1
   const scaleYNode = typeof node.scaleY === 'function' ? node.scaleY() : 1
