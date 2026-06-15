@@ -11,6 +11,10 @@ import {
   hasValidVisiblePointRegionSegments,
 } from '../../utils/pointRegionValidation'
 import {
+  clampValue,
+  getClosestPointRegionSegmentIndex,
+} from './pointRegionCanvasGeometry'
+import {
   clampPointToBounds,
   clampPolygonToBounds,
   clampRectangleToBounds,
@@ -400,55 +404,6 @@ function syncTransformedRectangleNode(node) {
   return visibleRectangle
 }
 
-function clampValue(value, minimum, maximum) {
-  return Math.max(minimum, Math.min(maximum, value))
-}
-
-function getPointToSegmentDistance(point, segmentStart, segmentEnd) {
-  const segmentX = segmentEnd.x - segmentStart.x
-  const segmentY = segmentEnd.y - segmentStart.y
-  const segmentLengthSquared = segmentX ** 2 + segmentY ** 2
-
-  if (segmentLengthSquared === 0) {
-    return Math.hypot(point.x - segmentStart.x, point.y - segmentStart.y)
-  }
-
-  const projection = (
-    ((point.x - segmentStart.x) * segmentX + (point.y - segmentStart.y) * segmentY) /
-    segmentLengthSquared
-  )
-  const clampedProjection = clampValue(projection, 0, 1)
-  const closestPoint = {
-    x: segmentStart.x + clampedProjection * segmentX,
-    y: segmentStart.y + clampedProjection * segmentY,
-  }
-
-  return Math.hypot(point.x - closestPoint.x, point.y - closestPoint.y)
-}
-
-function getClosestPointRegionSegmentIndex(pointerPosition, visiblePoints, closed = false) {
-  if (!pointerPosition) return -1
-
-  let closestSegmentIndex = -1
-  let closestDistance = Number.POSITIVE_INFINITY
-  const segmentCount = closed ? visiblePoints.length : visiblePoints.length - 1
-
-  for (let index = 0; index < segmentCount; index += 1) {
-    const distance = getPointToSegmentDistance(
-      pointerPosition,
-      visiblePoints[index],
-      visiblePoints[(index + 1) % visiblePoints.length]
-    )
-
-    if (distance < closestDistance) {
-      closestDistance = distance
-      closestSegmentIndex = index
-    }
-  }
-
-  return closestDistance <= POINT_REGION_SEGMENT_HIT_TOLERANCE ? closestSegmentIndex : -1
-}
-
 function getAnchorAwareVisibleRectangle(originalRectangle, transformedRectangle) {
   const anchor = transformer?.getActiveAnchor?.()
 
@@ -665,7 +620,8 @@ function createPointRegionNode(region) {
     const segmentIndex = getClosestPointRegionSegmentIndex(
       pointerPosition,
       visiblePoints,
-      isPolygon
+      isPolygon,
+      POINT_REGION_SEGMENT_HIT_TOLERANCE
     )
     const documentPoint = getDocumentCoordinates(
       pointerPosition,
