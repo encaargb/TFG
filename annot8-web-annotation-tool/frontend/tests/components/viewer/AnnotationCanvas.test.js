@@ -555,6 +555,37 @@ describe('AnnotationCanvas', () => {
     expect(stage.container().style.cursor).toBe('default')
   })
 
+  it('resets the cursor when moving from a rectangle region to empty canvas', async () => {
+    mountCanvas({
+      regions: [rectangleRegion()],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const rectangle = getRectInstances().find((rect) => rect.config.id === 'region-1')
+
+    rectangle.trigger('mouseenter')
+    stage.trigger('mousemove', { target: stage })
+
+    expect(stage.container().style.cursor).toBe('default')
+  })
+
+  it('does not reset the grabbing cursor while dragging over empty canvas', async () => {
+    mountCanvas({
+      regions: [rectangleRegion()],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const rectangle = getRectInstances().find((rect) => rect.config.id === 'region-1')
+
+    rectangle.trigger('mouseenter')
+    rectangle.trigger('dragstart')
+    stage.trigger('mousemove', { target: stage })
+
+    expect(stage.container().style.cursor).toBe('grabbing')
+  })
+
   it('does not set the grab cursor when hovering a rectangle region in drawing mode', async () => {
     mountCanvas({
       activeTool: 'rectangle',
@@ -568,6 +599,21 @@ describe('AnnotationCanvas', () => {
     rectangle.trigger('mouseenter')
 
     expect(stage.container().style.cursor).not.toBe('grab')
+  })
+
+  it('resets the cursor when moving from a polygon region to empty canvas', async () => {
+    mountCanvas({
+      regions: [polygonRegion()],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const polygon = getLineInstances().find((line) => line.config.id === 'region-1')
+
+    polygon.trigger('mouseenter')
+    stage.trigger('mousemove', { target: stage })
+
+    expect(stage.container().style.cursor).toBe('default')
   })
 
   it('emits clear-selected-region when clicking empty canvas in select mode', async () => {

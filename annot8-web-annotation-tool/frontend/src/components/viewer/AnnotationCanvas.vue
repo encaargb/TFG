@@ -172,6 +172,26 @@ function attachRegionCursorHandlers(node, regionId) {
   node.on('mouseleave', () => handleRegionMouseLeave(regionId))
 }
 
+function getNodeRegionId(node) {
+  return typeof node?.id === 'function' ? node.id() : node?.config?.id
+}
+
+function resetStaleRegionCursor(event) {
+  if (props.activeTool !== 'select' || draggedRegionId || !hoveredRegionId) return
+
+  const targetRegionId = getNodeRegionId(event?.target)
+
+  if (targetRegionId === hoveredRegionId) return
+  if (currentPageRegions.value.some((region) => region.id === targetRegionId)) {
+    hoveredRegionId = targetRegionId
+    setStageCursor('grab')
+    return
+  }
+
+  hoveredRegionId = null
+  resetStageCursor()
+}
+
 function clearSelectedPointRegionPoint() {
   selectedPointRegionPoint = null
 }
@@ -1296,7 +1316,9 @@ function loadSelectedPageInKonva(src) {
 
 }
 
-function handleMouseMove() {
+function handleMouseMove(event) {
+  resetStaleRegionCursor(event)
+
   const pos = stage.getPointerPosition()
   const coordinates = getDocumentCoordinates(
     pos,
