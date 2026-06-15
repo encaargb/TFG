@@ -7,6 +7,10 @@ import {
   getVisibleDimensions,
 } from '../../utils/viewerMath'
 import {
+  getPointRegionMinimumPointCount,
+  hasValidVisiblePointRegionSegments,
+} from '../../utils/pointRegionValidation'
+import {
   clampPointToBounds,
   clampPolygonToBounds,
   clampRectangleToBounds,
@@ -1092,31 +1096,11 @@ function isDraftPointRegionSegmentTooShort(documentPoint) {
   return distance < MIN_VISIBLE_SEGMENT_LENGTH
 }
 
-function getPointRegionMinimumPointCount(type) {
-  return type === 'polygon' ? 3 : 2
-}
-
-function hasValidVisiblePointRegionSegments(visiblePoints, type) {
-  if (visiblePoints.length < getPointRegionMinimumPointCount(type)) return false
-
-  const segmentCount = type === 'polygon' ? visiblePoints.length : visiblePoints.length - 1
-
-  for (let index = 0; index < segmentCount; index += 1) {
-    const start = visiblePoints[index]
-    const end = visiblePoints[(index + 1) % visiblePoints.length]
-    const distance = Math.hypot(end.x - start.x, end.y - start.y)
-
-    if (distance < MIN_VISIBLE_SEGMENT_LENGTH) return false
-  }
-
-  return true
-}
-
 function hasValidPointRegionSegments(points, type) {
   const { scaleX, scaleY } = getRegionScale()
   const visiblePoints = toVisiblePoints(points, scaleX, scaleY, props.zoomLevel)
 
-  return hasValidVisiblePointRegionSegments(visiblePoints, type)
+  return hasValidVisiblePointRegionSegments(visiblePoints, type, MIN_VISIBLE_SEGMENT_LENGTH)
 }
 
 function commitDraftRectangleRegion() {
