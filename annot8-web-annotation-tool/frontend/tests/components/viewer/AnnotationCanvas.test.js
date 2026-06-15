@@ -117,14 +117,18 @@ async function drawPointRegionWithDoubleClick(activeTool) {
   const stage = getLatestStage()
 
   stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+  stage.trigger('mousedown', { evt: { detail: 1 } })
   stage.trigger('click', { evt: { detail: 1 } })
 
   stage.getPointerPosition.mockReturnValue({ x: 250, y: 50 })
+  stage.trigger('mousedown', { evt: { detail: 1 } })
   stage.trigger('click', { evt: { detail: 1 } })
 
   stage.getPointerPosition.mockReturnValue({ x: 200, y: 150 })
+  stage.trigger('mousedown', { evt: { detail: 1 } })
   stage.trigger('click', { evt: { detail: 1 } })
 
+  stage.trigger('mousedown', { evt: { detail: 2 } })
   stage.trigger('click', { evt: { detail: 2 } })
   stage.trigger('dblclick')
 
@@ -1064,6 +1068,106 @@ describe('AnnotationCanvas', () => {
     expect(wrapper.emitted('select-region')).toBeUndefined()
   })
 
+  it('starts a polygon draft on mouse down before mouse up', async () => {
+    const wrapper = mountCanvas({ activeTool: 'polygon' })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousedown')
+
+    const draftPolygon = getLineInstances().at(-1)
+
+    expect(draftPolygon).toBeTruthy()
+    expect(wrapper.emitted('add-region')).toBeUndefined()
+  })
+
+  it('updates the polygon draft preview after mouse down and mouse move', async () => {
+    mountCanvas({ activeTool: 'polygon' })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousedown')
+
+    const draftPolygon = getLineInstances().at(-1)
+
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 50 })
+    stage.trigger('mousemove')
+
+    expect(draftPolygon.points).toHaveBeenLastCalledWith([100, 50, 250, 50])
+  })
+
+  it('adds a second polygon point when releasing after dragging', async () => {
+    const wrapper = mountCanvas({ activeTool: 'polygon' })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousedown')
+
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 50 })
+    stage.trigger('mousemove')
+    stage.trigger('mouseup')
+    stage.trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 200, y: 150 })
+    stage.trigger('mousedown')
+    stage.trigger('mouseup')
+    stage.trigger('click')
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+
+    expect(wrapper.emitted('add-region')[0][0]).toEqual(
+      expect.objectContaining({
+        type: 'polygon',
+        points: [
+          { x: 200, y: 100 },
+          { x: 500, y: 100 },
+          { x: 400, y: 300 },
+        ],
+      })
+    )
+  })
+
+  it('does not duplicate polygon points during normal clicks', async () => {
+    const wrapper = mountCanvas({ activeTool: 'polygon' })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousedown')
+    stage.trigger('mouseup')
+    stage.trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 50 })
+    stage.trigger('mousedown')
+    stage.trigger('mouseup')
+    stage.trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 200, y: 150 })
+    stage.trigger('mousedown')
+    stage.trigger('mouseup')
+    stage.trigger('click')
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+
+    expect(wrapper.emitted('add-region')[0][0]).toEqual(
+      expect.objectContaining({
+        type: 'polygon',
+        points: [
+          { x: 200, y: 100 },
+          { x: 500, y: 100 },
+          { x: 400, y: 300 },
+        ],
+      })
+    )
+  })
+
   it('clamps the point-region draft preview inside page bounds', async () => {
     mountCanvas({ activeTool: 'polygon' })
     await flushImageLoad()
@@ -1457,6 +1561,108 @@ describe('AnnotationCanvas', () => {
       })
     )
     expect(wrapper.emitted('select-region')).toBeUndefined()
+  })
+
+  it('starts a polyline draft on mouse down before mouse up', async () => {
+    const wrapper = mountCanvas({ activeTool: 'polyline' })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousedown')
+
+    const draftPolyline = getLineInstances().at(-1)
+
+    expect(draftPolyline).toBeTruthy()
+    expect(wrapper.emitted('add-region')).toBeUndefined()
+  })
+
+  it('does not duplicate point-region points during normal clicks', async () => {
+    const wrapper = mountCanvas({ activeTool: 'polyline' })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousedown')
+    stage.trigger('mouseup')
+    stage.trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 50 })
+    stage.trigger('mousedown')
+    stage.trigger('mouseup')
+    stage.trigger('click')
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+
+    expect(wrapper.emitted('add-region')[0][0]).toEqual(
+      expect.objectContaining({
+        type: 'polyline',
+        points: [
+          { x: 200, y: 100 },
+          { x: 500, y: 100 },
+        ],
+      })
+    )
+  })
+
+  it('adds a second polyline point when releasing after dragging', async () => {
+    const wrapper = mountCanvas({ activeTool: 'polyline' })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousedown')
+
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 50 })
+    stage.trigger('mousemove')
+    stage.trigger('mouseup')
+    stage.trigger('click')
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+
+    expect(wrapper.emitted('add-region')[0][0]).toEqual(
+      expect.objectContaining({
+        type: 'polyline',
+        points: [
+          { x: 200, y: 100 },
+          { x: 500, y: 100 },
+        ],
+      })
+    )
+  })
+
+  it('does not add a drag-release point for tiny point-region movement', async () => {
+    const wrapper = mountCanvas({ activeTool: 'polyline' })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousedown')
+
+    stage.getPointerPosition.mockReturnValue({ x: 104, y: 53 })
+    stage.trigger('mouseup')
+    stage.trigger('click')
+
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 50 })
+    stage.trigger('mousedown')
+    stage.trigger('mouseup')
+    stage.trigger('click')
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+
+    expect(wrapper.emitted('add-region')[0][0]).toEqual(
+      expect.objectContaining({
+        type: 'polyline',
+        points: [
+          { x: 200, y: 100 },
+          { x: 500, y: 100 },
+        ],
+      })
+    )
   })
 
   it('does not add a duplicate polyline point when finishing with double click', async () => {

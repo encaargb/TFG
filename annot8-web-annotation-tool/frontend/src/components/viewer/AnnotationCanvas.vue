@@ -68,6 +68,7 @@ const emit = defineEmits([
 const REGION_COLOR = '#0d6efd'
 const POLYGON_CLOSE_DISTANCE = 8
 const POINT_REGION_SEGMENT_HIT_TOLERANCE = 8
+const POINT_REGION_DRAG_POINT_DISTANCE = 8
 const MIN_VISIBLE_REGION_SIZE = 4
 
 const canvasContainer = ref(null)
@@ -85,6 +86,9 @@ let transformer = null
 let draftRegionNode = null
 let draftRegionStart = null
 let draftPointRegionPoints = []
+let skipNextPointRegionClick = false
+let skipNextPointRegionClickPosition = null
+let pointRegionDragStart = null
 let vertexHandles = []
 let imageLoadSequence = 0
 let hoveredRegionId = null
@@ -992,21 +996,23 @@ function cancelDraftRectangleRegion() {
   return true
 }
 
-function beginPointRegion() {
+function addDraftPointRegionPoint(pointerPosition, shouldClearSelection = true) {
   if (!stage || !regionLayer || !pageImageNode) return
   if (!['polygon', 'polyline'].includes(props.activeTool)) return
 
-  const pointerPosition = stage.getPointerPosition()
   const documentPoint = getClampedDocumentPointer(pointerPosition)
 
   if (!documentPoint) return
 
   if (props.activeTool === 'polygon' && isPointerNearFirstPolygonPoint(pointerPosition)) {
     commitDraftPointRegion()
-    return
+    return true
   }
 
-  emit('clear-selected-region')
+  if (shouldClearSelection) {
+    emit('clear-selected-region')
+  }
+
   draftPointRegionPoints.push(clampPointToBounds(documentPoint, getDocumentBounds()))
 
   if (!draftRegionNode) {
@@ -1023,6 +1029,54 @@ function beginPointRegion() {
   }
 
   updateDraftPointRegion()
+
+  return true
+}
+
+function beginPointRegion() {
+  return addDraftPointRegionPoint(stage?.getPointerPosition())
+}
+
+function handleStageMouseDown(event) {
+  beginRectangleRegion()
+
+  if (['polygon', 'polyline'].includes(props.activeTool)) {
+    if (event?.evt?.detail > 1) return
+
+    const pointerPosition = stage?.getPointerPosition()
+
+    if (beginPointRegion()) {
+      pointRegionDragStart = pointerPosition
+      skipNextPointRegionClick = true
+      skipNextPointRegionClickPosition = pointerPosition
+    }
+  }
+}
+
+function addPointRegionDragReleasePoint() {
+  if (!['polygon', 'polyline'].includes(props.activeTool) || !pointRegionDragStart) return
+
+  const pointerPosition = stage?.getPointerPosition()
+  const distance = pointerPosition
+    ? Math.hypot(
+        pointerPosition.x - pointRegionDragStart.x,
+        pointerPosition.y - pointRegionDragStart.y
+      )
+    : 0
+
+  pointRegionDragStart = null
+
+  if (distance <= POINT_REGION_DRAG_POINT_DISTANCE) return
+
+  if (addDraftPointRegionPoint(pointerPosition, false)) {
+    skipNextPointRegionClick = true
+    skipNextPointRegionClickPosition = pointerPosition
+  }
+}
+
+function handleStageMouseUp() {
+  commitDraftRectangleRegion()
+  addPointRegionDragReleasePoint()
 }
 
 function insertPolylineEndpointPoint(pointerPosition) {
@@ -1063,7 +1117,25 @@ function insertPolylineEndpointPoint(pointerPosition) {
 function handleStageClick(event) {
   if (event?.evt?.detail > 1) return
 
-  beginPointRegion()
+  if (skipNextPointRegionClick) {
+    const pointerPosition = stage?.getPointerPosition()
+    const shouldSkipClick =
+      !skipNextPointRegionClickPosition ||
+      !pointerPosition ||
+      Math.hypot(
+        pointerPosition.x - skipNextPointRegionClickPosition.x,
+        pointerPosition.y - skipNextPointRegionClickPosition.y
+      ) <= POINT_REGION_DRAG_POINT_DISTANCE
+
+    skipNextPointRegionClick = false
+    skipNextPointRegionClickPosition = null
+
+    if (!shouldSkipClick) {
+      beginPointRegion()
+    }
+  } else {
+    beginPointRegion()
+  }
 
   if (props.activeTool !== 'select') return
 
@@ -1084,6 +1156,9 @@ function cancelDraftPointRegion(shouldRender = true) {
 
   draftRegionNode = null
   draftPointRegionPoints = []
+  skipNextPointRegionClick = false
+  skipNextPointRegionClickPosition = null
+  pointRegionDragStart = null
 
   if (shouldRender) {
     renderRegions()
@@ -1108,6 +1183,9 @@ function commitDraftPointRegion() {
   draftRegionNode.destroy()
   draftRegionNode = null
   draftPointRegionPoints = []
+  skipNextPointRegionClick = false
+  skipNextPointRegionClickPosition = null
+  pointRegionDragStart = null
 
   if (isDrawableRegion(draftRegion)) {
     emit('add-region', draftRegion)
@@ -1260,9 +1338,9 @@ onMounted(() => {
 
   stage.on('mousemove', handleMouseMove)
   stage.on('mouseleave', handleMouseLeave)
-  stage.on('mousedown', beginRectangleRegion)
+  stage.on('mousedown', handleStageMouseDown)
   stage.on('click', handleStageClick)
-  stage.on('mouseup', commitDraftRectangleRegion)
+  stage.on('mouseup', handleStageMouseUp)
   stage.on('dblclick', commitDraftPointRegion)
   window.addEventListener('keydown', handleKeydown)
 
@@ -1321,6 +1399,9 @@ onBeforeUnmount(() => {
   draftRegionNode = null
   draftRegionStart = null
   draftPointRegionPoints = []
+  skipNextPointRegionClick = false
+  skipNextPointRegionClickPosition = null
+  pointRegionDragStart = null
   vertexHandles = []
   hoveredRegionId = null
   draggedRegionId = null
