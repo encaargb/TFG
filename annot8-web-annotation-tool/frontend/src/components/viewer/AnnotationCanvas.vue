@@ -71,6 +71,9 @@ const POINT_REGION_SEGMENT_HIT_TOLERANCE = 8
 const POINT_REGION_DRAG_POINT_DISTANCE = 8
 const MIN_VISIBLE_SEGMENT_LENGTH = 4
 const MIN_VISIBLE_RECTANGLE_SIZE = 4
+const POINT_REGION_VERTEX_HANDLE_RADIUS = 4
+const RECTANGLE_TRANSFORMER_ANCHOR_SIZE = 8
+const RECTANGLE_TRANSFORMER_ANCHOR_CORNER_RADIUS = 4
 
 const canvasContainer = ref(null)
 const canvasWrapper = ref(null)
@@ -724,7 +727,7 @@ function createPointRegionVertexHandles(region, pointRegionNode) {
     const handle = new Konva.Circle({
       x: point.x,
       y: point.y,
-      radius: 5,
+      radius: POINT_REGION_VERTEX_HANDLE_RADIUS,
       draggable: true,
       fill:
         selectedPointRegionPoint?.regionId === region.id &&
@@ -821,8 +824,8 @@ function renderRegions() {
     rotateEnabled: false,
     flipEnabled: false,
     keepRatio: false,
-    anchorSize: 10,
-    anchorCornerRadius: 5,
+    anchorSize: RECTANGLE_TRANSFORMER_ANCHOR_SIZE,
+    anchorCornerRadius: RECTANGLE_TRANSFORMER_ANCHOR_CORNER_RADIUS,
     anchorFill: '#ffffff',
     anchorStroke: '#0d6efd',
     anchorStrokeWidth: 2,

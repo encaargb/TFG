@@ -192,8 +192,8 @@ describe('AnnotationCanvas', () => {
     expect(transformer.nodes).toHaveBeenLastCalledWith([rectangle])
     expect(transformer.config).toEqual(
       expect.objectContaining({
-        anchorSize: 10,
-        anchorCornerRadius: 5,
+        anchorSize: 8,
+        anchorCornerRadius: 4,
         anchorFill: '#ffffff',
         anchorStroke: '#0d6efd',
         anchorStrokeWidth: 2,
@@ -1400,7 +1400,7 @@ describe('AnnotationCanvas', () => {
       expect.objectContaining({
         x: 100,
         y: 50,
-        radius: 5,
+        radius: 4,
         draggable: true,
         strokeScaleEnabled: false,
       })
@@ -1911,7 +1911,7 @@ describe('AnnotationCanvas', () => {
       expect.objectContaining({
         x: 100,
         y: 50,
-        radius: 5,
+        radius: 4,
         draggable: true,
         strokeScaleEnabled: false,
       })
