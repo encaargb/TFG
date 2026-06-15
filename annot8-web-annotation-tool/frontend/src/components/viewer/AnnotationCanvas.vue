@@ -11,15 +11,16 @@ import {
   hasValidVisiblePointRegionSegments,
 } from '../../utils/pointRegionValidation'
 import {
-  clampValue,
   clampVisiblePointRegionDelta,
   getClosestPointRegionSegmentIndex,
 } from './pointRegionCanvasGeometry'
 import {
   applyVisibleRectangleToNode,
+  clampTransformerBox,
   clampVisibleRectangle,
+  getAnchorAwareVisibleRectangle,
   getNodeVisibleRectangle,
-  normalizeVisibleRectangle,
+  getTransformedRectangleEdges,
 } from './rectangleCanvasGeometry'
 import { useCanvasAutoScroll } from './useCanvasAutoScroll'
 import { useCanvasCursor } from './useCanvasCursor'
@@ -32,7 +33,6 @@ import {
   createRectangleRegion,
   flattenPoints,
   isDrawableRegion,
-  toEdgeRectangle,
   toDocumentPoints,
   toDocumentRectangle,
   toVisiblePoints,
@@ -216,20 +216,6 @@ function getVisibleBounds() {
   return getVisibleDimensions(baseImageWidth, baseImageHeight, props.zoomLevel)
 }
 
-function clampTransformerBox(oldBox, newBox) {
-  if (
-    newBox.width < MIN_VISIBLE_RECTANGLE_SIZE ||
-    newBox.height < MIN_VISIBLE_RECTANGLE_SIZE
-  ) {
-    return oldBox
-  }
-
-  return {
-    ...newBox,
-    ...clampVisibleRectangle(newBox, getVisibleBounds(), MIN_VISIBLE_RECTANGLE_SIZE),
-  }
-}
-
 function setNodeVisibility(nodes, isVisible) {
   nodes.forEach((node) => {
     if (typeof node.visible === 'function') {
@@ -260,83 +246,17 @@ function syncTransformedRectangleNode(node) {
   return visibleRectangle
 }
 
-function getAnchorAwareVisibleRectangle(originalRectangle, transformedRectangle) {
-  const anchor = transformer?.getActiveAnchor?.()
-
-  if (!anchor) {
-    return clampVisibleRectangle(
-      transformedRectangle,
-      getVisibleBounds(),
-      MIN_VISIBLE_RECTANGLE_SIZE
-    )
-  }
-
-  const bounds = getVisibleBounds()
-  const original = normalizeVisibleRectangle(originalRectangle)
-  const transformed = normalizeVisibleRectangle(transformedRectangle)
-
-  let left = original.x
-  let top = original.y
-  let right = original.x + original.width
-  let bottom = original.y + original.height
-
-  if (anchor.includes('left')) {
-    left = clampValue(transformed.x, 0, right - MIN_VISIBLE_RECTANGLE_SIZE)
-  }
-
-  if (anchor.includes('right')) {
-    right = clampValue(
-      transformed.x + transformed.width,
-      left + MIN_VISIBLE_RECTANGLE_SIZE,
-      bounds.width
-    )
-  }
-
-  if (anchor.includes('top')) {
-    top = clampValue(transformed.y, 0, bottom - MIN_VISIBLE_RECTANGLE_SIZE)
-  }
-
-  if (anchor.includes('bottom')) {
-    bottom = clampValue(
-      transformed.y + transformed.height,
-      top + MIN_VISIBLE_RECTANGLE_SIZE,
-      bounds.height
-    )
-  }
-
-  return {
-    x: left,
-    y: top,
-    width: right - left,
-    height: bottom - top,
-  }
-}
-
 function syncResizedRectangleNode(node, region, scaleX, scaleY) {
   const visibleRectangle = getAnchorAwareVisibleRectangle(
     toVisibleRectangle(region, scaleX, scaleY, props.zoomLevel),
-    getNodeVisibleRectangle(node)
+    getNodeVisibleRectangle(node),
+    transformer?.getActiveAnchor?.(),
+    getVisibleBounds(),
+    MIN_VISIBLE_RECTANGLE_SIZE
   )
   applyVisibleRectangleToNode(node, visibleRectangle)
 
   return visibleRectangle
-}
-
-function getTransformedRectangleEdges(originalRegion, transformedRectangle) {
-  const originalRectangle = toEdgeRectangle(originalRegion)
-  const nextRectangle = toEdgeRectangle(transformedRectangle)
-  const anchor = transformer?.getActiveAnchor?.()
-
-  if (!anchor) {
-    return nextRectangle
-  }
-
-  return {
-    left: anchor.includes('left') ? nextRectangle.left : originalRectangle.left,
-    top: anchor.includes('top') ? nextRectangle.top : originalRectangle.top,
-    right: anchor.includes('right') ? nextRectangle.right : originalRectangle.right,
-    bottom: anchor.includes('bottom') ? nextRectangle.bottom : originalRectangle.bottom,
-  }
 }
 
 function createRectangleRegionNode(region) {
@@ -409,7 +329,8 @@ function createRectangleRegionNode(region) {
       clampRectangleToBounds(
         toDocumentRectangle(visibleRectangle, scaleX, scaleY, props.zoomLevel),
         getDocumentBounds()
-      )
+      ),
+      transformer?.getActiveAnchor?.()
     )
 
     emit('update-region', { id: region.id, changes: documentRectangle })
@@ -745,7 +666,12 @@ function renderRegions() {
     anchorStrokeWidth: 2,
     borderStroke: '#0d6efd',
     borderStrokeWidth: 1,
-    boundBoxFunc: (oldBox, newBox) => clampTransformerBox(oldBox, newBox),
+    boundBoxFunc: (oldBox, newBox) => clampTransformerBox(
+      oldBox,
+      newBox,
+      getVisibleBounds(),
+      MIN_VISIBLE_RECTANGLE_SIZE
+    ),
   })
 
   let selectedNode = null

@@ -1,8 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   applyVisibleRectangleToNode,
+  clampTransformerBox,
   clampVisibleRectangle,
+  getAnchorAwareVisibleRectangle,
   getNodeVisibleRectangle,
+  getTransformedRectangleEdges,
   normalizeVisibleRectangle,
 } from '../../src/components/viewer/rectangleCanvasGeometry'
 
@@ -101,5 +104,119 @@ describe('rectangleCanvasGeometry', () => {
     expect(node.height).toHaveBeenCalledWith(40)
     expect(node.scaleX).toHaveBeenCalledWith(1)
     expect(node.scaleY).toHaveBeenCalledWith(1)
+  })
+
+  it('resizing from the left keeps the right edge fixed', () => {
+    expect(getAnchorAwareVisibleRectangle(
+      { x: 10, y: 20, width: 50, height: 40 },
+      { x: 5, y: 20, width: 55, height: 40 },
+      'middle-left',
+      { width: 100, height: 100 },
+      8
+    )).toEqual({
+      x: 5,
+      y: 20,
+      width: 55,
+      height: 40,
+    })
+  })
+
+  it('resizing from the right keeps the left edge fixed', () => {
+    expect(getAnchorAwareVisibleRectangle(
+      { x: 10, y: 20, width: 50, height: 40 },
+      { x: 10, y: 20, width: 70, height: 40 },
+      'middle-right',
+      { width: 100, height: 100 },
+      8
+    )).toEqual({
+      x: 10,
+      y: 20,
+      width: 70,
+      height: 40,
+    })
+  })
+
+  it('resizing from the top keeps the bottom edge fixed', () => {
+    expect(getAnchorAwareVisibleRectangle(
+      { x: 10, y: 20, width: 50, height: 40 },
+      { x: 10, y: 10, width: 50, height: 50 },
+      'top-center',
+      { width: 100, height: 100 },
+      8
+    )).toEqual({
+      x: 10,
+      y: 10,
+      width: 50,
+      height: 50,
+    })
+  })
+
+  it('resizing from the bottom keeps the top edge fixed', () => {
+    expect(getAnchorAwareVisibleRectangle(
+      { x: 10, y: 20, width: 50, height: 40 },
+      { x: 10, y: 20, width: 50, height: 60 },
+      'bottom-center',
+      { width: 100, height: 100 },
+      8
+    )).toEqual({
+      x: 10,
+      y: 20,
+      width: 50,
+      height: 60,
+    })
+  })
+
+  it('enforces minimum rectangle size while resizing from an anchor', () => {
+    expect(getAnchorAwareVisibleRectangle(
+      { x: 10, y: 20, width: 50, height: 40 },
+      { x: 59, y: 20, width: 1, height: 40 },
+      'middle-left',
+      { width: 100, height: 100 },
+      8
+    )).toEqual({
+      x: 52,
+      y: 20,
+      width: 8,
+      height: 40,
+    })
+  })
+
+  it('respects visible bounds while resizing from an anchor', () => {
+    expect(getAnchorAwareVisibleRectangle(
+      { x: 10, y: 20, width: 50, height: 40 },
+      { x: 10, y: 20, width: 200, height: 40 },
+      'middle-right',
+      { width: 100, height: 100 },
+      8
+    )).toEqual({
+      x: 10,
+      y: 20,
+      width: 90,
+      height: 40,
+    })
+  })
+
+  it('returns the old transformer box when the new box is below minimum size', () => {
+    const oldBox = { x: 10, y: 20, width: 30, height: 40 }
+
+    expect(clampTransformerBox(
+      oldBox,
+      { x: 10, y: 20, width: 4, height: 40 },
+      { width: 100, height: 100 },
+      8
+    )).toBe(oldBox)
+  })
+
+  it('preserves the opposite rectangle edges for inactive transformer anchors', () => {
+    expect(getTransformedRectangleEdges(
+      { left: 10, top: 20, right: 60, bottom: 80 },
+      { left: 5, top: 15, right: 60, bottom: 80 },
+      'middle-left'
+    )).toEqual({
+      left: 5,
+      top: 20,
+      right: 60,
+      bottom: 80,
+    })
   })
 })
