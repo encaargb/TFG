@@ -135,6 +135,27 @@ async function drawPointRegionWithDoubleClick(activeTool) {
   return wrapper
 }
 
+function mockCanvasWrapperBounds(wrapper, bounds = {}) {
+  const element = wrapper.find('.canvas-wrapper').element
+  const rect = {
+    left: 0,
+    top: 0,
+    right: 300,
+    bottom: 200,
+    ...bounds,
+  }
+
+  element.scrollLeft = 0
+  element.scrollTop = 0
+  element.getBoundingClientRect = vi.fn(() => ({
+    ...rect,
+    width: rect.right - rect.left,
+    height: rect.bottom - rect.top,
+  }))
+
+  return element
+}
+
 describe('AnnotationCanvas', () => {
   beforeEach(() => {
     resetKonvaMocks()
@@ -225,6 +246,52 @@ describe('AnnotationCanvas', () => {
     stage.trigger('mouseleave')
 
     expect(wrapper.emitted('mouse-position-change')).toEqual([[null], [null]])
+  })
+
+  it('does not auto-scroll during normal hover in select mode', async () => {
+    const wrapper = mountCanvas()
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const canvasWrapper = mockCanvasWrapperBounds(wrapper)
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousemove', { evt: { clientX: 295, clientY: 100 } })
+
+    expect(canvasWrapper.scrollLeft).toBe(0)
+    expect(canvasWrapper.scrollTop).toBe(0)
+  })
+
+  it('auto-scrolls right while drawing near the wrapper edge', async () => {
+    const wrapper = mountCanvas({ activeTool: 'rectangle' })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const canvasWrapper = mockCanvasWrapperBounds(wrapper)
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousedown')
+
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 150 })
+    stage.trigger('mousemove', { evt: { clientX: 295, clientY: 100 } })
+
+    expect(canvasWrapper.scrollLeft).toBe(12)
+  })
+
+  it('auto-scrolls down while drawing near the wrapper edge', async () => {
+    const wrapper = mountCanvas({ activeTool: 'rectangle' })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const canvasWrapper = mockCanvasWrapperBounds(wrapper)
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousedown')
+
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 150 })
+    stage.trigger('mousemove', { evt: { clientX: 150, clientY: 195 } })
+
+    expect(canvasWrapper.scrollTop).toBe(12)
   })
 
   it('emits a new rectangle region after dragging on the canvas', async () => {
@@ -1146,6 +1213,25 @@ describe('AnnotationCanvas', () => {
     expect(draftPolygon.points).toHaveBeenLastCalledWith([100, 50, 250, 50])
   })
 
+  it('keeps polygon draft updates while auto-scrolling near the wrapper edge', async () => {
+    const wrapper = mountCanvas({ activeTool: 'polygon' })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const canvasWrapper = mockCanvasWrapperBounds(wrapper)
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousedown')
+
+    const draftPolygon = getLineInstances().at(-1)
+
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 50 })
+    stage.trigger('mousemove', { evt: { clientX: 295, clientY: 100 } })
+
+    expect(canvasWrapper.scrollLeft).toBe(12)
+    expect(draftPolygon.points).toHaveBeenLastCalledWith([100, 50, 250, 50])
+  })
+
   it('adds a second polygon point when releasing after dragging', async () => {
     const wrapper = mountCanvas({ activeTool: 'polygon' })
     await flushImageLoad()
@@ -1436,6 +1522,22 @@ describe('AnnotationCanvas', () => {
     vertexHandle.trigger('dragstart')
 
     expect(stage.container().style.cursor).toBe('grabbing')
+  })
+
+  it('auto-scrolls while dragging a polygon vertex handle near the wrapper edge', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [polygonRegion()],
+    })
+    await flushImageLoad()
+
+    const canvasWrapper = mockCanvasWrapperBounds(wrapper)
+    const vertexHandle = getCircleInstances().slice(-3)[0]
+
+    vertexHandle.trigger('dragstart')
+    vertexHandle.trigger('dragmove', { evt: { clientX: 295, clientY: 100 } })
+
+    expect(canvasWrapper.scrollLeft).toBe(12)
   })
 
   it('resets the cursor when leaving a polygon vertex handle', async () => {

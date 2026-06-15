@@ -74,6 +74,8 @@ const MIN_VISIBLE_RECTANGLE_SIZE = 4
 const POINT_REGION_VERTEX_HANDLE_RADIUS = 4
 const RECTANGLE_TRANSFORMER_ANCHOR_SIZE = 8
 const RECTANGLE_TRANSFORMER_ANCHOR_CORNER_RADIUS = 4
+const AUTO_SCROLL_EDGE_THRESHOLD = 32
+const AUTO_SCROLL_STEP = 12
 
 const canvasContainer = ref(null)
 const canvasWrapper = ref(null)
@@ -97,6 +99,7 @@ let vertexHandles = []
 let imageLoadSequence = 0
 let hoveredRegionId = null
 let draggedRegionId = null
+let isVertexHandleDragging = false
 let selectedPointRegionPoint = null
 let suppressPointRegionClick = false
 let suppressPointRegionDoubleClick = false
@@ -194,6 +197,54 @@ function resetStaleRegionCursor(event) {
 
   hoveredRegionId = null
   resetStageCursor()
+}
+
+function getEventClientPosition(event) {
+  const evt = event?.evt
+
+  if (!evt || !Number.isFinite(evt.clientX) || !Number.isFinite(evt.clientY)) return null
+
+  return {
+    x: evt.clientX,
+    y: evt.clientY,
+  }
+}
+
+function hasActiveCanvasInteraction() {
+  return Boolean(draftRegionNode || draggedRegionId || isVertexHandleDragging)
+}
+
+function autoScrollCanvasWrapper(event) {
+  if (!hasActiveCanvasInteraction()) return
+
+  const wrapper = canvasWrapper.value
+  const pointerPosition = getEventClientPosition(event)
+
+  if (!wrapper || !pointerPosition || typeof wrapper.getBoundingClientRect !== 'function') return
+
+  const bounds = wrapper.getBoundingClientRect()
+  let scrollX = 0
+  let scrollY = 0
+
+  if (pointerPosition.x >= bounds.right - AUTO_SCROLL_EDGE_THRESHOLD) {
+    scrollX = AUTO_SCROLL_STEP
+  } else if (pointerPosition.x <= bounds.left + AUTO_SCROLL_EDGE_THRESHOLD) {
+    scrollX = -AUTO_SCROLL_STEP
+  }
+
+  if (pointerPosition.y >= bounds.bottom - AUTO_SCROLL_EDGE_THRESHOLD) {
+    scrollY = AUTO_SCROLL_STEP
+  } else if (pointerPosition.y <= bounds.top + AUTO_SCROLL_EDGE_THRESHOLD) {
+    scrollY = -AUTO_SCROLL_STEP
+  }
+
+  if (scrollX) {
+    wrapper.scrollLeft += scrollX
+  }
+
+  if (scrollY) {
+    wrapper.scrollTop += scrollY
+  }
 }
 
 function clearSelectedPointRegionPoint() {
@@ -525,7 +576,8 @@ function createRectangleRegionNode(region) {
     emit('select-region', region.id)
   })
 
-  node.on('dragmove', () => {
+  node.on('dragmove', (event) => {
+    autoScrollCanvasWrapper(event)
     applyVisibleRectangleToNode(node, clampVisibleRectangle(getNodeVisibleRectangle(node)))
     regionLayer.draw()
   })
@@ -670,7 +722,8 @@ function createPointRegionNode(region) {
     emit('select-region', region.id)
   })
 
-  node.on('dragmove', () => {
+  node.on('dragmove', (event) => {
+    autoScrollCanvasWrapper(event)
     const delta = clampVisiblePolygonDelta(visiblePoints, { x: node.x(), y: node.y() })
     node.x(delta.x)
     node.y(delta.y)
@@ -790,6 +843,7 @@ function createPointRegionVertexHandles(region, pointRegionNode) {
       if (props.activeTool !== 'select') return
 
       isHandleDragging = true
+      isVertexHandleDragging = true
       setStageCursor('grabbing')
     })
 
@@ -799,7 +853,8 @@ function createPointRegionVertexHandles(region, pointRegionNode) {
       }
     })
 
-    handle.on('dragmove', () => {
+    handle.on('dragmove', (event) => {
+      autoScrollCanvasWrapper(event)
       const bounds = getVisibleBounds()
       const nextPoint = {
         x: Math.max(0, Math.min(bounds.width, handle.x())),
@@ -827,6 +882,7 @@ function createPointRegionVertexHandles(region, pointRegionNode) {
       })
 
       isHandleDragging = false
+      isVertexHandleDragging = false
 
       if (props.activeTool === 'select' && isHandleHovered) {
         setStageCursor('grab')
@@ -1375,6 +1431,7 @@ function loadSelectedPageInKonva(src) {
 
 function handleMouseMove(event) {
   resetStaleRegionCursor(event)
+  autoScrollCanvasWrapper(event)
 
   const pos = stage.getPointerPosition()
   const coordinates = getDocumentCoordinates(
@@ -1456,6 +1513,7 @@ watch(() => props.activeTool, (newTool, previousTool) => {
   if (previousTool === 'select' && newTool !== previousTool) {
     hoveredRegionId = null
     draggedRegionId = null
+    isVertexHandleDragging = false
     clearSelectedPointRegionPoint()
     resetStageCursor()
   }
@@ -1484,6 +1542,7 @@ onBeforeUnmount(() => {
   vertexHandles = []
   hoveredRegionId = null
   draggedRegionId = null
+  isVertexHandleDragging = false
   selectedPointRegionPoint = null
   suppressPointRegionClick = false
   suppressPointRegionDoubleClick = false
