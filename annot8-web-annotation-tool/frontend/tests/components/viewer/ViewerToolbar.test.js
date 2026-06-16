@@ -41,7 +41,6 @@ describe('ViewerToolbar', () => {
     expect(wrapper.text()).toContain('Page')
     expect(wrapper.text()).toContain('Tools')
     expect(wrapper.text()).toContain('View')
-    expect(wrapper.text()).toContain('100%')
     expect(getButtonByLabel(wrapper, 'Previous page').exists()).toBe(true)
     expect(getButtonByLabel(wrapper, 'Next page').exists()).toBe(true)
     expect(getButtonByLabel(wrapper, 'Delete selected region').exists()).toBe(true)

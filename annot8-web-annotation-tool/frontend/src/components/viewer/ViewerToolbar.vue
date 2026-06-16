@@ -170,7 +170,7 @@ defineEmits([
             aria-label="Reset zoom"
             @click="$emit('reset-zoom')"
           >
-            Reset 
+            Reset
           </BButton>
           <BButton
             type="button"
