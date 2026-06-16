@@ -262,6 +262,51 @@ describe('AnnotationCanvas', () => {
     expect(canvasWrapper.scrollTop).toBe(0)
   })
 
+  it.each(['rectangle', 'polygon', 'polyline'])(
+    'sets the creation cursor inside the visible document for the %s tool',
+    async (activeTool) => {
+      mountCanvas({ activeTool })
+      await flushImageLoad()
+
+      const stage = getLatestStage()
+
+      stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+      stage.trigger('mousemove')
+
+      expect(stage.container().style.cursor).toBe('crosshair')
+    }
+  )
+
+  it('resets the creation cursor outside the visible document', async () => {
+    mountCanvas({ activeTool: 'rectangle' })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousemove')
+
+    expect(stage.container().style.cursor).toBe('crosshair')
+
+    stage.getPointerPosition.mockReturnValue({ x: 1200, y: 50 })
+    stage.trigger('mousemove')
+
+    expect(stage.container().style.cursor).toBe('default')
+  })
+
+  it('resets the creation cursor when the pointer leaves the canvas', async () => {
+    mountCanvas({ activeTool: 'polyline' })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousemove')
+    stage.trigger('mouseleave')
+
+    expect(stage.container().style.cursor).toBe('default')
+  })
+
   it('auto-scrolls right while drawing near the wrapper edge', async () => {
     const wrapper = mountCanvas({ activeTool: 'rectangle' })
     await flushImageLoad()

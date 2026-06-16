@@ -266,6 +266,21 @@ function isPointerInsideVisibleDocument(pointerPosition) {
   )
 }
 
+function isCreationTool() {
+  return ['rectangle', 'polygon', 'polyline'].includes(props.activeTool)
+}
+
+function updateCreationToolCursor(pointerPosition = stage?.getPointerPosition()) {
+  if (!isCreationTool()) return
+
+  if (isPointerInsideVisibleDocument(pointerPosition)) {
+    setStageCursor('crosshair')
+    return
+  }
+
+  resetStageCursor()
+}
+
 function updateZoom() {
   if (!stage || !pageImageNode) return
 
@@ -1284,6 +1299,8 @@ function handleMouseMove(event) {
   autoScrollCanvasWrapper(event)
 
   const pos = stage.getPointerPosition()
+  updateCreationToolCursor(pos)
+
   const coordinates = getDocumentCoordinates(
     pos,
     props.zoomLevel,
@@ -1312,6 +1329,7 @@ function handleMouseMove(event) {
 }
 
 function handleMouseLeave() {
+  resetStageCursor()
   clearPolylineEndpointExtensionPreview()
   emit('mouse-position-change', null)
 }
@@ -1364,6 +1382,10 @@ watch(
 )
 
 watch(() => props.activeTool, (newTool, previousTool) => {
+  if (newTool !== previousTool) {
+    resetStageCursor()
+  }
+
   if (['polygon', 'polyline'].includes(previousTool) && previousTool !== newTool) {
     cancelDraftPointRegion(false)
   }
@@ -1429,18 +1451,6 @@ defineExpose({
 
 .canvas-wrapper--select {
   cursor: default;
-}
-
-.canvas-wrapper--rectangle {
-  cursor: crosshair;
-}
-
-.canvas-wrapper--polygon {
-  cursor: crosshair;
-}
-
-.canvas-wrapper--polyline {
-  cursor: crosshair;
 }
 
 .konva-container {
