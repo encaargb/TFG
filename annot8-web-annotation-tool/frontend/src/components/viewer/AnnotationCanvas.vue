@@ -150,6 +150,10 @@ function getRegionCreationColor() {
     : REGION_COLOR
 }
 
+function getRegionColor(region) {
+  return /^#[0-9a-fA-F]{6}$/.test(region?.color) ? region.color : REGION_COLOR
+}
+
 const {
   getDraggedRegionId,
   setStageCursor,
@@ -758,6 +762,11 @@ function renderRegions() {
   clearPolylineEndpointExtensionPreview(false)
   regionLayer.destroyChildren()
   vertexHandles = []
+  const selectedRectangle = currentPageRegions.value.find(
+    (region) => region.id === props.selectedRegionId && region.type === 'rectangle'
+  )
+  const transformerColor = getRegionColor(selectedRectangle)
+
   transformer = new Konva.Transformer({
     rotateEnabled: false,
     flipEnabled: false,
@@ -765,9 +774,9 @@ function renderRegions() {
     anchorSize: RECTANGLE_TRANSFORMER_ANCHOR_SIZE,
     anchorCornerRadius: RECTANGLE_TRANSFORMER_ANCHOR_CORNER_RADIUS,
     anchorFill: '#ffffff',
-    anchorStroke: '#0d6efd',
+    anchorStroke: transformerColor,
     anchorStrokeWidth: 2,
-    borderStroke: '#0d6efd',
+    borderStroke: transformerColor,
     borderStrokeWidth: 1,
     boundBoxFunc: (oldBox, newBox) => clampTransformerBox(
       oldBox,

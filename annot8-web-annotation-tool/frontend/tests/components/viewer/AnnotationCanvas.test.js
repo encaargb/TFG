@@ -192,7 +192,7 @@ describe('AnnotationCanvas', () => {
   it('renders rectangle regions and attaches the transformer to the selected rectangle', async () => {
     mountCanvas({
       selectedRegionId: 'region-1',
-      regions: [rectangleRegion()],
+      regions: [rectangleRegion({ color: '#ff00aa' })],
     })
     await flushImageLoad()
 
@@ -216,8 +216,65 @@ describe('AnnotationCanvas', () => {
         anchorSize: 8,
         anchorCornerRadius: 4,
         anchorFill: '#ffffff',
-        anchorStroke: '#0d6efd',
+        anchorStroke: '#ff00aa',
         anchorStrokeWidth: 2,
+        borderStroke: '#ff00aa',
+      })
+    )
+  })
+
+  it('updates selected rectangle transformer colors when the region color changes', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [rectangleRegion({ color: '#ff00aa' })],
+    })
+    await flushImageLoad()
+
+    expect(getTransformerInstances().at(-1).config).toEqual(
+      expect.objectContaining({
+        anchorStroke: '#ff00aa',
+        borderStroke: '#ff00aa',
+      })
+    )
+
+    await wrapper.setProps({
+      regions: [rectangleRegion({ color: '#00ff88' })],
+    })
+
+    expect(getTransformerInstances().at(-1).config).toEqual(
+      expect.objectContaining({
+        anchorStroke: '#00ff88',
+        borderStroke: '#00ff88',
+      })
+    )
+  })
+
+  it('uses the fallback transformer color when no rectangle is selected', async () => {
+    mountCanvas({
+      selectedRegionId: null,
+      regions: [rectangleRegion({ color: '#ff00aa' })],
+    })
+    await flushImageLoad()
+
+    expect(getTransformerInstances().at(-1).config).toEqual(
+      expect.objectContaining({
+        anchorStroke: '#0d6efd',
+        borderStroke: '#0d6efd',
+      })
+    )
+  })
+
+  it('uses the fallback transformer color when the selected rectangle has no valid color', async () => {
+    mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [rectangleRegion({ color: 'not-a-color' })],
+    })
+    await flushImageLoad()
+
+    expect(getTransformerInstances().at(-1).config).toEqual(
+      expect.objectContaining({
+        anchorStroke: '#0d6efd',
+        borderStroke: '#0d6efd',
       })
     )
   })
@@ -2992,6 +3049,47 @@ describe('AnnotationCanvas', () => {
 
     expect(event.cancelBubble).toBe(true)
     expect(secondVertexHandle.fill).toHaveBeenLastCalledWith('#0d6efd')
+  })
+
+  it('keeps polygon and polyline vertex handles using their region colors', async () => {
+    mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [fourPointPolygonRegion({ color: '#ff00aa' })],
+    })
+    await flushImageLoad()
+
+    const polygonHandle = getCircleInstances().slice(-4)[0]
+
+    expect(polygonHandle.config).toEqual(
+      expect.objectContaining({
+        fill: '#ffffff',
+        stroke: '#ff00aa',
+      })
+    )
+
+    resetKonvaMocks()
+    Konva.Stage.mockClear()
+    Konva.Layer.mockClear()
+    Konva.Image.mockClear()
+    Konva.Rect.mockClear()
+    Konva.Line.mockClear()
+    Konva.Transformer.mockClear()
+    Konva.Circle.mockClear()
+
+    mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [threePointPolylineRegion({ color: '#00ff88' })],
+    })
+    await flushImageLoad()
+
+    const polylineHandle = getCircleInstances().slice(-3)[0]
+
+    expect(polylineHandle.config).toEqual(
+      expect.objectContaining({
+        fill: '#ffffff',
+        stroke: '#00ff88',
+      })
+    )
   })
 
   it('selects a different polyline vertex handle when dragging starts', async () => {
