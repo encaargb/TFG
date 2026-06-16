@@ -170,7 +170,7 @@ defineEmits([
             aria-label="Reset zoom"
             @click="$emit('reset-zoom')"
           >
-            {{ zoomPercentage }}%
+            Reset 
           </BButton>
           <BButton
             type="button"
@@ -183,10 +183,6 @@ defineEmits([
           </BButton>
         </BButtonGroup>
       </div>
-
-      <BBadge variant="light" class="coords border ms-md-auto">
-        ({{ mousePos.x }}, {{ mousePos.y }})
-      </BBadge>
     </BButtonToolbar>
   </BNavbar>
 </template>
@@ -216,7 +212,4 @@ defineEmits([
   text-transform: uppercase;
 }
 
-.coords {
-  font-family: monospace;
-}
 </style>
