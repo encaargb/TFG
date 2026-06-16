@@ -36,17 +36,7 @@ defineEmits(['select-page', 'toggle-sidebar'])
         :title="collapsed ? 'Show page thumbnails' : 'Hide page thumbnails'"
         @click="$emit('toggle-sidebar')"
       >
-        <svg
-          class="sidebar-toggle-icon"
-          viewBox="0 0 24 24"
-          aria-hidden="true"
-          focusable="false"
-        >
-          <rect x="3.5" y="4" width="17" height="16" rx="3"></rect>
-          <path d="M10 4v16"></path>
-          <path v-if="collapsed" d="M8.5 8.5 12 12l-3.5 3.5"></path>
-          <path v-else d="M11.5 8.5 8 12l3.5 3.5"></path>
-        </svg>
+        <i class="bi bi-list sidebar-toggle-icon" aria-hidden="true"></i>
       </BButton>
 
       <div
@@ -116,13 +106,7 @@ defineEmits(['select-page', 'toggle-sidebar'])
 }
 
 .sidebar-toggle-icon {
-  width: 1.35rem;
-  height: 1.35rem;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2.4;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  font-size: 1.25rem;
   vertical-align: middle;
 }
 
