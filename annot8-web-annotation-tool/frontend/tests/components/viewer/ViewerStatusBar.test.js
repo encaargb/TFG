@@ -31,11 +31,11 @@ describe('ViewerStatusBar', () => {
     expect(statusBar.exists()).toBe(true)
     expect(statusItems(wrapper)).toEqual([
       'Page 3 / 7',
-      'Zoom 125%',
+      'Mouse: (320, 180)',
       'Tool: Polygon',
       'Selected: none',
-      'Page regions: 4',
-      'Mouse: (320, 180)',
+      'Regions on page: 4',
+      'Zoom 125%',
       'Save: Saved',
     ])
   })
@@ -58,7 +58,7 @@ describe('ViewerStatusBar', () => {
     expect(wrapper.text()).toContain('Zoom 75%')
     expect(wrapper.text()).toContain('Tool: Rectangle')
     expect(wrapper.text()).toContain('Selected: Rectangle region-3')
-    expect(wrapper.text()).toContain('Page regions: 0')
+    expect(wrapper.text()).toContain('Regions on page: 0')
     expect(wrapper.text()).toContain('Mouse: (12, 34)')
     expect(wrapper.text()).toContain('Save: Saving...')
   })

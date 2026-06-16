@@ -74,8 +74,8 @@ const mouseLabel = computed(() => {
       <span class="status-item">
         Page {{ selectedIndex + 1 }} / {{ totalPages }}
       </span>
-      <span class="status-item">
-        Zoom {{ zoomPercentage }}%
+      <span class="status-item status-coords">
+        Mouse: {{ mouseLabel }}
       </span>
       <span class="status-item">
         Tool: {{ toolLabels[activeTool] }}
@@ -84,10 +84,10 @@ const mouseLabel = computed(() => {
         Selected: {{ selectedRegionLabel }}
       </span>
       <span class="status-item">
-        Page regions: {{ currentPageRegionCount }}
+        Regions on page: {{ currentPageRegionCount }}
       </span>
-      <span class="status-item status-coords ms-md-auto">
-        Mouse: {{ mouseLabel }}
+      <span class="status-item status-zoom ms-md-auto">
+        Zoom {{ zoomPercentage }}%
       </span>
       <span class="status-item">
         Save: {{ saveLabels[saveStatus] }}
