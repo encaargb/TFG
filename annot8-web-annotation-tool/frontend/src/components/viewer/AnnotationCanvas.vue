@@ -83,6 +83,11 @@ const props = defineProps({
     type: String,
     required: true,
   },
+  regionCreationColor: {
+    type: String,
+    default: REGION_COLOR,
+    validator: (value) => /^#[0-9a-fA-F]{6}$/.test(value),
+  },
 })
 
 const emit = defineEmits([
@@ -137,6 +142,12 @@ function getDocumentBounds() {
     width: originalImageWidth,
     height: originalImageHeight,
   }
+}
+
+function getRegionCreationColor() {
+  return /^#[0-9a-fA-F]{6}$/.test(props.regionCreationColor)
+    ? props.regionCreationColor.toLowerCase()
+    : REGION_COLOR
 }
 
 const {
@@ -832,8 +843,8 @@ function beginRectangleRegion() {
 
   draftRegionNode = new Konva.Rect({
     ...visibleStart,
-    fill: `${REGION_COLOR}26`,
-    stroke: REGION_COLOR,
+    fill: `${getRegionCreationColor()}26`,
+    stroke: getRegionCreationColor(),
     strokeWidth: 2,
     strokeScaleEnabled: false,
     dash: [6, 4],
@@ -855,7 +866,7 @@ function updateDraftRectangleRegion() {
     pageIndex: props.pageIndex,
     start: draftRegionStart,
     end: documentEnd,
-    color: REGION_COLOR,
+    color: getRegionCreationColor(),
   })
   const { scaleX, scaleY } = getRegionScale()
   const visibleRegion = toVisibleRectangle(draftRegion, scaleX, scaleY, props.zoomLevel)
@@ -886,7 +897,9 @@ function updateDraftPointRegion() {
 
   draftRegionNode.points(flattenPoints(visiblePoints))
   draftRegionNode.closed(shouldClosePolygon)
-  draftRegionNode.fill(shouldClosePolygon ? `${REGION_COLOR}26` : `${REGION_COLOR}12`)
+  draftRegionNode.fill(
+    shouldClosePolygon ? `${getRegionCreationColor()}26` : `${getRegionCreationColor()}12`
+  )
   regionLayer.draw()
 }
 
@@ -953,7 +966,7 @@ function commitDraftRectangleRegion() {
       pageIndex: props.pageIndex,
       start: draftRegionStart,
       end: documentEnd,
-      color: REGION_COLOR,
+      color: getRegionCreationColor(),
     })
 
     draftRegion = {
@@ -1009,8 +1022,8 @@ function addDraftPointRegionPoint(pointerPosition, shouldClearSelection = true) 
     draftRegionNode = new Konva.Line({
       points: [],
       closed: false,
-      fill: props.activeTool === 'polygon' ? `${REGION_COLOR}12` : 'transparent',
-      stroke: REGION_COLOR,
+      fill: props.activeTool === 'polygon' ? `${getRegionCreationColor()}12` : 'transparent',
+      stroke: getRegionCreationColor(),
       strokeWidth: 2,
       strokeScaleEnabled: false,
       dash: [6, 4],
@@ -1167,7 +1180,7 @@ function commitDraftPointRegion() {
     id: props.nextRegionId,
     pageIndex: props.pageIndex,
     points: draftPointRegionPoints,
-    color: REGION_COLOR,
+    color: getRegionCreationColor(),
   })
   const draftRegion = {
     ...region,

@@ -4,6 +4,7 @@ import AnnotationCanvas from '../components/viewer/AnnotationCanvas.vue'
 import PageSidebar from '../components/viewer/PageSidebar.vue'
 import ViewerStatusBar from '../components/viewer/ViewerStatusBar.vue'
 import ViewerToolbar from '../components/viewer/ViewerToolbar.vue'
+import { REGION_COLOR } from '../components/viewer/annotationCanvasConstants'
 import { ProjectDocumentModel } from '../models/ProjectDocumentModel'
 import { fetchProjectDocument, saveProjectRegions } from '../services/documentApi'
 import {
@@ -27,6 +28,7 @@ const selectedRegionId = ref(null)
 const sidebarCollapsed = ref(false)
 const annotationCanvas = ref(null)
 const regionSequence = ref(0)
+const regionCreationColor = ref(REGION_COLOR)
 
 const selectedPage = computed(() => pages.value[selectedIndex.value])
 const zoomPercentage = computed(() => getZoomPercentage(zoomLevel.value))
@@ -37,7 +39,6 @@ const currentPageRegionCount = computed(() => currentPageRegions.value.length)
 const selectedRegion = computed(
   () => regions.value.find((region) => region.id === selectedRegionId.value) ?? null
 )
-const selectedRegionColor = computed(() => selectedRegion.value?.color ?? '#0d6efd')
 const nextRegionId = computed(() => `region-${regionSequence.value + 1}`)
 
 const mousePos = ref(null)
@@ -152,15 +153,10 @@ function updateRegion({ id, changes }) {
   persistRegions()
 }
 
-function updateSelectedRegionColor(color) {
-  if (!selectedRegionId.value) return
+function updateNewRegionColor(color) {
+  if (!/^#[0-9a-fA-F]{6}$/.test(color)) return
 
-  updateRegion({
-    id: selectedRegionId.value,
-    changes: {
-      color,
-    },
-  })
+  regionCreationColor.value = color.toLowerCase()
 }
 
 function setMousePosition(position) {
@@ -201,7 +197,7 @@ onMounted(() => {
         :active-tool="activeTool"
         :region-count="currentPageRegionCount"
         :has-selected-region="Boolean(selectedRegionId)"
-        :selected-region-color="selectedRegionColor"
+        :region-creation-color="regionCreationColor"
         :zoom-level="zoomLevel"
         :min-zoom="MIN_ZOOM"
         :max-zoom="MAX_ZOOM"
@@ -210,7 +206,7 @@ onMounted(() => {
         @previous-page="goToPreviousPage"
         @next-page="goToNextPage"
         @set-active-tool="setActiveTool"
-        @update-selected-region-color="updateSelectedRegionColor"
+        @update-new-region-color="updateNewRegionColor"
         @delete-selected-region="deleteSelectedRegion"
         @zoom-out="zoomOut"
         @reset-zoom="resetZoom"
@@ -226,6 +222,7 @@ onMounted(() => {
         :active-tool="activeTool"
         :zoom-level="zoomLevel"
         :next-region-id="nextRegionId"
+        :region-creation-color="regionCreationColor"
         @add-region="addRegion"
         @update-region="updateRegion"
         @select-region="selectedRegionId = $event"

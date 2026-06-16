@@ -28,7 +28,7 @@ const ViewerToolbarStub = {
     'activeTool',
     'regionCount',
     'hasSelectedRegion',
-    'selectedRegionColor',
+    'regionCreationColor',
     'zoomLevel',
     'minZoom',
     'maxZoom',
@@ -39,7 +39,7 @@ const ViewerToolbarStub = {
     'previous-page',
     'next-page',
     'set-active-tool',
-    'update-selected-region-color',
+    'update-new-region-color',
     'delete-selected-region',
     'zoom-out',
     'reset-zoom',
@@ -49,13 +49,13 @@ const ViewerToolbarStub = {
     <nav class="viewer-toolbar-stub">
       <span data-testid="toolbar-state">
         {{ selectedIndex }} {{ totalPages }} {{ activeTool }} {{ regionCount }}
-        {{ hasSelectedRegion }} {{ selectedRegionColor }} {{ zoomLevel }} {{ zoomPercentage }}
+        {{ hasSelectedRegion }} {{ regionCreationColor }} {{ zoomLevel }} {{ zoomPercentage }}
       </span>
       <button type="button" data-testid="previous-page" @click="$emit('previous-page')">Previous</button>
       <button type="button" data-testid="next-page" @click="$emit('next-page')">Next</button>
       <button type="button" data-testid="tool-rectangle" @click="$emit('set-active-tool', 'rectangle')">Rectangle</button>
       <button type="button" data-testid="tool-select" @click="$emit('set-active-tool', 'select')">Select</button>
-      <button type="button" data-testid="set-region-color" @click="$emit('update-selected-region-color', '#ff00aa')">Set color</button>
+      <button type="button" data-testid="set-region-color" @click="$emit('update-new-region-color', '#ff00aa')">Set color</button>
       <button type="button" data-testid="delete-region" @click="$emit('delete-selected-region')">Delete</button>
       <button type="button" data-testid="zoom-in" @click="$emit('zoom-in')">Zoom in</button>
       <button type="button" data-testid="zoom-out" @click="$emit('zoom-out')">Zoom out</button>
@@ -99,6 +99,7 @@ const AnnotationCanvasStub = {
     'activeTool',
     'zoomLevel',
     'nextRegionId',
+    'regionCreationColor',
   ],
   emits: [
     'add-region',
@@ -116,6 +117,7 @@ const AnnotationCanvasStub = {
       <span data-testid="canvas-state">
         {{ selectedPage }} {{ pageIndex }} {{ regions.length }}
         {{ selectedRegionId }} {{ activeTool }} {{ zoomLevel }} {{ nextRegionId }}
+        {{ regionCreationColor }}
       </span>
       <button
         type="button"
@@ -128,7 +130,7 @@ const AnnotationCanvasStub = {
           top: 20,
           right: 40,
           bottom: 60,
-          color: '#0d6efd',
+          color: regionCreationColor,
           annotations: []
         })"
       >
@@ -146,7 +148,7 @@ const AnnotationCanvasStub = {
             { x: 40, y: 20 },
             { x: 25, y: 60 }
           ],
-          color: '#0d6efd',
+          color: regionCreationColor,
           annotations: []
         })"
       >
@@ -163,7 +165,7 @@ const AnnotationCanvasStub = {
             { x: 10, y: 20 },
             { x: 40, y: 60 }
           ],
-          color: '#0d6efd',
+          color: regionCreationColor,
           annotations: []
         })"
       >
@@ -263,7 +265,7 @@ describe('ViewerPage', () => {
         activeTool: 'select',
         regionCount: 0,
         hasSelectedRegion: false,
-        selectedRegionColor: '#0d6efd',
+        regionCreationColor: '#0d6efd',
         zoomLevel: 1,
         zoomPercentage: 100,
       })
@@ -277,6 +279,7 @@ describe('ViewerPage', () => {
         activeTool: 'select',
         zoomLevel: 1,
         nextRegionId: 'region-1',
+        regionCreationColor: '#0d6efd',
       })
     )
     expect(statusBar.text()).toContain('Page 1 / 15')
@@ -391,7 +394,7 @@ describe('ViewerPage', () => {
     await wrapper.find('[data-testid="select-region"]').trigger('click')
 
     expect(getStub(wrapper, ViewerToolbarStub).props('hasSelectedRegion')).toBe(true)
-    expect(getStub(wrapper, ViewerToolbarStub).props('selectedRegionColor')).toBe('#0d6efd')
+    expect(getStub(wrapper, ViewerToolbarStub).props('regionCreationColor')).toBe('#0d6efd')
     expect(getStub(wrapper, AnnotationCanvasStub).props('selectedRegionId')).toBe('region-1')
     expect(getStub(wrapper, ViewerStatusBarStub).props('selectedRegion')).toEqual(
       expect.objectContaining({
@@ -499,35 +502,45 @@ describe('ViewerPage', () => {
     )
   })
 
-  it('passes selected region color to the toolbar and updates it through the existing region flow', async () => {
+  it('stores the selected creation color and passes it to the toolbar and canvas', async () => {
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
+
+    expect(getStub(wrapper, ViewerToolbarStub).props('regionCreationColor')).toBe('#0d6efd')
+    expect(getStub(wrapper, AnnotationCanvasStub).props('regionCreationColor')).toBe('#0d6efd')
+
+    await wrapper.find('[data-testid="set-region-color"]').trigger('click')
+
+    expect(getStub(wrapper, ViewerToolbarStub).props('regionCreationColor')).toBe('#ff00aa')
+    expect(getStub(wrapper, AnnotationCanvasStub).props('regionCreationColor')).toBe('#ff00aa')
+  })
+
+  it('uses the selected creation color for new regions without recoloring existing regions', async () => {
     const wrapper = mountViewerPage()
     await flushMountedFetch()
 
     await wrapper.find('[data-testid="add-region"]').trigger('click')
-    await wrapper.find('[data-testid="select-region"]').trigger('click')
-
-    expect(getStub(wrapper, ViewerToolbarStub).props()).toEqual(
-      expect.objectContaining({
-        hasSelectedRegion: true,
-        selectedRegionColor: '#0d6efd',
-      })
-    )
-
-    await wrapper.find('[data-testid="set-region-color"]').trigger('click')
 
     expect(ProjectDocumentModel.regions[0]).toEqual(
       expect.objectContaining({
         id: 'region-1',
-        color: '#ff00aa',
+        color: '#0d6efd',
       })
     )
-    expect(getStub(wrapper, ViewerToolbarStub).props('selectedRegionColor')).toBe('#ff00aa')
-    expect(getStub(wrapper, ViewerStatusBarStub).props('selectedRegion')).toEqual(
+
+    await wrapper.find('[data-testid="set-region-color"]').trigger('click')
+    await wrapper.find('[data-testid="add-region"]').trigger('click')
+
+    expect(ProjectDocumentModel.regions).toEqual([
       expect.objectContaining({
         id: 'region-1',
+        color: '#0d6efd',
+      }),
+      expect.objectContaining({
+        id: 'region-2',
         color: '#ff00aa',
-      })
-    )
+      }),
+    ])
     expect(saveProjectRegionsSpy).toHaveBeenLastCalledWith('doc1', ProjectDocumentModel.regions)
   })
 

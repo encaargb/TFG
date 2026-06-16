@@ -10,7 +10,7 @@ function mountToolbar(props = {}) {
       activeTool: 'select',
       regionCount: 2,
       hasSelectedRegion: true,
-      selectedRegionColor: '#123abc',
+      regionCreationColor: '#123abc',
       zoomLevel: 1,
       minZoom: 0.25,
       maxZoom: 8,
@@ -34,7 +34,7 @@ function expectToolButtonPressed(wrapper, label, isPressed = true) {
 }
 
 function getRegionColorInput(wrapper) {
-  return wrapper.find('input[aria-label="Region color"]')
+  return wrapper.find('input[aria-label="New region color"]')
 }
 
 describe('ViewerToolbar', () => {
@@ -69,7 +69,7 @@ describe('ViewerToolbar', () => {
     expectButtonDisabled(wrapper, 'Delete selected region')
     expectButtonDisabled(wrapper, 'Zoom out')
     expectButtonDisabled(wrapper, 'Zoom in', false)
-    expect(getRegionColorInput(wrapper).element.disabled).toBe(true)
+    expect(getRegionColorInput(wrapper).element.disabled).toBe(false)
   })
 
   it('disables next and zoom in at their upper bounds', () => {
@@ -89,36 +89,40 @@ describe('ViewerToolbar', () => {
     expectButtonDisabled(wrapper, 'Delete selected region', false)
   })
 
-  it('shows the selected region color when a region is selected', () => {
+  it('uses the existing color control for the new-region color', () => {
     const wrapper = mountToolbar({
-      hasSelectedRegion: true,
-      selectedRegionColor: '#ff00aa',
+      regionCreationColor: '#ff00aa',
     })
 
     expect(getRegionColorInput(wrapper).element.value).toBe('#ff00aa')
     expect(getRegionColorInput(wrapper).element.disabled).toBe(false)
   })
 
-  it('emits selected region color changes from the color input', async () => {
-    const wrapper = mountToolbar({
-      hasSelectedRegion: true,
-      selectedRegionColor: '#123abc',
-    })
+  it('renders only one toolbar color control', () => {
+    const wrapper = mountToolbar()
 
-    await getRegionColorInput(wrapper).setValue('#00ff88')
-
-    expect(wrapper.emitted('update-selected-region-color')).toEqual([['#00ff88']])
+    expect(wrapper.findAll('input[type="color"]')).toHaveLength(1)
   })
 
-  it('does not emit color changes when no region is selected', async () => {
+  it('emits new-region color changes from the color input', async () => {
     const wrapper = mountToolbar({
-      hasSelectedRegion: false,
-      selectedRegionColor: '#123abc',
+      regionCreationColor: '#123abc',
     })
 
     await getRegionColorInput(wrapper).setValue('#00ff88')
 
-    expect(wrapper.emitted('update-selected-region-color')).toBeUndefined()
+    expect(wrapper.emitted('update-new-region-color')).toEqual([['#00ff88']])
+  })
+
+  it('emits color changes even when no region is selected', async () => {
+    const wrapper = mountToolbar({
+      hasSelectedRegion: false,
+      regionCreationColor: '#123abc',
+    })
+
+    await getRegionColorInput(wrapper).setValue('#00ff88')
+
+    expect(wrapper.emitted('update-new-region-color')).toEqual([['#00ff88']])
   })
 
   it('marks the active annotation tool', () => {

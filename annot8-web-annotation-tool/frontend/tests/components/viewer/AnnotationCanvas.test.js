@@ -110,8 +110,8 @@ function threePointPolylineRegion(overrides = {}) {
   })
 }
 
-async function drawPointRegionWithDoubleClick(activeTool) {
-  const wrapper = mountCanvas({ activeTool })
+async function drawPointRegionWithDoubleClick(activeTool, props = {}) {
+  const wrapper = mountCanvas({ activeTool, ...props })
   await flushImageLoad()
 
   const stage = getLatestStage()
@@ -367,6 +367,132 @@ describe('AnnotationCanvas', () => {
     expect(wrapper.emitted('add-region')[0][0]).not.toHaveProperty('width')
     expect(wrapper.emitted('add-region')[0][0]).not.toHaveProperty('height')
     expect(wrapper.emitted('select-region')).toBeUndefined()
+  })
+
+  it('uses the selected creation color for rectangle drafts and created rectangles', async () => {
+    const wrapper = mountCanvas({
+      activeTool: 'rectangle',
+      regionCreationColor: '#ff00aa',
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousedown')
+
+    const draftRectangle = getRectInstances().at(-1)
+
+    expect(draftRectangle.config).toEqual(
+      expect.objectContaining({
+        fill: '#ff00aa26',
+        stroke: '#ff00aa',
+      })
+    )
+
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 150 })
+    stage.trigger('mousemove')
+    stage.trigger('mouseup')
+
+    expect(wrapper.emitted('add-region')[0][0]).toEqual(
+      expect.objectContaining({
+        type: 'rectangle',
+        color: '#ff00aa',
+      })
+    )
+  })
+
+  it('falls back to the default region color for invalid creation colors', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const wrapper = mountCanvas({
+      activeTool: 'rectangle',
+      regionCreationColor: 'not-a-color',
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousedown')
+
+    const draftRectangle = getRectInstances().at(-1)
+
+    expect(draftRectangle.config).toEqual(
+      expect.objectContaining({
+        fill: '#0d6efd26',
+        stroke: '#0d6efd',
+      })
+    )
+
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 150 })
+    stage.trigger('mouseup')
+
+    expect(wrapper.emitted('add-region')[0][0]).toEqual(
+      expect.objectContaining({
+        color: '#0d6efd',
+      })
+    )
+
+    warnSpy.mockRestore()
+  })
+
+  it('uses the selected creation color for polygon drafts and created polygons', async () => {
+    const wrapper = mountCanvas({
+      activeTool: 'polygon',
+      regionCreationColor: '#ff00aa',
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousedown', { evt: { detail: 1 } })
+    stage.trigger('click', { evt: { detail: 1 } })
+
+    const draftPolygon = getLineInstances().at(-1)
+
+    expect(draftPolygon.config).toEqual(
+      expect.objectContaining({
+        fill: '#ff00aa12',
+        stroke: '#ff00aa',
+      })
+    )
+
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 50 })
+    stage.trigger('mousedown', { evt: { detail: 1 } })
+    stage.trigger('click', { evt: { detail: 1 } })
+
+    stage.getPointerPosition.mockReturnValue({ x: 200, y: 150 })
+    stage.trigger('mousedown', { evt: { detail: 1 } })
+    stage.trigger('click', { evt: { detail: 1 } })
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+
+    expect(wrapper.emitted('add-region')[0][0]).toEqual(
+      expect.objectContaining({
+        type: 'polygon',
+        color: '#ff00aa',
+      })
+    )
+  })
+
+  it('uses the selected creation color for polyline drafts and created polylines', async () => {
+    const wrapper = await drawPointRegionWithDoubleClick('polyline', {
+      regionCreationColor: '#ff00aa',
+    })
+
+    const draftPolyline = getLineInstances().find((line) => line.config.dash)
+
+    expect(draftPolyline.config).toEqual(
+      expect.objectContaining({
+        fill: 'transparent',
+        stroke: '#ff00aa',
+      })
+    )
+    expect(wrapper.emitted('add-region')[0][0]).toEqual(
+      expect.objectContaining({
+        type: 'polyline',
+        color: '#ff00aa',
+      })
+    )
   })
 
   it('normalizes rectangle creation when dragging from bottom-right to top-left', async () => {
