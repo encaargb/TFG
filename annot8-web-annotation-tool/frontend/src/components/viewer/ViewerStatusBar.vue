@@ -185,7 +185,7 @@ function updateZoomLevel(event) {
         <span class="statusbar-zoom-percentage">{{ zoomPercentage }}%</span>
       </span>
       <span class="status-item">
-        Save: {{ saveLabels[saveStatus] }}
+        {{ saveLabels[saveStatus] }}
       </span>
     </div>
   </footer>

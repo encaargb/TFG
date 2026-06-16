@@ -49,7 +49,7 @@ describe('ViewerStatusBar', () => {
       'Selected: none',
       'Regions on page: 4',
       '125%',
-      'Save: Saved',
+      'Saved',
     ])
     expect(getZoomSlider(wrapper).exists()).toBe(true)
   })
@@ -76,7 +76,7 @@ describe('ViewerStatusBar', () => {
     expect(wrapper.text()).toContain('Selected: Rectangle region-3')
     expect(wrapper.text()).toContain('Regions on page: 0')
     expect(wrapper.text()).toContain('Mouse: (12, 34)')
-    expect(wrapper.text()).toContain('Save: Saving...')
+    expect(wrapper.text()).toContain('Saving...')
   })
 
   it('renders the zoom slider with zoom configuration props', () => {
@@ -169,13 +169,13 @@ describe('ViewerStatusBar', () => {
     })
 
     expect(wrapper.text()).toContain('Mouse: (–, –)')
-    expect(wrapper.text()).toContain('Save: Saved')
+    expect(wrapper.text()).toContain('Saved')
 
     await wrapper.setProps({ saveStatus: 'saving' })
-    expect(wrapper.text()).toContain('Save: Saving...')
+    expect(wrapper.text()).toContain('Saving...')
 
     await wrapper.setProps({ saveStatus: 'error' })
-    expect(wrapper.text()).toContain('Save: Save error')
+    expect(wrapper.text()).toContain('Save error')
   })
 
   it('warns when activeTool is outside the supported viewer tools', () => {
