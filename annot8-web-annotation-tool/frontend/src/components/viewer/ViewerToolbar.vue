@@ -104,39 +104,47 @@ defineEmits([
         <BButtonGroup size="sm" aria-label="Region tools">
           <BButton
             type="button"
-            aria-label="Select region tool"
+            aria-label="Select tool"
+            title="Select tool"
             :variant="activeTool === 'select' ? 'secondary' : 'outline-secondary'"
             :aria-pressed="activeTool === 'select'"
             @click="$emit('set-active-tool', 'select')"
           >
-            Select
+            <i class="bi bi-cursor-fill toolbar-icon" aria-hidden="true"></i>
+            <span class="visually-hidden">Select</span>
           </BButton>
           <BButton
             type="button"
             aria-label="Select rectangle tool"
+            title="Rectangle tool"
             :variant="activeTool === 'rectangle' ? 'secondary' : 'outline-secondary'"
             :aria-pressed="activeTool === 'rectangle'"
             @click="$emit('set-active-tool', 'rectangle')"
           >
-            Rectangle
+            <i class="bi bi-square toolbar-icon" aria-hidden="true"></i>
+            <span class="visually-hidden">Rectangle</span>
           </BButton>
           <BButton
             type="button"
             aria-label="Select polygon tool"
+            title="Polygon tool"
             :variant="activeTool === 'polygon' ? 'secondary' : 'outline-secondary'"
             :aria-pressed="activeTool === 'polygon'"
             @click="$emit('set-active-tool', 'polygon')"
           >
-            Polygon
+            <i class="bi bi-pentagon toolbar-icon" aria-hidden="true"></i>
+            <span class="visually-hidden">Polygon</span>
           </BButton>
           <BButton
             type="button"
             aria-label="Select polyline tool"
+            title="Polyline tool"
             :variant="activeTool === 'polyline' ? 'secondary' : 'outline-secondary'"
             :aria-pressed="activeTool === 'polyline'"
             @click="$emit('set-active-tool', 'polyline')"
           >
-            Polyline
+            <i class="bi bi-bezier2 toolbar-icon" aria-hidden="true"></i>
+            <span class="visually-hidden">Polyline</span>
           </BButton>
         </BButtonGroup>
 
@@ -212,4 +220,8 @@ defineEmits([
   text-transform: uppercase;
 }
 
+.toolbar-icon {
+  font-size: 1rem;
+  vertical-align: middle;
+}
 </style>
