@@ -28,6 +28,7 @@ const ViewerToolbarStub = {
     'activeTool',
     'regionCount',
     'hasSelectedRegion',
+    'selectedRegionColor',
     'zoomLevel',
     'minZoom',
     'maxZoom',
@@ -38,6 +39,7 @@ const ViewerToolbarStub = {
     'previous-page',
     'next-page',
     'set-active-tool',
+    'update-selected-region-color',
     'delete-selected-region',
     'zoom-out',
     'reset-zoom',
@@ -47,12 +49,13 @@ const ViewerToolbarStub = {
     <nav class="viewer-toolbar-stub">
       <span data-testid="toolbar-state">
         {{ selectedIndex }} {{ totalPages }} {{ activeTool }} {{ regionCount }}
-        {{ hasSelectedRegion }} {{ zoomLevel }} {{ zoomPercentage }}
+        {{ hasSelectedRegion }} {{ selectedRegionColor }} {{ zoomLevel }} {{ zoomPercentage }}
       </span>
       <button type="button" data-testid="previous-page" @click="$emit('previous-page')">Previous</button>
       <button type="button" data-testid="next-page" @click="$emit('next-page')">Next</button>
       <button type="button" data-testid="tool-rectangle" @click="$emit('set-active-tool', 'rectangle')">Rectangle</button>
       <button type="button" data-testid="tool-select" @click="$emit('set-active-tool', 'select')">Select</button>
+      <button type="button" data-testid="set-region-color" @click="$emit('update-selected-region-color', '#ff00aa')">Set color</button>
       <button type="button" data-testid="delete-region" @click="$emit('delete-selected-region')">Delete</button>
       <button type="button" data-testid="zoom-in" @click="$emit('zoom-in')">Zoom in</button>
       <button type="button" data-testid="zoom-out" @click="$emit('zoom-out')">Zoom out</button>
@@ -260,6 +263,7 @@ describe('ViewerPage', () => {
         activeTool: 'select',
         regionCount: 0,
         hasSelectedRegion: false,
+        selectedRegionColor: '#0d6efd',
         zoomLevel: 1,
         zoomPercentage: 100,
       })
@@ -387,6 +391,7 @@ describe('ViewerPage', () => {
     await wrapper.find('[data-testid="select-region"]').trigger('click')
 
     expect(getStub(wrapper, ViewerToolbarStub).props('hasSelectedRegion')).toBe(true)
+    expect(getStub(wrapper, ViewerToolbarStub).props('selectedRegionColor')).toBe('#0d6efd')
     expect(getStub(wrapper, AnnotationCanvasStub).props('selectedRegionId')).toBe('region-1')
     expect(getStub(wrapper, ViewerStatusBarStub).props('selectedRegion')).toEqual(
       expect.objectContaining({
@@ -492,6 +497,38 @@ describe('ViewerPage', () => {
         currentPageRegionCount: 0,
       })
     )
+  })
+
+  it('passes selected region color to the toolbar and updates it through the existing region flow', async () => {
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
+
+    await wrapper.find('[data-testid="add-region"]').trigger('click')
+    await wrapper.find('[data-testid="select-region"]').trigger('click')
+
+    expect(getStub(wrapper, ViewerToolbarStub).props()).toEqual(
+      expect.objectContaining({
+        hasSelectedRegion: true,
+        selectedRegionColor: '#0d6efd',
+      })
+    )
+
+    await wrapper.find('[data-testid="set-region-color"]').trigger('click')
+
+    expect(ProjectDocumentModel.regions[0]).toEqual(
+      expect.objectContaining({
+        id: 'region-1',
+        color: '#ff00aa',
+      })
+    )
+    expect(getStub(wrapper, ViewerToolbarStub).props('selectedRegionColor')).toBe('#ff00aa')
+    expect(getStub(wrapper, ViewerStatusBarStub).props('selectedRegion')).toEqual(
+      expect.objectContaining({
+        id: 'region-1',
+        color: '#ff00aa',
+      })
+    )
+    expect(saveProjectRegionsSpy).toHaveBeenLastCalledWith('doc1', ProjectDocumentModel.regions)
   })
 
   it('deletes the selected region from toolbar delete events', async () => {

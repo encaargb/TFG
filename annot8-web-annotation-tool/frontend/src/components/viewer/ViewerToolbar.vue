@@ -1,8 +1,12 @@
 <script setup>
+import { computed } from 'vue'
 import { MousePointer2, Pentagon, Square, Waypoints } from '@lucide/vue'
 import { BBadge, BButton, BButtonGroup, BButtonToolbar, BNavbar } from 'bootstrap-vue-next'
 
-defineProps({
+const DEFAULT_REGION_COLOR = '#0d6efd'
+const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/
+
+const props = defineProps({
   selectedIndex: {
     type: Number,
     required: true,
@@ -26,6 +30,11 @@ defineProps({
   hasSelectedRegion: {
     type: Boolean,
     required: true,
+  },
+  selectedRegionColor: {
+    type: String,
+    default: '#0d6efd',
+    validator: (value) => /^#[0-9a-fA-F]{6}$/.test(value),
   },
   zoomLevel: {
     type: Number,
@@ -53,15 +62,30 @@ defineProps({
   },
 })
 
-defineEmits([
+const emit = defineEmits([
   'previous-page',
   'next-page',
   'set-active-tool',
+  'update-selected-region-color',
   'delete-selected-region',
   'zoom-out',
   'reset-zoom',
   'zoom-in',
 ])
+
+const regionColorValue = computed(() =>
+  HEX_COLOR_PATTERN.test(props.selectedRegionColor)
+    ? props.selectedRegionColor
+    : DEFAULT_REGION_COLOR
+)
+
+function updateSelectedRegionColor(event) {
+  const color = event?.target?.value
+
+  if (!props.hasSelectedRegion || !HEX_COLOR_PATTERN.test(color)) return
+
+  emit('update-selected-region-color', color)
+}
 </script>
 
 <template>
@@ -177,6 +201,20 @@ defineEmits([
           </BButton>
         </BButtonGroup>
 
+        <label class="visually-hidden" for="region-color-input">
+          Region color
+        </label>
+        <input
+          id="region-color-input"
+          class="region-color-input form-control form-control-color form-control-sm"
+          type="color"
+          aria-label="Region color"
+          title="Region color"
+          :disabled="!hasSelectedRegion"
+          :value="regionColorValue"
+          @input="updateSelectedRegionColor"
+        />
+
         <BButton
           type="button"
           size="sm"
@@ -257,5 +295,12 @@ defineEmits([
 
 .toolbar-icon {
   display: block;
+}
+
+.region-color-input {
+  flex: 0 0 auto;
+  width: 2rem;
+  height: 2rem;
+  padding: 0.2rem;
 }
 </style>

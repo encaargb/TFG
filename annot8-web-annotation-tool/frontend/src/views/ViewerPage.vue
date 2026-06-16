@@ -37,6 +37,7 @@ const currentPageRegionCount = computed(() => currentPageRegions.value.length)
 const selectedRegion = computed(
   () => regions.value.find((region) => region.id === selectedRegionId.value) ?? null
 )
+const selectedRegionColor = computed(() => selectedRegion.value?.color ?? '#0d6efd')
 const nextRegionId = computed(() => `region-${regionSequence.value + 1}`)
 
 const mousePos = ref(null)
@@ -151,6 +152,17 @@ function updateRegion({ id, changes }) {
   persistRegions()
 }
 
+function updateSelectedRegionColor(color) {
+  if (!selectedRegionId.value) return
+
+  updateRegion({
+    id: selectedRegionId.value,
+    changes: {
+      color,
+    },
+  })
+}
+
 function setMousePosition(position) {
   mousePos.value = position
 }
@@ -189,6 +201,7 @@ onMounted(() => {
         :active-tool="activeTool"
         :region-count="currentPageRegionCount"
         :has-selected-region="Boolean(selectedRegionId)"
+        :selected-region-color="selectedRegionColor"
         :zoom-level="zoomLevel"
         :min-zoom="MIN_ZOOM"
         :max-zoom="MAX_ZOOM"
@@ -197,6 +210,7 @@ onMounted(() => {
         @previous-page="goToPreviousPage"
         @next-page="goToNextPage"
         @set-active-tool="setActiveTool"
+        @update-selected-region-color="updateSelectedRegionColor"
         @delete-selected-region="deleteSelectedRegion"
         @zoom-out="zoomOut"
         @reset-zoom="resetZoom"
