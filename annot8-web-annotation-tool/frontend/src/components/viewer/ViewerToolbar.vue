@@ -97,9 +97,6 @@ defineEmits([
           </BButton>
         </BButtonGroup>
 
-        <BBadge variant="light" class="status-pill border">
-          {{ selectedIndex + 1 }} / {{ totalPages }}
-        </BBadge>
       </div>
 
       <div class="toolbar-section toolbar-section--tools">
@@ -142,10 +139,6 @@ defineEmits([
             Polyline
           </BButton>
         </BButtonGroup>
-
-        <BBadge variant="light" class="status-pill border">
-          Regions: {{ regionCount }}
-        </BBadge>
 
         <BButton
           type="button"
@@ -221,11 +214,6 @@ defineEmits([
   font-weight: 700;
   letter-spacing: 0;
   text-transform: uppercase;
-}
-
-.status-pill {
-  color: #495057;
-  font-weight: 500;
 }
 
 .coords {
