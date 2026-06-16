@@ -29,11 +29,6 @@ const ViewerToolbarStub = {
     'regionCount',
     'hasSelectedRegion',
     'regionCreationColor',
-    'zoomLevel',
-    'minZoom',
-    'maxZoom',
-    'zoomPercentage',
-    'mousePos',
   ],
   emits: [
     'previous-page',
@@ -41,15 +36,12 @@ const ViewerToolbarStub = {
     'set-active-tool',
     'update-new-region-color',
     'delete-selected-region',
-    'zoom-out',
-    'reset-zoom',
-    'zoom-in',
   ],
   template: `
     <nav class="viewer-toolbar-stub">
       <span data-testid="toolbar-state">
         {{ selectedIndex }} {{ totalPages }} {{ activeTool }} {{ regionCount }}
-        {{ hasSelectedRegion }} {{ regionCreationColor }} {{ zoomLevel }} {{ zoomPercentage }}
+        {{ hasSelectedRegion }} {{ regionCreationColor }}
       </span>
       <button type="button" data-testid="previous-page" @click="$emit('previous-page')">Previous</button>
       <button type="button" data-testid="next-page" @click="$emit('next-page')">Next</button>
@@ -57,9 +49,6 @@ const ViewerToolbarStub = {
       <button type="button" data-testid="tool-select" @click="$emit('set-active-tool', 'select')">Select</button>
       <button type="button" data-testid="set-region-color" @click="$emit('update-new-region-color', '#ff00aa')">Set color</button>
       <button type="button" data-testid="delete-region" @click="$emit('delete-selected-region')">Delete</button>
-      <button type="button" data-testid="zoom-in" @click="$emit('zoom-in')">Zoom in</button>
-      <button type="button" data-testid="zoom-out" @click="$emit('zoom-out')">Zoom out</button>
-      <button type="button" data-testid="reset-zoom" @click="$emit('reset-zoom')">Reset</button>
     </nav>
   `,
 }
@@ -75,7 +64,13 @@ const ViewerStatusBarStub = {
     'currentPageRegionCount',
     'mousePos',
     'saveStatus',
+    'zoomLevel',
+    'minZoomLevel',
+    'maxZoomLevel',
+    'zoomStep',
+    'defaultZoomLevel',
   ],
+  emits: ['zoom-out', 'zoom-in', 'update-zoom-level'],
   template: `
     <footer class="viewer-status-bar-stub">
       Page {{ selectedIndex + 1 }} / {{ totalPages }}
@@ -85,6 +80,9 @@ const ViewerStatusBarStub = {
       Page regions {{ currentPageRegionCount }}
       Mouse {{ mousePos ? mousePos.x : '-' }} {{ mousePos ? mousePos.y : '-' }}
       Save {{ saveStatus }}
+      <button type="button" data-testid="zoom-in" @click="$emit('zoom-in')">Zoom in</button>
+      <button type="button" data-testid="zoom-out" @click="$emit('zoom-out')">Zoom out</button>
+      <button type="button" data-testid="set-zoom-slider" @click="$emit('update-zoom-level', 2)">Set zoom</button>
     </footer>
   `,
 }
@@ -266,8 +264,6 @@ describe('ViewerPage', () => {
         regionCount: 0,
         hasSelectedRegion: false,
         regionCreationColor: '#0d6efd',
-        zoomLevel: 1,
-        zoomPercentage: 100,
       })
     )
     expect(canvas.props()).toEqual(
@@ -291,6 +287,12 @@ describe('ViewerPage', () => {
         currentPageRegionCount: 0,
         mousePos: null,
         saveStatus: 'saved',
+        zoomLevel: 1,
+        zoomPercentage: 100,
+        minZoomLevel: 0.25,
+        maxZoomLevel: 8,
+        zoomStep: 0.25,
+        defaultZoomLevel: 1,
       })
     )
   })
@@ -318,7 +320,7 @@ describe('ViewerPage', () => {
     expect(updateZoomSpy).toHaveBeenCalledTimes(1)
   })
 
-  it('wires toolbar navigation, tool, and zoom events to child props', async () => {
+  it('wires toolbar navigation and tool events, and status bar zoom events to child props', async () => {
     const wrapper = mountViewerPage()
     await flushMountedFetch()
 
@@ -330,6 +332,11 @@ describe('ViewerPage', () => {
       expect.objectContaining({
         selectedIndex: 1,
         activeTool: 'rectangle',
+      })
+    )
+    expect(getStub(wrapper, ViewerStatusBarStub).props()).toEqual(
+      expect.objectContaining({
+        selectedIndex: 1,
         zoomLevel: 1.25,
         zoomPercentage: 125,
       })
@@ -342,16 +349,44 @@ describe('ViewerPage', () => {
       })
     )
 
-    await wrapper.find('[data-testid="reset-zoom"]').trigger('click')
     await wrapper.find('[data-testid="previous-page"]').trigger('click')
 
     expect(getStub(wrapper, ViewerToolbarStub).props()).toEqual(
       expect.objectContaining({
         selectedIndex: 0,
+      })
+    )
+    expect(getStub(wrapper, ViewerStatusBarStub).props()).toEqual(
+      expect.objectContaining({
         zoomLevel: 1,
         zoomPercentage: 100,
       })
     )
+  })
+
+  it('updates zoom from the status bar slider and clamps it to configured limits', async () => {
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
+
+    await wrapper.find('[data-testid="set-zoom-slider"]').trigger('click')
+
+    expect(getStub(wrapper, ViewerStatusBarStub).props()).toEqual(
+      expect.objectContaining({
+        zoomLevel: 2,
+        zoomPercentage: 200,
+      })
+    )
+    expect(getStub(wrapper, AnnotationCanvasStub).props('zoomLevel')).toBe(2)
+
+    getStub(wrapper, ViewerStatusBarStub).vm.$emit('update-zoom-level', 99)
+    await wrapper.vm.$nextTick()
+
+    expect(getStub(wrapper, ViewerStatusBarStub).props('zoomLevel')).toBe(8)
+
+    getStub(wrapper, ViewerStatusBarStub).vm.$emit('update-zoom-level', -1)
+    await wrapper.vm.$nextTick()
+
+    expect(getStub(wrapper, ViewerStatusBarStub).props('zoomLevel')).toBe(0.25)
   })
 
   it('stores regions emitted by the canvas and updates selected-region state', async () => {

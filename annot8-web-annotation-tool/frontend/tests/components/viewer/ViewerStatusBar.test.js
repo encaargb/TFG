@@ -7,7 +7,12 @@ function mountStatusBar(props = {}) {
     props: {
       selectedIndex: 2,
       totalPages: 7,
+      zoomLevel: 1.25,
       zoomPercentage: 125,
+      minZoomLevel: 0.25,
+      maxZoomLevel: 8,
+      zoomStep: 0.25,
+      defaultZoomLevel: 1,
       activeTool: 'polygon',
       selectedRegion: null,
       currentPageRegionCount: 4,
@@ -20,6 +25,14 @@ function mountStatusBar(props = {}) {
 
 function statusItems(wrapper) {
   return wrapper.findAll('.status-item').map((item) => item.text())
+}
+
+function getButtonByLabel(wrapper, label) {
+  return wrapper.find(`button[aria-label="${label}"]`)
+}
+
+function getZoomSlider(wrapper) {
+  return wrapper.find('input[aria-label="Zoom level"]')
 }
 
 describe('ViewerStatusBar', () => {
@@ -35,9 +48,10 @@ describe('ViewerStatusBar', () => {
       'Tool: Polygon',
       'Selected: none',
       'Regions on page: 4',
-      'Zoom 125%',
+      '125%',
       'Save: Saved',
     ])
+    expect(getZoomSlider(wrapper).exists()).toBe(true)
   })
 
   it('updates displayed status from prop changes', async () => {
@@ -46,6 +60,7 @@ describe('ViewerStatusBar', () => {
     await wrapper.setProps({
       selectedIndex: 0,
       totalPages: 2,
+      zoomLevel: 0.75,
       zoomPercentage: 75,
       activeTool: 'rectangle',
       selectedRegion: { id: 'region-3', type: 'rectangle' },
@@ -55,12 +70,84 @@ describe('ViewerStatusBar', () => {
     })
 
     expect(wrapper.text()).toContain('Page 1 / 2')
-    expect(wrapper.text()).toContain('Zoom 75%')
+    expect(wrapper.text()).toContain('75%')
+    expect(wrapper.text()).not.toContain('Zoom')
     expect(wrapper.text()).toContain('Tool: Rectangle')
     expect(wrapper.text()).toContain('Selected: Rectangle region-3')
     expect(wrapper.text()).toContain('Regions on page: 0')
     expect(wrapper.text()).toContain('Mouse: (12, 34)')
     expect(wrapper.text()).toContain('Save: Saving...')
+  })
+
+  it('renders the zoom slider with zoom configuration props', () => {
+    const wrapper = mountStatusBar()
+    const slider = getZoomSlider(wrapper)
+
+    expect(slider.exists()).toBe(true)
+    expect(slider.attributes()).toEqual(
+      expect.objectContaining({
+        min: '0.25',
+        max: '8',
+        step: '0.25',
+      })
+    )
+    expect(slider.element.value).toBe('1.25')
+  })
+
+  it('renders zoom controls without a visible Zoom label or reset button', () => {
+    const wrapper = mountStatusBar()
+
+    expect(getButtonByLabel(wrapper, 'Zoom out').exists()).toBe(true)
+    expect(getZoomSlider(wrapper).exists()).toBe(true)
+    expect(getButtonByLabel(wrapper, 'Zoom in').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('Zoom')
+    expect(getButtonByLabel(wrapper, 'Reset zoom').exists()).toBe(false)
+  })
+
+  it('renders a decorative default zoom marker', () => {
+    const wrapper = mountStatusBar()
+    const marker = wrapper.find('.statusbar-zoom-default-marker')
+
+    expect(marker.exists()).toBe(true)
+    expect(marker.attributes('aria-hidden')).toBe('true')
+  })
+
+  it('emits a numeric zoom level when the slider changes', async () => {
+    const wrapper = mountStatusBar()
+
+    await getZoomSlider(wrapper).setValue('2.5')
+
+    expect(wrapper.emitted('update-zoom-level')).toEqual([[2.5]])
+  })
+
+  it('emits zoom button events', async () => {
+    const wrapper = mountStatusBar()
+
+    await getButtonByLabel(wrapper, 'Zoom out').trigger('click')
+    await getButtonByLabel(wrapper, 'Zoom in').trigger('click')
+
+    expect(wrapper.emitted('zoom-out')).toEqual([[]])
+    expect(wrapper.emitted('zoom-in')).toEqual([[]])
+  })
+
+  it('disables zoom out at the minimum zoom', () => {
+    const wrapper = mountStatusBar({
+      zoomLevel: 0.25,
+      zoomPercentage: 25,
+    })
+
+    expect(getButtonByLabel(wrapper, 'Zoom out').element.disabled).toBe(true)
+    expect(getButtonByLabel(wrapper, 'Zoom in').element.disabled).toBe(false)
+  })
+
+  it('disables zoom in at the maximum zoom', () => {
+    const wrapper = mountStatusBar({
+      zoomLevel: 8,
+      zoomPercentage: 800,
+    })
+
+    expect(getButtonByLabel(wrapper, 'Zoom out').element.disabled).toBe(false)
+    expect(getButtonByLabel(wrapper, 'Zoom in').element.disabled).toBe(true)
   })
 
   it.each([

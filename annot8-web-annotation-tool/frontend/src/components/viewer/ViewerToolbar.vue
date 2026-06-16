@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import { MousePointer2, Pentagon, Square, Waypoints } from '@lucide/vue'
-import { BBadge, BButton, BButtonGroup, BButtonToolbar, BNavbar } from 'bootstrap-vue-next'
+import { BButton, BButtonGroup, BButtonToolbar, BNavbar } from 'bootstrap-vue-next'
 
 const DEFAULT_REGION_COLOR = '#0d6efd'
 const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/
@@ -36,30 +36,6 @@ const props = defineProps({
     default: '#0d6efd',
     validator: (value) => /^#[0-9a-fA-F]{6}$/.test(value),
   },
-  zoomLevel: {
-    type: Number,
-    required: true,
-    validator: (value) => Number.isFinite(value) && value > 0,
-  },
-  minZoom: {
-    type: Number,
-    required: true,
-    validator: (value) => Number.isFinite(value) && value > 0,
-  },
-  maxZoom: {
-    type: Number,
-    required: true,
-    validator: (value) => Number.isFinite(value) && value > 0,
-  },
-  zoomPercentage: {
-    type: Number,
-    required: true,
-    validator: (value) => Number.isFinite(value) && value > 0,
-  },
-  mousePos: {
-    type: Object,
-    required: true,
-  },
 })
 
 const emit = defineEmits([
@@ -68,9 +44,6 @@ const emit = defineEmits([
   'set-active-tool',
   'update-new-region-color',
   'delete-selected-region',
-  'zoom-out',
-  'reset-zoom',
-  'zoom-in',
 ])
 
 const regionColorValue = computed(() =>
@@ -226,37 +199,6 @@ function updateNewRegionColor(event) {
         </BButton>
       </div>
 
-      <div class="toolbar-section toolbar-section--view">
-        <span class="toolbar-label">View</span>
-        <BButtonGroup size="sm" aria-label="Zoom controls">
-          <BButton
-            type="button"
-            variant="outline-secondary"
-            aria-label="Zoom out"
-            :disabled="zoomLevel <= minZoom"
-            @click="$emit('zoom-out')"
-          >
-            -
-          </BButton>
-          <BButton
-            type="button"
-            variant="outline-secondary"
-            aria-label="Reset zoom"
-            @click="$emit('reset-zoom')"
-          >
-            Reset
-          </BButton>
-          <BButton
-            type="button"
-            variant="outline-secondary"
-            aria-label="Zoom in"
-            :disabled="zoomLevel >= maxZoom"
-            @click="$emit('zoom-in')"
-          >
-            +
-          </BButton>
-        </BButtonGroup>
-      </div>
     </BButtonToolbar>
   </BNavbar>
 </template>
@@ -272,8 +214,7 @@ function updateNewRegionColor(event) {
   gap: 0.5rem;
 }
 
-.toolbar-section--tools,
-.toolbar-section--view {
+.toolbar-section--tools {
   border-left: 1px solid #dee2e6;
   padding-left: 1rem;
 }

@@ -21,8 +21,9 @@ const selectedIndex = ref(0)
 const MIN_ZOOM = 0.25
 const MAX_ZOOM = 8
 const ZOOM_STEP = 0.25
+const DEFAULT_ZOOM = 1
 
-const zoomLevel = ref(1)
+const zoomLevel = ref(DEFAULT_ZOOM)
 const activeTool = ref('select')
 const selectedRegionId = ref(null)
 const sidebarCollapsed = ref(false)
@@ -42,13 +43,12 @@ const selectedRegion = computed(
 const nextRegionId = computed(() => `region-${regionSequence.value + 1}`)
 
 const mousePos = ref(null)
-const toolbarMousePos = computed(() => mousePos.value ?? { x: 0, y: 0 })
 const saveStatus = ref('saved')
 
 // Page changes always return to the default zoom so every page starts from
 // a predictable view state.
 function resetZoom() {
-  zoomLevel.value = 1
+  zoomLevel.value = DEFAULT_ZOOM
 }
 
 function goToPreviousPage() {
@@ -135,6 +135,14 @@ function zoomOut() {
   }
 }
 
+function setZoomLevel(value) {
+  const nextZoomLevel = Number(value)
+
+  if (!Number.isFinite(nextZoomLevel)) return
+
+  zoomLevel.value = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, nextZoomLevel))
+}
+
 function addRegion(region) {
   regionSequence.value += 1
   regions.value.push(region)
@@ -198,19 +206,11 @@ onMounted(() => {
         :region-count="currentPageRegionCount"
         :has-selected-region="Boolean(selectedRegionId)"
         :region-creation-color="regionCreationColor"
-        :zoom-level="zoomLevel"
-        :min-zoom="MIN_ZOOM"
-        :max-zoom="MAX_ZOOM"
-        :zoom-percentage="zoomPercentage"
-        :mouse-pos="toolbarMousePos"
         @previous-page="goToPreviousPage"
         @next-page="goToNextPage"
         @set-active-tool="setActiveTool"
         @update-new-region-color="updateNewRegionColor"
         @delete-selected-region="deleteSelectedRegion"
-        @zoom-out="zoomOut"
-        @reset-zoom="resetZoom"
-        @zoom-in="zoomIn"
       />
 
       <AnnotationCanvas
@@ -239,6 +239,14 @@ onMounted(() => {
         :current-page-region-count="currentPageRegionCount"
         :mouse-pos="mousePos"
         :save-status="saveStatus"
+        :zoom-level="zoomLevel"
+        :min-zoom-level="MIN_ZOOM"
+        :max-zoom-level="MAX_ZOOM"
+        :zoom-step="ZOOM_STEP"
+        :default-zoom-level="DEFAULT_ZOOM"
+        @zoom-out="zoomOut"
+        @zoom-in="zoomIn"
+        @update-zoom-level="setZoomLevel"
       />
     </main>
   </div>

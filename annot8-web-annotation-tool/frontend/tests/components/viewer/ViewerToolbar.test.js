@@ -11,11 +11,6 @@ function mountToolbar(props = {}) {
       regionCount: 2,
       hasSelectedRegion: true,
       regionCreationColor: '#123abc',
-      zoomLevel: 1,
-      minZoom: 0.25,
-      maxZoom: 8,
-      zoomPercentage: 100,
-      mousePos: { x: 12, y: 34 },
       ...props,
     },
   })
@@ -38,14 +33,14 @@ function getRegionColorInput(wrapper) {
 }
 
 describe('ViewerToolbar', () => {
-  it('renders navigation, tool, delete, zoom, and status controls', () => {
+  it('renders navigation, tool, delete, and color controls', () => {
     const wrapper = mountToolbar()
 
     expect(wrapper.find('nav[aria-label="Viewer controls"]').exists()).toBe(true)
     expect(wrapper.find('[role="toolbar"][aria-label="Viewer actions"]').exists()).toBe(true)
     expect(wrapper.text()).toContain('Page')
     expect(wrapper.text()).toContain('Tools')
-    expect(wrapper.text()).toContain('View')
+    expect(wrapper.text()).not.toContain('View')
     expect(getButtonByLabel(wrapper, 'Previous page').exists()).toBe(true)
     expect(getButtonByLabel(wrapper, 'Next page').exists()).toBe(true)
     expect(getButtonByLabel(wrapper, 'Select tool').exists()).toBe(true)
@@ -54,33 +49,30 @@ describe('ViewerToolbar', () => {
     expect(getButtonByLabel(wrapper, 'Select polyline tool').exists()).toBe(true)
     expect(getRegionColorInput(wrapper).exists()).toBe(true)
     expect(getButtonByLabel(wrapper, 'Delete selected region').exists()).toBe(true)
-    expect(getButtonByLabel(wrapper, 'Reset zoom').exists()).toBe(true)
+    expect(getButtonByLabel(wrapper, 'Zoom out').exists()).toBe(false)
+    expect(getButtonByLabel(wrapper, 'Reset zoom').exists()).toBe(false)
+    expect(getButtonByLabel(wrapper, 'Zoom in').exists()).toBe(false)
   })
 
   it('reflects disabled states from the current viewer state', () => {
     const wrapper = mountToolbar({
       selectedIndex: 0,
       hasSelectedRegion: false,
-      zoomLevel: 0.25,
     })
 
     expectButtonDisabled(wrapper, 'Previous page')
     expectButtonDisabled(wrapper, 'Next page', false)
     expectButtonDisabled(wrapper, 'Delete selected region')
-    expectButtonDisabled(wrapper, 'Zoom out')
-    expectButtonDisabled(wrapper, 'Zoom in', false)
     expect(getRegionColorInput(wrapper).element.disabled).toBe(false)
   })
 
-  it('disables next and zoom in at their upper bounds', () => {
+  it('disables next at the last page', () => {
     const wrapper = mountToolbar({
       selectedIndex: 3,
-      zoomLevel: 8,
     })
 
     expectButtonDisabled(wrapper, 'Previous page', false)
     expectButtonDisabled(wrapper, 'Next page')
-    expectButtonDisabled(wrapper, 'Zoom in')
   })
 
   it('keeps delete enabled when a region is selected', () => {
@@ -168,18 +160,12 @@ describe('ViewerToolbar', () => {
     ])
   })
 
-  it('emits delete and zoom events', async () => {
+  it('emits delete events', async () => {
     const wrapper = mountToolbar()
 
     await getButtonByLabel(wrapper, 'Delete selected region').trigger('click')
-    await getButtonByLabel(wrapper, 'Zoom out').trigger('click')
-    await getButtonByLabel(wrapper, 'Reset zoom').trigger('click')
-    await getButtonByLabel(wrapper, 'Zoom in').trigger('click')
 
     expect(wrapper.emitted('delete-selected-region')).toEqual([[]])
-    expect(wrapper.emitted('zoom-out')).toEqual([[]])
-    expect(wrapper.emitted('reset-zoom')).toEqual([[]])
-    expect(wrapper.emitted('zoom-in')).toEqual([[]])
   })
 
   it('warns when activeTool is outside the supported viewer tools', () => {
