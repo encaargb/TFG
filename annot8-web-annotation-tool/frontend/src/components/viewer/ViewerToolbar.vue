@@ -105,6 +105,7 @@ defineEmits([
         <BButtonGroup size="sm" aria-label="Region tools">
           <BButton
             type="button"
+            class="toolbar-tool-button"
             aria-label="Select tool"
             title="Select tool"
             :variant="activeTool === 'select' ? 'secondary' : 'outline-secondary'"
@@ -122,6 +123,7 @@ defineEmits([
           </BButton>
           <BButton
             type="button"
+            class="toolbar-tool-button"
             aria-label="Select rectangle tool"
             title="Rectangle tool"
             :variant="activeTool === 'rectangle' ? 'secondary' : 'outline-secondary'"
@@ -139,6 +141,7 @@ defineEmits([
           </BButton>
           <BButton
             type="button"
+            class="toolbar-tool-button"
             aria-label="Select polygon tool"
             title="Polygon tool"
             :variant="activeTool === 'polygon' ? 'secondary' : 'outline-secondary'"
@@ -156,6 +159,7 @@ defineEmits([
           </BButton>
           <BButton
             type="button"
+            class="toolbar-tool-button"
             aria-label="Select polyline tool"
             title="Polyline tool"
             :variant="activeTool === 'polyline' ? 'secondary' : 'outline-secondary'"
@@ -245,7 +249,13 @@ defineEmits([
   text-transform: uppercase;
 }
 
+.toolbar-tool-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .toolbar-icon {
-  vertical-align: middle;
+  display: block;
 }
 </style>
