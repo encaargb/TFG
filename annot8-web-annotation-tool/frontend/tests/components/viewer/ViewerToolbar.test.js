@@ -44,10 +44,9 @@ describe('ViewerToolbar', () => {
     expect(getButtonByLabel(wrapper, 'Previous page').exists()).toBe(true)
     expect(getButtonByLabel(wrapper, 'Next page').exists()).toBe(true)
     expect(getButtonByLabel(wrapper, 'Select tool').exists()).toBe(true)
-    expect(getButtonByLabel(wrapper, 'Select tool').find('.bi.bi-cursor-fill').exists()).toBe(true)
-    expect(getButtonByLabel(wrapper, 'Select rectangle tool').find('.bi.bi-square').exists()).toBe(true)
-    expect(getButtonByLabel(wrapper, 'Select polygon tool').find('.bi.bi-pentagon').exists()).toBe(true)
-    expect(getButtonByLabel(wrapper, 'Select polyline tool').find('.bi.bi-bezier2').exists()).toBe(true)
+    expect(getButtonByLabel(wrapper, 'Select rectangle tool').exists()).toBe(true)
+    expect(getButtonByLabel(wrapper, 'Select polygon tool').exists()).toBe(true)
+    expect(getButtonByLabel(wrapper, 'Select polyline tool').exists()).toBe(true)
     expect(getButtonByLabel(wrapper, 'Delete selected region').exists()).toBe(true)
     expect(getButtonByLabel(wrapper, 'Reset zoom').exists()).toBe(true)
   })
@@ -84,12 +83,20 @@ describe('ViewerToolbar', () => {
   })
 
   it('marks the active annotation tool', () => {
-    const wrapper = mountToolbar({ activeTool: 'polygon' })
+    const tools = [
+      ['select', 'Select tool'],
+      ['rectangle', 'Select rectangle tool'],
+      ['polygon', 'Select polygon tool'],
+      ['polyline', 'Select polyline tool'],
+    ]
 
-    expectToolButtonPressed(wrapper, 'Select tool', false)
-    expectToolButtonPressed(wrapper, 'Select rectangle tool', false)
-    expectToolButtonPressed(wrapper, 'Select polygon tool')
-    expectToolButtonPressed(wrapper, 'Select polyline tool', false)
+    tools.forEach(([activeTool, activeLabel]) => {
+      const wrapper = mountToolbar({ activeTool })
+
+      tools.forEach(([, label]) => {
+        expectToolButtonPressed(wrapper, label, label === activeLabel)
+      })
+    })
   })
 
   it('emits navigation events', async () => {

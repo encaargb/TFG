@@ -1,4 +1,5 @@
 <script setup>
+import { MousePointer2, Pentagon, Square, Waypoints } from '@lucide/vue'
 import { BBadge, BButton, BButtonGroup, BButtonToolbar, BNavbar } from 'bootstrap-vue-next'
 
 defineProps({
@@ -110,7 +111,13 @@ defineEmits([
             :aria-pressed="activeTool === 'select'"
             @click="$emit('set-active-tool', 'select')"
           >
-            <i class="bi bi-cursor-fill toolbar-icon" aria-hidden="true"></i>
+            <MousePointer2
+              class="toolbar-icon"
+              :size="16"
+              :stroke-width="2.4"
+              aria-hidden="true"
+              focusable="false"
+            />
             <span class="visually-hidden">Select</span>
           </BButton>
           <BButton
@@ -121,7 +128,13 @@ defineEmits([
             :aria-pressed="activeTool === 'rectangle'"
             @click="$emit('set-active-tool', 'rectangle')"
           >
-            <i class="bi bi-square toolbar-icon" aria-hidden="true"></i>
+            <Square
+              class="toolbar-icon"
+              :size="16"
+              :stroke-width="2.4"
+              aria-hidden="true"
+              focusable="false"
+            />
             <span class="visually-hidden">Rectangle</span>
           </BButton>
           <BButton
@@ -132,7 +145,13 @@ defineEmits([
             :aria-pressed="activeTool === 'polygon'"
             @click="$emit('set-active-tool', 'polygon')"
           >
-            <i class="bi bi-pentagon toolbar-icon" aria-hidden="true"></i>
+            <Pentagon
+              class="toolbar-icon"
+              :size="16"
+              :stroke-width="2.4"
+              aria-hidden="true"
+              focusable="false"
+            />
             <span class="visually-hidden">Polygon</span>
           </BButton>
           <BButton
@@ -143,7 +162,13 @@ defineEmits([
             :aria-pressed="activeTool === 'polyline'"
             @click="$emit('set-active-tool', 'polyline')"
           >
-            <i class="bi bi-bezier2 toolbar-icon" aria-hidden="true"></i>
+            <Waypoints
+              class="toolbar-icon"
+              :size="16"
+              :stroke-width="2.4"
+              aria-hidden="true"
+              focusable="false"
+            />
             <span class="visually-hidden">Polyline</span>
           </BButton>
         </BButtonGroup>
@@ -221,7 +246,6 @@ defineEmits([
 }
 
 .toolbar-icon {
-  font-size: 1rem;
   vertical-align: middle;
 }
 </style>

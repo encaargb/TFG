@@ -1,4 +1,5 @@
 <script setup>
+import { Menu } from '@lucide/vue'
 import { BBadge, BButton, BImg } from 'bootstrap-vue-next'
 
 defineProps({
@@ -36,7 +37,13 @@ defineEmits(['select-page', 'toggle-sidebar'])
         :title="collapsed ? 'Show page thumbnails' : 'Hide page thumbnails'"
         @click="$emit('toggle-sidebar')"
       >
-        <i class="bi bi-list sidebar-toggle-icon" aria-hidden="true"></i>
+        <Menu
+          class="sidebar-toggle-icon"
+          :size="20"
+          :stroke-width="2.4"
+          aria-hidden="true"
+          focusable="false"
+        />
       </BButton>
 
       <div
@@ -106,7 +113,6 @@ defineEmits(['select-page', 'toggle-sidebar'])
 }
 
 .sidebar-toggle-icon {
-  font-size: 1.25rem;
   vertical-align: middle;
 }
 

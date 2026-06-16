@@ -12,8 +12,8 @@
     "test:html:open": "vitest --run --reporter=html --outputFile=./html/index.html && vitest --ui"
   },
   "dependencies": {
+    "@lucide/vue": "^1.20.0",
     "bootstrap": "^5.3.8",
-    "bootstrap-icons": "^1.13.1",
     "bootstrap-vue-next": "^0.45.4",
     "konva": "^10.2.3",
     "vue": "^3.5.30"
