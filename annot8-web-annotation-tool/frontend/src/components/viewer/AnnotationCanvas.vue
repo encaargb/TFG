@@ -109,6 +109,7 @@ let transformer = null
 let draftRegionNode = null
 let draftRegionStart = null
 let draftPointRegionPoints = []
+let polylineEndpointExtensionPreviewNode = null
 let skipNextPointRegionClick = false
 let skipNextPointRegionClickPosition = null
 let pointRegionDragStart = null
@@ -164,6 +165,79 @@ const { autoScrollCanvasWrapper } = useCanvasAutoScroll({
 
 function clearSelectedPointRegionPoint() {
   selectedPointRegionPoint = null
+  clearPolylineEndpointExtensionPreview()
+}
+
+function clearPolylineEndpointExtensionPreview(shouldDraw = true) {
+  if (!polylineEndpointExtensionPreviewNode) return
+
+  polylineEndpointExtensionPreviewNode.destroy()
+  polylineEndpointExtensionPreviewNode = null
+
+  if (shouldDraw) {
+    regionLayer?.draw()
+  }
+}
+
+function getPolylineEndpointExtensionPreviewContext() {
+  if (props.activeTool !== 'select' || !selectedPointRegionPoint) return null
+  if (isVertexHandleDragging) return null
+
+  const { regionId, pointIndex } = selectedPointRegionPoint
+  const region = props.regions.find((candidate) => candidate.id === regionId)
+
+  if (!region || region.type !== 'polyline' || props.selectedRegionId !== region.id) return null
+  if (pointIndex !== 0 && pointIndex !== region.points.length - 1) return null
+
+  return {
+    endpoint: region.points[pointIndex],
+    isFirstEndpoint: pointIndex === 0,
+    region,
+  }
+}
+
+function updatePolylineEndpointExtensionPreview(pointerPosition = stage?.getPointerPosition()) {
+  if (!stage || !regionLayer || !isPointerInsideVisibleDocument(pointerPosition)) {
+    clearPolylineEndpointExtensionPreview()
+    return
+  }
+
+  const previewContext = getPolylineEndpointExtensionPreviewContext()
+  const documentHoverPoint = getClampedDocumentPointer(pointerPosition)
+
+  if (!previewContext || !documentHoverPoint) {
+    clearPolylineEndpointExtensionPreview()
+    return
+  }
+
+  const { endpoint, isFirstEndpoint, region } = previewContext
+  const previewDocumentPoints = isFirstEndpoint
+    ? [documentHoverPoint, endpoint]
+    : [endpoint, documentHoverPoint]
+  const { scaleX, scaleY } = getRegionScale()
+  const previewVisiblePoints = toVisiblePoints(
+    previewDocumentPoints,
+    scaleX,
+    scaleY,
+    props.zoomLevel
+  )
+
+  if (!polylineEndpointExtensionPreviewNode) {
+    polylineEndpointExtensionPreviewNode = new Konva.Line({
+      points: [],
+      closed: false,
+      fill: 'transparent',
+      stroke: region.color || REGION_COLOR,
+      strokeWidth: 2,
+      strokeScaleEnabled: false,
+      dash: [6, 4],
+      listening: false,
+    })
+    regionLayer.add(polylineEndpointExtensionPreviewNode)
+  }
+
+  polylineEndpointExtensionPreviewNode.points(flattenPoints(previewVisiblePoints))
+  regionLayer.draw()
 }
 
 function getClampedDocumentPointer(pointerPosition = stage?.getPointerPosition()) {
@@ -513,6 +587,7 @@ function createPointRegionVertexHandles(region, pointRegionNode) {
   const editedVisiblePoints = visiblePoints.map((point) => ({ ...point }))
 
   function selectVertexHandle(pointIndex, handle) {
+    clearPolylineEndpointExtensionPreview(false)
     selectedPointRegionPoint = { regionId: region.id, pointIndex }
     vertexHandles.forEach((vertexHandle) => vertexHandle.fill('#ffffff'))
     handle.fill(region.color)
@@ -654,6 +729,7 @@ function createRegionNode(region) {
 function renderRegions() {
   if (!regionLayer || !baseImageWidth || !baseImageHeight) return
 
+  clearPolylineEndpointExtensionPreview(false)
   regionLayer.destroyChildren()
   vertexHandles = []
   transformer = new Konva.Transformer({
@@ -1146,6 +1222,7 @@ function handleKeydown(event) {
   }
 
   if (event.key === 'Escape') {
+    clearSelectedPointRegionPoint()
     emit('clear-selected-region')
     return
   }
@@ -1216,7 +1293,10 @@ function handleMouseMove(event) {
     originalImageHeight
   )
 
-  if (!coordinates) return
+  if (!coordinates) {
+    clearPolylineEndpointExtensionPreview()
+    return
+  }
 
   emit('mouse-position-change', coordinates)
 
@@ -1226,10 +1306,13 @@ function handleMouseMove(event) {
     } else {
       updateDraftRectangleRegion()
     }
+  } else {
+    updatePolylineEndpointExtensionPreview(pos)
   }
 }
 
 function handleMouseLeave() {
+  clearPolylineEndpointExtensionPreview()
   emit('mouse-position-change', null)
 }
 
@@ -1267,6 +1350,8 @@ watch(() => props.zoomLevel, () => {
 watch(() => props.selectedRegionId, (newSelectedRegionId) => {
   if (selectedPointRegionPoint?.regionId !== newSelectedRegionId) {
     clearSelectedPointRegionPoint()
+  } else {
+    clearPolylineEndpointExtensionPreview()
   }
 })
 
@@ -1308,6 +1393,7 @@ onBeforeUnmount(() => {
   draftRegionNode = null
   draftRegionStart = null
   draftPointRegionPoints = []
+  polylineEndpointExtensionPreviewNode = null
   skipNextPointRegionClick = false
   skipNextPointRegionClickPosition = null
   pointRegionDragStart = null

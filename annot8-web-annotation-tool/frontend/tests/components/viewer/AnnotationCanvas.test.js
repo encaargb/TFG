@@ -2389,6 +2389,37 @@ describe('AnnotationCanvas', () => {
     })
   })
 
+  it('shows a dashed preview line from the pointer to the first selected polyline endpoint', async () => {
+    mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [threePointPolylineRegion()],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const firstVertexHandle = getCircleInstances().slice(-3)[0]
+
+    firstVertexHandle.trigger('click')
+    stage.getPointerPosition.mockReturnValue({ x: 80, y: 140 })
+    stage.trigger('mousemove')
+
+    const previewLine = getLineInstances().find((line) => line.config.listening === false)
+
+    expect(previewLine.config).toEqual(
+      expect.objectContaining({
+        dash: [6, 4],
+        listening: false,
+        stroke: '#0d6efd',
+      })
+    )
+    expect(previewLine.points).toHaveBeenLastCalledWith([80, 140, 100, 50])
+
+    stage.getPointerPosition.mockReturnValue({ x: 90, y: 150 })
+    stage.trigger('mousemove')
+
+    expect(previewLine.points).toHaveBeenLastCalledWith([90, 150, 100, 50])
+  })
+
   it('does not extend a selected polyline endpoint when the new segment is below 4 visible px', async () => {
     const wrapper = mountCanvas({
       selectedRegionId: 'region-1',
@@ -2455,6 +2486,32 @@ describe('AnnotationCanvas', () => {
     })
   })
 
+  it('shows a dashed preview line from the last selected polyline endpoint to the pointer', async () => {
+    mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [threePointPolylineRegion()],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const lastVertexHandle = getCircleInstances().slice(-3).at(-1)
+
+    lastVertexHandle.trigger('click')
+    stage.getPointerPosition.mockReturnValue({ x: 260, y: 180 })
+    stage.trigger('mousemove')
+
+    const previewLine = getLineInstances().find((line) => line.config.listening === false)
+
+    expect(previewLine.config).toEqual(
+      expect.objectContaining({
+        dash: [6, 4],
+        listening: false,
+        stroke: '#0d6efd',
+      })
+    )
+    expect(previewLine.points).toHaveBeenLastCalledWith([200, 150, 260, 180])
+  })
+
   it('does not add an endpoint point when a middle polyline point is selected', async () => {
     const wrapper = mountCanvas({
       selectedRegionId: 'region-1',
@@ -2470,6 +2527,89 @@ describe('AnnotationCanvas', () => {
     stage.trigger('click')
 
     expect(wrapper.emitted('update-region')).toBeUndefined()
+    expect(wrapper.emitted('clear-selected-region')).toEqual([[]])
+  })
+
+  it('does not show an endpoint extension preview when a middle polyline point is selected', async () => {
+    mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [threePointPolylineRegion()],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const middleVertexHandle = getCircleInstances().slice(-3)[1]
+
+    middleVertexHandle.trigger('click')
+    stage.getPointerPosition.mockReturnValue({ x: 80, y: 140 })
+    stage.trigger('mousemove')
+
+    expect(getLineInstances().some((line) => line.config.listening === false)).toBe(false)
+  })
+
+  it('does not show an endpoint extension preview for selected polygon points', async () => {
+    mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [fourPointPolygonRegion()],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const firstVertexHandle = getCircleInstances().slice(-4)[0]
+
+    firstVertexHandle.trigger('click')
+    stage.getPointerPosition.mockReturnValue({ x: 80, y: 140 })
+    stage.trigger('mousemove')
+
+    expect(getLineInstances().some((line) => line.config.listening === false)).toBe(false)
+  })
+
+  it('clears the endpoint extension preview after clicking to extend the polyline', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [threePointPolylineRegion()],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const firstVertexHandle = getCircleInstances().slice(-3)[0]
+
+    firstVertexHandle.trigger('click')
+    stage.getPointerPosition.mockReturnValue({ x: 80, y: 140 })
+    stage.trigger('mousemove')
+
+    const previewLine = getLineInstances().find((line) => line.config.listening === false)
+
+    stage.trigger('click')
+
+    expect(previewLine.destroy).toHaveBeenCalledTimes(1)
+    expect(wrapper.emitted('update-region')[0][0].changes.points).toEqual([
+      { x: 160, y: 280 },
+      { x: 200, y: 100 },
+      { x: 500, y: 100 },
+      { x: 400, y: 300 },
+    ])
+  })
+
+  it('clears the endpoint extension preview when Escape clears selection', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [threePointPolylineRegion()],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const firstVertexHandle = getCircleInstances().slice(-3)[0]
+
+    firstVertexHandle.trigger('click')
+    stage.getPointerPosition.mockReturnValue({ x: 80, y: 140 })
+    stage.trigger('mousemove')
+
+    const previewLine = getLineInstances().find((line) => line.config.listening === false)
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+
+    expect(previewLine.destroy).toHaveBeenCalledTimes(1)
     expect(wrapper.emitted('clear-selected-region')).toEqual([[]])
   })
 
