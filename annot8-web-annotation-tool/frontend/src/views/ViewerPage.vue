@@ -40,6 +40,13 @@ const currentPageRegionCount = computed(() => currentPageRegions.value.length)
 const selectedRegion = computed(
   () => regions.value.find((region) => region.id === selectedRegionId.value) ?? null
 )
+const toolbarColor = computed(() => {
+  if (!selectedRegion.value) return regionCreationColor.value
+
+  return /^#[0-9a-fA-F]{6}$/.test(selectedRegion.value.color)
+    ? selectedRegion.value.color
+    : REGION_COLOR
+})
 const nextRegionId = computed(() => `region-${regionSequence.value + 1}`)
 
 const mousePos = ref(null)
@@ -161,10 +168,22 @@ function updateRegion({ id, changes }) {
   persistRegions()
 }
 
-function updateNewRegionColor(color) {
+function updateToolbarColor(color) {
   if (!/^#[0-9a-fA-F]{6}$/.test(color)) return
 
-  regionCreationColor.value = color.toLowerCase()
+  const normalizedColor = color.toLowerCase()
+
+  if (selectedRegion.value) {
+    updateRegion({
+      id: selectedRegion.value.id,
+      changes: {
+        color: normalizedColor,
+      },
+    })
+    return
+  }
+
+  regionCreationColor.value = normalizedColor
 }
 
 function setMousePosition(position) {
@@ -205,11 +224,11 @@ onMounted(() => {
         :active-tool="activeTool"
         :region-count="currentPageRegionCount"
         :has-selected-region="Boolean(selectedRegionId)"
-        :region-creation-color="regionCreationColor"
+        :toolbar-color="toolbarColor"
         @previous-page="goToPreviousPage"
         @next-page="goToNextPage"
         @set-active-tool="setActiveTool"
-        @update-new-region-color="updateNewRegionColor"
+        @update-region-color="updateToolbarColor"
         @delete-selected-region="deleteSelectedRegion"
       />
 

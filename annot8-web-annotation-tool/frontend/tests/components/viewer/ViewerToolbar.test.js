@@ -10,7 +10,7 @@ function mountToolbar(props = {}) {
       activeTool: 'select',
       regionCount: 2,
       hasSelectedRegion: true,
-      regionCreationColor: '#123abc',
+      toolbarColor: '#123abc',
       ...props,
     },
   })
@@ -29,7 +29,7 @@ function expectToolButtonPressed(wrapper, label, isPressed = true) {
 }
 
 function getRegionColorInput(wrapper) {
-  return wrapper.find('input[aria-label="New region color"]')
+  return wrapper.find('input[aria-label="Region color"]')
 }
 
 describe('ViewerToolbar', () => {
@@ -81,9 +81,9 @@ describe('ViewerToolbar', () => {
     expectButtonDisabled(wrapper, 'Delete selected region', false)
   })
 
-  it('uses the existing color control for the new-region color', () => {
+  it('uses the existing color control for the toolbar color', () => {
     const wrapper = mountToolbar({
-      regionCreationColor: '#ff00aa',
+      toolbarColor: '#ff00aa',
     })
 
     expect(getRegionColorInput(wrapper).element.value).toBe('#ff00aa')
@@ -96,25 +96,33 @@ describe('ViewerToolbar', () => {
     expect(wrapper.findAll('input[type="color"]')).toHaveLength(1)
   })
 
-  it('emits new-region color changes from the color input', async () => {
+  it('emits region color changes from the color input', async () => {
     const wrapper = mountToolbar({
-      regionCreationColor: '#123abc',
+      toolbarColor: '#123abc',
     })
 
     await getRegionColorInput(wrapper).setValue('#00ff88')
 
-    expect(wrapper.emitted('update-new-region-color')).toEqual([['#00ff88']])
+    expect(wrapper.emitted('update-region-color')).toEqual([['#00ff88']])
   })
 
   it('emits color changes even when no region is selected', async () => {
     const wrapper = mountToolbar({
       hasSelectedRegion: false,
-      regionCreationColor: '#123abc',
+      toolbarColor: '#123abc',
     })
 
     await getRegionColorInput(wrapper).setValue('#00ff88')
 
-    expect(wrapper.emitted('update-new-region-color')).toEqual([['#00ff88']])
+    expect(wrapper.emitted('update-region-color')).toEqual([['#00ff88']])
+  })
+
+  it('uses contextual color input titles', () => {
+    const selectedWrapper = mountToolbar({ hasSelectedRegion: true })
+    const creationWrapper = mountToolbar({ hasSelectedRegion: false })
+
+    expect(getRegionColorInput(selectedWrapper).attributes('title')).toBe('Selected region color')
+    expect(getRegionColorInput(creationWrapper).attributes('title')).toBe('New region color')
   })
 
   it('marks the active annotation tool', () => {

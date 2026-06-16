@@ -28,26 +28,26 @@ const ViewerToolbarStub = {
     'activeTool',
     'regionCount',
     'hasSelectedRegion',
-    'regionCreationColor',
+    'toolbarColor',
   ],
   emits: [
     'previous-page',
     'next-page',
     'set-active-tool',
-    'update-new-region-color',
+    'update-region-color',
     'delete-selected-region',
   ],
   template: `
     <nav class="viewer-toolbar-stub">
       <span data-testid="toolbar-state">
         {{ selectedIndex }} {{ totalPages }} {{ activeTool }} {{ regionCount }}
-        {{ hasSelectedRegion }} {{ regionCreationColor }}
+        {{ hasSelectedRegion }} {{ toolbarColor }}
       </span>
       <button type="button" data-testid="previous-page" @click="$emit('previous-page')">Previous</button>
       <button type="button" data-testid="next-page" @click="$emit('next-page')">Next</button>
       <button type="button" data-testid="tool-rectangle" @click="$emit('set-active-tool', 'rectangle')">Rectangle</button>
       <button type="button" data-testid="tool-select" @click="$emit('set-active-tool', 'select')">Select</button>
-      <button type="button" data-testid="set-region-color" @click="$emit('update-new-region-color', '#ff00aa')">Set color</button>
+      <button type="button" data-testid="set-region-color" @click="$emit('update-region-color', '#ff00aa')">Set color</button>
       <button type="button" data-testid="delete-region" @click="$emit('delete-selected-region')">Delete</button>
     </nav>
   `,
@@ -263,7 +263,7 @@ describe('ViewerPage', () => {
         activeTool: 'select',
         regionCount: 0,
         hasSelectedRegion: false,
-        regionCreationColor: '#0d6efd',
+        toolbarColor: '#0d6efd',
       })
     )
     expect(canvas.props()).toEqual(
@@ -429,7 +429,7 @@ describe('ViewerPage', () => {
     await wrapper.find('[data-testid="select-region"]').trigger('click')
 
     expect(getStub(wrapper, ViewerToolbarStub).props('hasSelectedRegion')).toBe(true)
-    expect(getStub(wrapper, ViewerToolbarStub).props('regionCreationColor')).toBe('#0d6efd')
+    expect(getStub(wrapper, ViewerToolbarStub).props('toolbarColor')).toBe('#0d6efd')
     expect(getStub(wrapper, AnnotationCanvasStub).props('selectedRegionId')).toBe('region-1')
     expect(getStub(wrapper, ViewerStatusBarStub).props('selectedRegion')).toEqual(
       expect.objectContaining({
@@ -537,16 +537,16 @@ describe('ViewerPage', () => {
     )
   })
 
-  it('stores the selected creation color and passes it to the toolbar and canvas', async () => {
+  it('stores the selected creation color and passes it to the toolbar and canvas when no region is selected', async () => {
     const wrapper = mountViewerPage()
     await flushMountedFetch()
 
-    expect(getStub(wrapper, ViewerToolbarStub).props('regionCreationColor')).toBe('#0d6efd')
+    expect(getStub(wrapper, ViewerToolbarStub).props('toolbarColor')).toBe('#0d6efd')
     expect(getStub(wrapper, AnnotationCanvasStub).props('regionCreationColor')).toBe('#0d6efd')
 
     await wrapper.find('[data-testid="set-region-color"]').trigger('click')
 
-    expect(getStub(wrapper, ViewerToolbarStub).props('regionCreationColor')).toBe('#ff00aa')
+    expect(getStub(wrapper, ViewerToolbarStub).props('toolbarColor')).toBe('#ff00aa')
     expect(getStub(wrapper, AnnotationCanvasStub).props('regionCreationColor')).toBe('#ff00aa')
   })
 
@@ -564,7 +564,36 @@ describe('ViewerPage', () => {
     )
 
     await wrapper.find('[data-testid="set-region-color"]').trigger('click')
+
+    expect(ProjectDocumentModel.regions[0]).toEqual(
+      expect.objectContaining({
+        id: 'region-1',
+        color: '#0d6efd',
+      })
+    )
+
+    await wrapper.find('[data-testid="select-region"]').trigger('click')
+
+    expect(getStub(wrapper, ViewerToolbarStub).props()).toEqual(
+      expect.objectContaining({
+        hasSelectedRegion: true,
+        toolbarColor: '#0d6efd',
+      })
+    )
+    expect(getStub(wrapper, AnnotationCanvasStub).props('regionCreationColor')).toBe('#ff00aa')
+
+    await wrapper.find('[data-testid="clear-region"]').trigger('click')
+
+    expect(getStub(wrapper, ViewerToolbarStub).props()).toEqual(
+      expect.objectContaining({
+        hasSelectedRegion: false,
+        toolbarColor: '#ff00aa',
+      })
+    )
+
     await wrapper.find('[data-testid="add-region"]').trigger('click')
+    await wrapper.find('[data-testid="add-polygon-region"]').trigger('click')
+    await wrapper.find('[data-testid="add-polyline-region"]').trigger('click')
 
     expect(ProjectDocumentModel.regions).toEqual([
       expect.objectContaining({
@@ -573,10 +602,75 @@ describe('ViewerPage', () => {
       }),
       expect.objectContaining({
         id: 'region-2',
+        type: 'rectangle',
+        color: '#ff00aa',
+      }),
+      expect.objectContaining({
+        id: 'region-3',
+        type: 'polygon',
+        color: '#ff00aa',
+      }),
+      expect.objectContaining({
+        id: 'region-4',
+        type: 'polyline',
         color: '#ff00aa',
       }),
     ])
     expect(saveProjectRegionsSpy).toHaveBeenLastCalledWith('doc1', ProjectDocumentModel.regions)
+  })
+
+  it('edits a selected region color without overwriting the creation color', async () => {
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
+
+    await wrapper.find('[data-testid="add-region"]').trigger('click')
+    await wrapper.find('[data-testid="select-region"]').trigger('click')
+
+    expect(getStub(wrapper, ViewerToolbarStub).props()).toEqual(
+      expect.objectContaining({
+        hasSelectedRegion: true,
+        toolbarColor: '#0d6efd',
+      })
+    )
+
+    await wrapper.find('[data-testid="set-region-color"]').trigger('click')
+
+    expect(ProjectDocumentModel.regions[0]).toEqual(
+      expect.objectContaining({
+        id: 'region-1',
+        color: '#ff00aa',
+      })
+    )
+    expect(getStub(wrapper, ViewerToolbarStub).props('toolbarColor')).toBe('#ff00aa')
+    expect(getStub(wrapper, AnnotationCanvasStub).props('regionCreationColor')).toBe('#0d6efd')
+    expect(saveProjectRegionsSpy).toHaveBeenLastCalledWith('doc1', ProjectDocumentModel.regions)
+
+    await wrapper.find('[data-testid="clear-region"]').trigger('click')
+
+    expect(getStub(wrapper, ViewerToolbarStub).props()).toEqual(
+      expect.objectContaining({
+        hasSelectedRegion: false,
+        toolbarColor: '#0d6efd',
+      })
+    )
+    expect(ProjectDocumentModel.regions[0]).toEqual(
+      expect.objectContaining({
+        color: '#ff00aa',
+      })
+    )
+
+    await wrapper.find('[data-testid="add-region"]').trigger('click')
+
+    expect(ProjectDocumentModel.regions).toEqual([
+      expect.objectContaining({
+        id: 'region-1',
+        color: '#ff00aa',
+      }),
+      expect.objectContaining({
+        id: 'region-2',
+        color: '#0d6efd',
+      }),
+    ])
   })
 
   it('deletes the selected region from toolbar delete events', async () => {

@@ -31,7 +31,7 @@ const props = defineProps({
     type: Boolean,
     required: true,
   },
-  regionCreationColor: {
+  toolbarColor: {
     type: String,
     default: '#0d6efd',
     validator: (value) => /^#[0-9a-fA-F]{6}$/.test(value),
@@ -42,22 +42,26 @@ const emit = defineEmits([
   'previous-page',
   'next-page',
   'set-active-tool',
-  'update-new-region-color',
+  'update-region-color',
   'delete-selected-region',
 ])
 
 const regionColorValue = computed(() =>
-  HEX_COLOR_PATTERN.test(props.regionCreationColor)
-    ? props.regionCreationColor
+  HEX_COLOR_PATTERN.test(props.toolbarColor)
+    ? props.toolbarColor
     : DEFAULT_REGION_COLOR
 )
 
-function updateNewRegionColor(event) {
+const regionColorTitle = computed(() =>
+  props.hasSelectedRegion ? 'Selected region color' : 'New region color'
+)
+
+function updateRegionColor(event) {
   const color = event?.target?.value
 
   if (!HEX_COLOR_PATTERN.test(color)) return
 
-  emit('update-new-region-color', color)
+  emit('update-region-color', color)
 }
 </script>
 
@@ -174,17 +178,17 @@ function updateNewRegionColor(event) {
           </BButton>
         </BButtonGroup>
 
-        <label class="visually-hidden" for="region-creation-color-input">
-          New region color
+        <label class="visually-hidden" for="region-color-input">
+          Region color
         </label>
         <input
-          id="region-creation-color-input"
+          id="region-color-input"
           class="region-color-input form-control form-control-color form-control-sm"
           type="color"
-          aria-label="New region color"
-          title="New region color"
+          aria-label="Region color"
+          :title="regionColorTitle"
           :value="regionColorValue"
-          @input="updateNewRegionColor"
+          @input="updateRegionColor"
         />
 
         <BButton
