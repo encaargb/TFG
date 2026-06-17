@@ -6,6 +6,7 @@ const PORT = '3101'
 const BASE_URL = `http://127.0.0.1:${PORT}`
 
 let backend
+let backendStderr = ''
 
 function rectangleRegion(overrides = {}) {
   return {
@@ -69,6 +70,16 @@ async function getDocumentRegions() {
   return body.regions
 }
 
+async function putRawRegionsBody(body) {
+  return fetch(`${BASE_URL}/api/documents/doc1/regions`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body,
+  })
+}
+
 async function assertInvalidRegionsPreserveStoredRegions(regions, expectedStoredRegions) {
   const response = await saveRegions(regions)
   const body = await response.json()
@@ -111,10 +122,14 @@ describe('mock backend', () => {
       cwd: new URL('..', import.meta.url),
       env: {
         ...process.env,
+        NODE_ENV: 'test',
         PORT,
         FRONTEND_ORIGIN: 'http://localhost:5173',
       },
-      stdio: 'ignore',
+      stdio: ['ignore', 'ignore', 'pipe'],
+    })
+    backend.stderr.on('data', (chunk) => {
+      backendStderr += chunk.toString()
     })
 
     await waitForBackend()
@@ -643,14 +658,62 @@ describe('mock backend', () => {
     }
   })
 
-  it('returns errors for invalid requests', async () => {
-    const invalidJsonResponse = await fetch(`${BASE_URL}/api/documents/doc1/regions`, {
+  it('classifies malformed JSON as a bad request without changing stored regions', async () => {
+    const existingRegions = [rectangleRegion()]
+    const initialSaveResponse = await saveRegions(existingRegions)
+    assert.equal(initialSaveResponse.status, 200)
+
+    const response = await putRawRegionsBody('{')
+    const body = await response.json()
+
+    assert.equal(response.status, 400)
+    assert.deepEqual(body, { error: 'Invalid JSON body' })
+    assert.deepEqual(await getDocumentRegions(), existingRegions)
+  })
+
+  it('preserves validation error messages without changing stored regions', async () => {
+    const existingRegions = [rectangleRegion()]
+    const initialSaveResponse = await saveRegions(existingRegions)
+    assert.equal(initialSaveResponse.status, 200)
+
+    const response = await saveRegions([
+      rectangleRegion({ left: '10' }),
+    ])
+    const body = await response.json()
+
+    assert.equal(response.status, 400)
+    assert.deepEqual(body, {
+      error: 'Region at index 0 has invalid rectangle coordinates',
+    })
+    assert.deepEqual(await getDocumentRegions(), existingRegions)
+  })
+
+  it('classifies unexpected region update errors as internal server errors', async () => {
+    const existingRegions = [rectangleRegion()]
+    const nextRegions = [rectangleRegion({ id: 'new-region' })]
+    const initialSaveResponse = await saveRegions(existingRegions)
+    assert.equal(initialSaveResponse.status, 200)
+    backendStderr = ''
+
+    const response = await fetch(`${BASE_URL}/api/documents/doc1/regions`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
+        'x-annot8-force-region-error': 'true',
       },
-      body: '{',
+      body: JSON.stringify({ regions: nextRegions }),
     })
+    const body = await response.json()
+
+    assert.equal(response.status, 500)
+    assert.deepEqual(body, { error: 'Internal server error' })
+    assert.ok(!JSON.stringify(body).includes('Forced internal region update failure'))
+    assert.match(backendStderr, /Forced internal region update failure/)
+    assert.deepEqual(await getDocumentRegions(), existingRegions)
+  })
+
+  it('returns errors for invalid requests', async () => {
+    const invalidJsonResponse = await putRawRegionsBody('{')
     const missingDocumentResponse = await fetch(`${BASE_URL}/api/documents/missing`)
 
     assert.equal(invalidJsonResponse.status, 400)

@@ -23,6 +23,13 @@ const documents = new Map([
   ],
 ])
 
+class InvalidRegionsPayloadError extends Error {
+  constructor(message) {
+    super(message)
+    this.name = 'InvalidRegionsPayloadError'
+  }
+}
+
 /**
  * Sends a JSON response with the CORS headers required by the Vite frontend.
  */
@@ -129,7 +136,7 @@ function getDocumentId(pathname) {
 
 function validateRegionsArray(body) {
   if (!Object.prototype.hasOwnProperty.call(body, 'regions') || !Array.isArray(body.regions)) {
-    throw new Error('Regions must be an array')
+    throw new InvalidRegionsPayloadError('Regions must be an array')
   }
 
   body.regions.forEach(validateRegionCommonFields)
@@ -151,19 +158,23 @@ function validateRectangleRegion(region, index) {
   )
 
   if (!hasValidCoordinates) {
-    throw new Error(`Region at index ${index} has invalid rectangle coordinates`)
+    throw new InvalidRegionsPayloadError(
+      `Region at index ${index} has invalid rectangle coordinates`
+    )
   }
 }
 
 function validatePoint(point, regionIndex, pointIndex) {
   if (!isObject(point) || !isFiniteNumber(point.x) || !isFiniteNumber(point.y)) {
-    throw new Error(`Region at index ${regionIndex} has invalid point at index ${pointIndex}`)
+    throw new InvalidRegionsPayloadError(
+      `Region at index ${regionIndex} has invalid point at index ${pointIndex}`
+    )
   }
 }
 
 function validatePolygonRegion(region, index) {
   if (!Array.isArray(region.points) || region.points.length < 3) {
-    throw new Error(`Region at index ${index} has invalid polygon points`)
+    throw new InvalidRegionsPayloadError(`Region at index ${index} has invalid polygon points`)
   }
 
   region.points.forEach((point, pointIndex) => {
@@ -173,7 +184,7 @@ function validatePolygonRegion(region, index) {
 
 function validatePolylineRegion(region, index) {
   if (!Array.isArray(region.points) || region.points.length < 2) {
-    throw new Error(`Region at index ${index} has invalid polyline points`)
+    throw new InvalidRegionsPayloadError(`Region at index ${index} has invalid polyline points`)
   }
 
   region.points.forEach((point, pointIndex) => {
@@ -183,27 +194,27 @@ function validatePolylineRegion(region, index) {
 
 function validateRegionCommonFields(region, index) {
   if (!isObject(region)) {
-    throw new Error(`Region at index ${index} must be an object`)
+    throw new InvalidRegionsPayloadError(`Region at index ${index} must be an object`)
   }
 
   if (typeof region.id !== 'string' || region.id.trim() === '') {
-    throw new Error(`Region at index ${index} has invalid id`)
+    throw new InvalidRegionsPayloadError(`Region at index ${index} has invalid id`)
   }
 
   if (!Number.isInteger(region.pageIndex) || region.pageIndex < 0) {
-    throw new Error(`Region at index ${index} has invalid pageIndex`)
+    throw new InvalidRegionsPayloadError(`Region at index ${index} has invalid pageIndex`)
   }
 
   if (!['rectangle', 'polygon', 'polyline'].includes(region.type)) {
-    throw new Error(`Region at index ${index} has unsupported type`)
+    throw new InvalidRegionsPayloadError(`Region at index ${index} has unsupported type`)
   }
 
   if (typeof region.color !== 'string' || region.color.trim() === '') {
-    throw new Error(`Region at index ${index} has invalid color`)
+    throw new InvalidRegionsPayloadError(`Region at index ${index} has invalid color`)
   }
 
   if (!Array.isArray(region.annotations)) {
-    throw new Error(`Region at index ${index} has invalid annotations`)
+    throw new InvalidRegionsPayloadError(`Region at index ${index} has invalid annotations`)
   }
 
   if (region.type === 'rectangle') {
@@ -254,14 +265,29 @@ const server = http.createServer(async (request, response) => {
     if (request.method === 'PUT' && url.pathname === `/api/documents/${documentId}/regions`) {
       try {
         const body = await readJsonBody(request)
+        if (
+          process.env.NODE_ENV === 'test' &&
+          request.headers['x-annot8-force-region-error'] === 'true'
+        ) {
+          throw new Error('Forced internal region update failure')
+        }
         // The mock backend replaces the full region list instead of applying
         // partial updates. This keeps the API simple for the annotation demo.
         document.regions = validateRegionsArray(body)
         sendJson(response, 200, { regions: document.regions })
       } catch (error) {
-        sendJson(response, 400, {
-          error: error instanceof SyntaxError ? 'Invalid JSON body' : error.message,
-        })
+        if (error instanceof SyntaxError) {
+          sendJson(response, 400, { error: 'Invalid JSON body' })
+          return
+        }
+
+        if (error instanceof InvalidRegionsPayloadError) {
+          sendJson(response, 400, { error: error.message })
+          return
+        }
+
+        console.error(error)
+        sendJson(response, 500, { error: 'Internal server error' })
       }
       return
     }
