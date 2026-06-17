@@ -15,6 +15,8 @@ const PageSidebarStub = {
     <aside class="page-sidebar-stub">
       <span data-testid="sidebar-state">{{ selectedIndex }} {{ collapsed }} {{ pages.length }}</span>
       <button type="button" data-testid="select-page-5" @click="$emit('select-page', 4)">Select page 5</button>
+      <button type="button" data-testid="select-page-negative" @click="$emit('select-page', -1)">Select page -1</button>
+      <button type="button" data-testid="select-page-out-of-range" @click="$emit('select-page', pages.length)">Select page out of range</button>
       <button type="button" data-testid="toggle-sidebar" @click="$emit('toggle-sidebar')">Toggle sidebar</button>
     </aside>
   `,
@@ -48,7 +50,14 @@ const ViewerToolbarStub = {
       <button type="button" data-testid="tool-rectangle" @click="$emit('set-active-tool', 'rectangle')">Rectangle</button>
       <button type="button" data-testid="tool-select" @click="$emit('set-active-tool', 'select')">Select</button>
       <button type="button" data-testid="set-region-color" @click="$emit('update-region-color', '#ff00aa')">Set color</button>
-      <button type="button" data-testid="delete-region" @click="$emit('delete-selected-region')">Delete</button>
+      <button
+        type="button"
+        data-testid="delete-region"
+        :disabled="!hasSelectedRegion"
+        @click="$emit('delete-selected-region')"
+      >
+        Delete
+      </button>
     </nav>
   `,
 }
@@ -228,6 +237,7 @@ function getStub(wrapper, component) {
 
 describe('ViewerPage', () => {
   beforeEach(() => {
+    vi.restoreAllMocks()
     ProjectDocumentModel.id = 'doc1'
     ProjectDocumentModel.pages = Array.from(
       { length: 15 },
@@ -362,6 +372,139 @@ describe('ViewerPage', () => {
         zoomPercentage: 100,
       })
     )
+  })
+
+  it('clears selected region, mouse coordinates, and zoom when navigating to next page', async () => {
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
+
+    await wrapper.find('[data-testid="add-region"]').trigger('click')
+    await wrapper.find('[data-testid="select-region"]').trigger('click')
+    await wrapper.find('[data-testid="move-mouse"]').trigger('click')
+    await wrapper.find('[data-testid="set-zoom-slider"]').trigger('click')
+    await wrapper.find('[data-testid="next-page"]').trigger('click')
+
+    expect(getStub(wrapper, ViewerToolbarStub).props()).toEqual(
+      expect.objectContaining({
+        selectedIndex: 1,
+        hasSelectedRegion: false,
+      })
+    )
+    expect(getStub(wrapper, AnnotationCanvasStub).props()).toEqual(
+      expect.objectContaining({
+        pageIndex: 1,
+        selectedRegionId: null,
+        zoomLevel: 1,
+      })
+    )
+    expect(getStub(wrapper, ViewerStatusBarStub).props()).toEqual(
+      expect.objectContaining({
+        selectedRegion: null,
+        mousePos: null,
+        zoomLevel: 1,
+      })
+    )
+  })
+
+  it('clears selected region when navigating to previous page', async () => {
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
+
+    await wrapper.find('[data-testid="next-page"]').trigger('click')
+    await wrapper.find('[data-testid="add-region"]').trigger('click')
+    await wrapper.find('[data-testid="select-region"]').trigger('click')
+    await wrapper.find('[data-testid="previous-page"]').trigger('click')
+
+    expect(getStub(wrapper, ViewerToolbarStub).props()).toEqual(
+      expect.objectContaining({
+        selectedIndex: 0,
+        hasSelectedRegion: false,
+      })
+    )
+    expect(getStub(wrapper, AnnotationCanvasStub).props()).toEqual(
+      expect.objectContaining({
+        pageIndex: 0,
+        selectedRegionId: null,
+      })
+    )
+    expect(ProjectDocumentModel.regions).toHaveLength(1)
+  })
+
+  it('clears selected region when selecting a page from the sidebar', async () => {
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
+
+    await wrapper.find('[data-testid="add-region"]').trigger('click')
+    await wrapper.find('[data-testid="select-region"]').trigger('click')
+    await wrapper.find('[data-testid="select-page-5"]').trigger('click')
+
+    expect(getStub(wrapper, ViewerToolbarStub).props()).toEqual(
+      expect.objectContaining({
+        selectedIndex: 4,
+        hasSelectedRegion: false,
+      })
+    )
+    expect(getStub(wrapper, AnnotationCanvasStub).props('selectedRegionId')).toBe(null)
+    expect(ProjectDocumentModel.regions).toHaveLength(1)
+  })
+
+  it('disables delete after navigating away from a selected region', async () => {
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
+
+    await wrapper.find('[data-testid="add-region"]').trigger('click')
+    await wrapper.find('[data-testid="select-region"]').trigger('click')
+    expect(wrapper.find('[data-testid="delete-region"]').attributes('disabled')).toBeUndefined()
+
+    await wrapper.find('[data-testid="next-page"]').trigger('click')
+
+    expect(wrapper.find('[data-testid="delete-region"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('does not delete a previous-page region when delete is triggered after navigation', async () => {
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
+
+    await wrapper.find('[data-testid="add-region"]').trigger('click')
+    await wrapper.find('[data-testid="select-region"]').trigger('click')
+    await wrapper.find('[data-testid="next-page"]').trigger('click')
+    getStub(wrapper, ViewerToolbarStub).vm.$emit('delete-selected-region')
+    await wrapper.vm.$nextTick()
+
+    expect(ProjectDocumentModel.regions).toEqual([
+      expect.objectContaining({
+        id: 'region-1',
+        pageIndex: 0,
+      }),
+    ])
+    expect(saveProjectRegionsSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects invalid page navigation targets without changing the current page', async () => {
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
+
+    await wrapper.find('[data-testid="set-zoom-slider"]').trigger('click')
+    await wrapper.find('[data-testid="move-mouse"]').trigger('click')
+    await wrapper.find('[data-testid="select-page-negative"]').trigger('click')
+
+    expect(getStub(wrapper, AnnotationCanvasStub).props()).toEqual(
+      expect.objectContaining({
+        pageIndex: 0,
+        zoomLevel: 2,
+      })
+    )
+    expect(getStub(wrapper, ViewerStatusBarStub).props('mousePos')).toEqual({ x: 321, y: 654 })
+
+    await wrapper.find('[data-testid="select-page-out-of-range"]').trigger('click')
+
+    expect(getStub(wrapper, AnnotationCanvasStub).props()).toEqual(
+      expect.objectContaining({
+        pageIndex: 0,
+        zoomLevel: 2,
+      })
+    )
+    expect(getStub(wrapper, ViewerStatusBarStub).props('mousePos')).toEqual({ x: 321, y: 654 })
   })
 
   it('updates zoom from the status bar slider and clamps it to configured limits', async () => {

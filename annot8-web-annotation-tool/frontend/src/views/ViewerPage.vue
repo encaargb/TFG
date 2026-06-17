@@ -58,24 +58,26 @@ function resetZoom() {
   zoomLevel.value = DEFAULT_ZOOM
 }
 
+function navigateToPage(index) {
+  if (!Number.isInteger(index) || index < 0 || index >= pages.value.length) return
+  if (index === selectedIndex.value) return
+
+  selectedIndex.value = index
+  selectedRegionId.value = null
+  mousePos.value = null
+  resetZoom()
+}
+
 function goToPreviousPage() {
-  if (selectedIndex.value > 0) {
-    selectedIndex.value--
-    resetZoom()
-  }
+  navigateToPage(selectedIndex.value - 1)
 }
 
 function goToNextPage() {
-  if (selectedIndex.value < pages.value.length - 1) {
-    selectedIndex.value++
-    resetZoom()
-  }
+  navigateToPage(selectedIndex.value + 1)
 }
 
 function selectPage(index) {
-  selectedIndex.value = index
-  selectedRegionId.value = null
-  resetZoom()
+  navigateToPage(index)
 }
 
 async function toggleSidebar() {
