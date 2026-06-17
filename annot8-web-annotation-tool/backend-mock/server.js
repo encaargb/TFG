@@ -132,7 +132,39 @@ function validateRegionsArray(body) {
     throw new Error('Regions must be an array')
   }
 
+  body.regions.forEach(validateRegionCommonFields)
+
   return body.regions
+}
+
+function isObject(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function validateRegionCommonFields(region, index) {
+  if (!isObject(region)) {
+    throw new Error(`Region at index ${index} must be an object`)
+  }
+
+  if (typeof region.id !== 'string' || region.id.trim() === '') {
+    throw new Error(`Region at index ${index} has invalid id`)
+  }
+
+  if (!Number.isInteger(region.pageIndex) || region.pageIndex < 0) {
+    throw new Error(`Region at index ${index} has invalid pageIndex`)
+  }
+
+  if (!['rectangle', 'polygon', 'polyline'].includes(region.type)) {
+    throw new Error(`Region at index ${index} has unsupported type`)
+  }
+
+  if (typeof region.color !== 'string' || region.color.trim() === '') {
+    throw new Error(`Region at index ${index} has invalid color`)
+  }
+
+  if (!Array.isArray(region.annotations)) {
+    throw new Error(`Region at index ${index} has invalid annotations`)
+  }
 }
 
 const server = http.createServer(async (request, response) => {
