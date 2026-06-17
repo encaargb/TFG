@@ -478,10 +478,38 @@ describe('mock backend', () => {
     )
   })
 
-  it('continues accepting polyline payloads without geometry validation', async () => {
+  it('accepts polyline regions with valid points', async () => {
     const regions = [
-      polylineRegion({ points: null }),
-      polylineRegion({ id: 'invalid-polyline-shape', points: 'not validated in this task' }),
+      polylineRegion(),
+      polylineRegion({
+        id: 'three-point-polyline',
+        points: [
+          { x: 10, y: 20 },
+          { x: 40, y: 60 },
+          { x: 80, y: 90 },
+        ],
+      }),
+      polylineRegion({
+        id: 'decimal-polyline',
+        points: [
+          { x: 10.5, y: 20.25 },
+          { x: 40.75, y: 60.125 },
+        ],
+      }),
+      polylineRegion({
+        id: 'zero-polyline',
+        points: [
+          { x: 0, y: 0 },
+          { x: 0, y: 0 },
+        ],
+      }),
+      polylineRegion({
+        id: 'negative-polyline',
+        points: [
+          { x: -10, y: -20 },
+          { x: -5, y: -1 },
+        ],
+      }),
     ]
 
     const response = await saveRegions(regions)
@@ -490,6 +518,102 @@ describe('mock backend', () => {
     assert.equal(response.status, 200)
     assert.deepEqual(body, { regions })
     assert.deepEqual(await getDocumentRegions(), regions)
+  })
+
+  it('rejects polyline regions with missing or undersized points arrays', async () => {
+    const existingRegions = [rectangleRegion()]
+    const initialSaveResponse = await saveRegions(existingRegions)
+    assert.equal(initialSaveResponse.status, 200)
+
+    const missingPoints = polylineRegion()
+    delete missingPoints.points
+
+    const invalidPolylines = [
+      missingPoints,
+      polylineRegion({ points: null }),
+      polylineRegion({ points: 'invalid' }),
+      polylineRegion({ points: [] }),
+      polylineRegion({ points: [{ x: 10, y: 20 }] }),
+    ]
+
+    for (const polyline of invalidPolylines) {
+      await assertInvalidRegionsPreserveStoredRegions([polyline], existingRegions)
+    }
+  })
+
+  it('rejects polyline regions with invalid point objects', async () => {
+    const existingRegions = [rectangleRegion()]
+    const initialSaveResponse = await saveRegions(existingRegions)
+    assert.equal(initialSaveResponse.status, 200)
+
+    const missingXPoint = { y: 60 }
+    const missingYPoint = { x: 40 }
+    const invalidPoints = [
+      null,
+      [40, 60],
+      missingXPoint,
+      missingYPoint,
+    ]
+
+    for (const point of invalidPoints) {
+      await assertInvalidRegionsPreserveStoredRegions(
+        [
+          polylineRegion({
+            points: [
+              { x: 10, y: 20 },
+              point,
+            ],
+          }),
+        ],
+        existingRegions
+      )
+    }
+  })
+
+  it('rejects polyline regions with non-finite or non-number point coordinates', async () => {
+    const existingRegions = [rectangleRegion()]
+    const initialSaveResponse = await saveRegions(existingRegions)
+    assert.equal(initialSaveResponse.status, 200)
+
+    const invalidCoordinateValues = [
+      '40',
+      null,
+      NaN,
+      Infinity,
+      -Infinity,
+      true,
+      {},
+      [],
+    ]
+
+    for (const coordinateValue of invalidCoordinateValues) {
+      await assertInvalidRegionsPreserveStoredRegions(
+        [
+          polylineRegion({
+            points: [
+              { x: 10, y: 20 },
+              { x: coordinateValue, y: 60 },
+            ],
+          }),
+        ],
+        existingRegions
+      )
+    }
+  })
+
+  it('does not store any regions when a multi-region payload contains an invalid polyline', async () => {
+    const existingRegions = [rectangleRegion({ id: 'existing-region' })]
+    const initialSaveResponse = await saveRegions(existingRegions)
+    assert.equal(initialSaveResponse.status, 200)
+
+    await assertInvalidRegionsPreserveStoredRegions(
+      [
+        rectangleRegion({ id: 'valid-rectangle' }),
+        polygonRegion({ id: 'valid-polygon' }),
+        polylineRegion({ id: 'invalid-polyline', points: [{ x: 10, y: 20 }] }),
+      ],
+      existingRegions
+    )
   })
 
   it('rejects missing or invalid regions arrays without changing stored regions', async () => {

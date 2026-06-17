@@ -171,6 +171,16 @@ function validatePolygonRegion(region, index) {
   })
 }
 
+function validatePolylineRegion(region, index) {
+  if (!Array.isArray(region.points) || region.points.length < 2) {
+    throw new Error(`Region at index ${index} has invalid polyline points`)
+  }
+
+  region.points.forEach((point, pointIndex) => {
+    validatePoint(point, index, pointIndex)
+  })
+}
+
 function validateRegionCommonFields(region, index) {
   if (!isObject(region)) {
     throw new Error(`Region at index ${index} must be an object`)
@@ -202,6 +212,10 @@ function validateRegionCommonFields(region, index) {
 
   if (region.type === 'polygon') {
     validatePolygonRegion(region, index)
+  }
+
+  if (region.type === 'polyline') {
+    validatePolylineRegion(region, index)
   }
 }
 
