@@ -135,6 +135,14 @@ async function drawPointRegionWithDoubleClick(activeTool, props = {}) {
   return wrapper
 }
 
+async function changeCanvasPage(wrapper, pageIndex = 1) {
+  await wrapper.setProps({
+    selectedPage: `/page-${pageIndex + 1}.png`,
+    pageIndex,
+  })
+  await flushImageLoad()
+}
+
 function mockCanvasWrapperBounds(wrapper, bounds = {}) {
   const element = wrapper.find('.canvas-wrapper').element
   const rect = {
@@ -1384,6 +1392,161 @@ describe('AnnotationCanvas', () => {
     } finally {
       window.Image = OriginalImage
     }
+  })
+
+  it('cancels an unfinished rectangle when the page changes', async () => {
+    const wrapper = mountCanvas({ activeTool: 'rectangle' })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousedown')
+
+    const draftRectangle = getRectInstances().at(-1)
+
+    await changeCanvasPage(wrapper)
+    stage.trigger('mouseup')
+
+    expect(draftRectangle.destroy).toHaveBeenCalledTimes(1)
+    expect(wrapper.emitted('add-region')).toBeUndefined()
+    expect(wrapper.props('activeTool')).toBe('rectangle')
+  })
+
+  it('cancels an unfinished polygon when the page changes', async () => {
+    const wrapper = mountCanvas({ activeTool: 'polygon' })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousedown', { evt: { detail: 1 } })
+    stage.trigger('click', { evt: { detail: 1 } })
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 50 })
+    stage.trigger('mousemove')
+
+    const draftPolygon = getLineInstances().at(-1)
+
+    await changeCanvasPage(wrapper)
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+
+    expect(draftPolygon.destroy).toHaveBeenCalledTimes(1)
+    expect(wrapper.emitted('add-region')).toBeUndefined()
+    expect(wrapper.props('activeTool')).toBe('polygon')
+  })
+
+  it('cancels an unfinished polyline when the page changes', async () => {
+    const wrapper = mountCanvas({ activeTool: 'polyline' })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousedown', { evt: { detail: 1 } })
+    stage.trigger('click', { evt: { detail: 1 } })
+
+    const draftPolyline = getLineInstances().at(-1)
+
+    await changeCanvasPage(wrapper)
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+
+    expect(draftPolyline.destroy).toHaveBeenCalledTimes(1)
+    expect(wrapper.emitted('add-region')).toBeUndefined()
+    expect(wrapper.props('activeTool')).toBe('polyline')
+  })
+
+  it('clears pending point-region drag state when the page changes', async () => {
+    const wrapper = mountCanvas({ activeTool: 'polyline' })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    stage.getPointerPosition.mockReturnValue({ x: 100, y: 50 })
+    stage.trigger('mousedown', { evt: { detail: 1 } })
+
+    await changeCanvasPage(wrapper)
+
+    stage.getPointerPosition.mockReturnValue({ x: 250, y: 150 })
+    stage.trigger('mouseup')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+
+    expect(wrapper.emitted('add-region')).toBeUndefined()
+  })
+
+  it('clears selected point-region vertices when the page changes', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [fourPointPolygonRegion()],
+    })
+    await flushImageLoad()
+
+    const vertexHandle = getCircleInstances().slice(-4)[0]
+    vertexHandle.trigger('click')
+
+    await changeCanvasPage(wrapper)
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }))
+
+    expect(wrapper.emitted('update-region')).toBeUndefined()
+    expect(wrapper.emitted('delete-selected-region')).toEqual([[]])
+  })
+
+  it('clears pending polyline endpoint extension state when the page changes', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [threePointPolylineRegion()],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const firstVertexHandle = getCircleInstances().slice(-3)[0]
+    firstVertexHandle.trigger('click')
+    stage.getPointerPosition.mockReturnValue({ x: 80, y: 140 })
+    stage.trigger('mousemove')
+
+    const previewLine = getLineInstances().find((line) => line.config.listening === false)
+
+    await changeCanvasPage(wrapper)
+    stage.getPointerPosition.mockReturnValue({ x: 70, y: 130 })
+    stage.trigger('click')
+
+    expect(previewLine.destroy).toHaveBeenCalledTimes(1)
+    expect(wrapper.emitted('update-region')).toBeUndefined()
+  })
+
+  it('clears temporary hover cursor state when the page changes', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [polygonRegion()],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const vertexHandle = getCircleInstances().slice(-3)[0]
+    vertexHandle.trigger('mouseenter')
+
+    expect(stage.container().style.cursor).toBe('grab')
+
+    await changeCanvasPage(wrapper)
+
+    expect(stage.container().style.cursor).toBe('default')
+  })
+
+  it('keeps completed regions stored and renders only regions for the new page after a page change', async () => {
+    const pageOneRegion = rectangleRegion({ id: 'page-one-region', pageIndex: 0 })
+    const pageTwoRegion = rectangleRegion({ id: 'page-two-region', pageIndex: 1 })
+    const wrapper = mountCanvas({
+      regions: [pageOneRegion, pageTwoRegion],
+    })
+    await flushImageLoad()
+
+    const regionLayer = getLayerInstances()[1]
+    regionLayer.add.mockClear()
+
+    await changeCanvasPage(wrapper)
+
+    const renderedRegionIds = regionLayer.add.mock.calls
+      .map(([node]) => node?.config?.id)
+      .filter(Boolean)
+
+    expect(wrapper.props('regions')).toEqual([pageOneRegion, pageTwoRegion])
+    expect(renderedRegionIds).toContain('page-two-region')
+    expect(renderedRegionIds).not.toContain('page-one-region')
   })
 
   it('destroys the Konva stage when unmounted', async () => {

@@ -1181,6 +1181,23 @@ function cancelDraftPointRegion(shouldRender = true) {
   }
 }
 
+function resetTransientInteractionState() {
+  cancelDraftRectangleRegion()
+  cancelDraftPointRegion(false)
+  clearSelectedPointRegionPoint()
+  clearPolylineEndpointExtensionPreview(false)
+  clearRegionCursorState()
+  resetStageCursor()
+
+  pointRegionDragStart = null
+  skipNextPointRegionClick = false
+  skipNextPointRegionClickPosition = null
+  isVertexHandleDragging = false
+  selectedPointRegionPoint = null
+  suppressPointRegionClick = false
+  suppressPointRegionDoubleClick = false
+}
+
 function commitDraftPointRegion() {
   if (!draftRegionNode || !['polygon', 'polyline'].includes(props.activeTool)) return
 
@@ -1385,6 +1402,10 @@ watch(() => props.selectedPage, (newPage) => {
 
 watch(() => props.zoomLevel, () => {
   updateZoom()
+})
+
+watch(() => props.pageIndex, () => {
+  resetTransientInteractionState()
 })
 
 watch(() => props.selectedRegionId, (newSelectedRegionId) => {
