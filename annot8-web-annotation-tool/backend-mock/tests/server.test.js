@@ -7,6 +7,22 @@ const BASE_URL = `http://127.0.0.1:${PORT}`
 
 let backend
 
+async function saveRegions(regions) {
+  return fetch(`${BASE_URL}/api/documents/doc1/regions`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ regions }),
+  })
+}
+
+async function getDocumentRegions() {
+  const response = await fetch(`${BASE_URL}/api/documents/doc1`)
+  const body = await response.json()
+  return body.regions
+}
+
 function waitForBackend() {
   return new Promise((resolve, reject) => {
     const startedAt = Date.now()
@@ -97,13 +113,7 @@ describe('mock backend', () => {
       },
     ]
 
-    const saveResponse = await fetch(`${BASE_URL}/api/documents/doc1/regions`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ regions }),
-    })
+    const saveResponse = await saveRegions(regions)
     const saveBody = await saveResponse.json()
 
     const documentResponse = await fetch(`${BASE_URL}/api/documents/doc1`)
@@ -112,6 +122,54 @@ describe('mock backend', () => {
     assert.equal(saveResponse.status, 200)
     assert.deepEqual(saveBody, { regions })
     assert.deepEqual(documentBody.regions, regions)
+  })
+
+  it('accepts an explicit empty regions array', async () => {
+    const response = await saveRegions([])
+    const body = await response.json()
+
+    assert.equal(response.status, 200)
+    assert.deepEqual(body, { regions: [] })
+    assert.deepEqual(await getDocumentRegions(), [])
+  })
+
+  it('rejects missing or invalid regions arrays without changing stored regions', async () => {
+    const existingRegions = [
+      {
+        id: 'region-1',
+        pageIndex: 0,
+        type: 'rectangle',
+        left: 10,
+        top: 20,
+        right: 40,
+        bottom: 60,
+        color: '#0d6efd',
+        annotations: [],
+      },
+    ]
+    const invalidPayloads = [
+      {},
+      { regions: 'invalid' },
+      { regions: null },
+    ]
+
+    const initialSaveResponse = await saveRegions(existingRegions)
+    assert.equal(initialSaveResponse.status, 200)
+
+    for (const payload of invalidPayloads) {
+      const response = await fetch(`${BASE_URL}/api/documents/doc1/regions`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      })
+      const body = await response.json()
+
+      assert.equal(response.status, 400)
+      assert.deepEqual(body, { error: 'Regions must be an array' })
+      assert.deepEqual(await getDocumentRegions(), existingRegions)
+    }
   })
 
   it('returns errors for invalid requests', async () => {

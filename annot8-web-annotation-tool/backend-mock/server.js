@@ -127,6 +127,14 @@ function getDocumentId(pathname) {
   return match?.[1]
 }
 
+function validateRegionsArray(body) {
+  if (!Object.prototype.hasOwnProperty.call(body, 'regions') || !Array.isArray(body.regions)) {
+    throw new Error('Regions must be an array')
+  }
+
+  return body.regions
+}
+
 const server = http.createServer(async (request, response) => {
   const url = new URL(request.url, `http://${request.headers.host}`)
 
@@ -164,10 +172,12 @@ const server = http.createServer(async (request, response) => {
         const body = await readJsonBody(request)
         // The mock backend replaces the full region list instead of applying
         // partial updates. This keeps the API simple for the annotation demo.
-        document.regions = Array.isArray(body.regions) ? body.regions : []
+        document.regions = validateRegionsArray(body)
         sendJson(response, 200, { regions: document.regions })
       } catch (error) {
-        sendJson(response, 400, { error: 'Invalid JSON body' })
+        sendJson(response, 400, {
+          error: error instanceof SyntaxError ? 'Invalid JSON body' : error.message,
+        })
       }
       return
     }
