@@ -333,10 +333,155 @@ describe('mock backend', () => {
     )
   })
 
-  it('continues accepting polygon and polyline payloads without geometry validation', async () => {
+  it('accepts polygon regions with valid points', async () => {
     const regions = [
-      polygonRegion({ points: 'not validated in this task' }),
+      polygonRegion(),
+      polygonRegion({
+        id: 'four-point-polygon',
+        points: [
+          { x: 10, y: 20 },
+          { x: 40, y: 20 },
+          { x: 45, y: 45 },
+          { x: 25, y: 60 },
+        ],
+      }),
+      polygonRegion({
+        id: 'decimal-polygon',
+        points: [
+          { x: 10.5, y: 20.25 },
+          { x: 40.75, y: 20.125 },
+          { x: 25.5, y: 60.875 },
+        ],
+      }),
+      polygonRegion({
+        id: 'zero-polygon',
+        points: [
+          { x: 0, y: 0 },
+          { x: 10, y: 0 },
+          { x: 0, y: 10 },
+        ],
+      }),
+      polygonRegion({
+        id: 'negative-polygon',
+        points: [
+          { x: -10, y: -20 },
+          { x: -5, y: -20 },
+          { x: -10, y: -5 },
+        ],
+      }),
+    ]
+
+    const response = await saveRegions(regions)
+    const body = await response.json()
+
+    assert.equal(response.status, 200)
+    assert.deepEqual(body, { regions })
+    assert.deepEqual(await getDocumentRegions(), regions)
+  })
+
+  it('rejects polygon regions with missing or undersized points arrays', async () => {
+    const existingRegions = [rectangleRegion()]
+    const initialSaveResponse = await saveRegions(existingRegions)
+    assert.equal(initialSaveResponse.status, 200)
+
+    const missingPoints = polygonRegion()
+    delete missingPoints.points
+
+    const invalidPolygons = [
+      missingPoints,
+      polygonRegion({ points: null }),
+      polygonRegion({ points: 'invalid' }),
+      polygonRegion({ points: [] }),
+      polygonRegion({ points: [{ x: 10, y: 20 }] }),
+      polygonRegion({ points: [{ x: 10, y: 20 }, { x: 40, y: 20 }] }),
+    ]
+
+    for (const polygon of invalidPolygons) {
+      await assertInvalidRegionsPreserveStoredRegions([polygon], existingRegions)
+    }
+  })
+
+  it('rejects polygon regions with invalid point objects', async () => {
+    const existingRegions = [rectangleRegion()]
+    const initialSaveResponse = await saveRegions(existingRegions)
+    assert.equal(initialSaveResponse.status, 200)
+
+    const missingXPoint = { y: 60 }
+    const missingYPoint = { x: 25 }
+    const invalidPoints = [
+      null,
+      [25, 60],
+      missingXPoint,
+      missingYPoint,
+    ]
+
+    for (const point of invalidPoints) {
+      await assertInvalidRegionsPreserveStoredRegions(
+        [
+          polygonRegion({
+            points: [
+              { x: 10, y: 20 },
+              { x: 40, y: 20 },
+              point,
+            ],
+          }),
+        ],
+        existingRegions
+      )
+    }
+  })
+
+  it('rejects polygon regions with non-finite or non-number point coordinates', async () => {
+    const existingRegions = [rectangleRegion()]
+    const initialSaveResponse = await saveRegions(existingRegions)
+    assert.equal(initialSaveResponse.status, 200)
+
+    const invalidCoordinateValues = [
+      '25',
+      null,
+      NaN,
+      Infinity,
+      -Infinity,
+      true,
+      {},
+      [],
+    ]
+
+    for (const coordinateValue of invalidCoordinateValues) {
+      await assertInvalidRegionsPreserveStoredRegions(
+        [
+          polygonRegion({
+            points: [
+              { x: 10, y: 20 },
+              { x: 40, y: 20 },
+              { x: coordinateValue, y: 60 },
+            ],
+          }),
+        ],
+        existingRegions
+      )
+    }
+  })
+
+  it('does not store any regions when a multi-region payload contains an invalid polygon', async () => {
+    const existingRegions = [rectangleRegion({ id: 'existing-region' })]
+    const initialSaveResponse = await saveRegions(existingRegions)
+    assert.equal(initialSaveResponse.status, 200)
+
+    await assertInvalidRegionsPreserveStoredRegions(
+      [
+        rectangleRegion({ id: 'valid-rectangle' }),
+        polygonRegion({ id: 'invalid-polygon', points: [{ x: 10, y: 20 }] }),
+        polylineRegion({ id: 'valid-polyline' }),
+      ],
+      existingRegions
+    )
+  })
+
+  it('continues accepting polyline payloads without geometry validation', async () => {
+    const regions = [
       polylineRegion({ points: null }),
+      polylineRegion({ id: 'invalid-polyline-shape', points: 'not validated in this task' }),
     ]
 
     const response = await saveRegions(regions)

@@ -155,6 +155,22 @@ function validateRectangleRegion(region, index) {
   }
 }
 
+function validatePoint(point, regionIndex, pointIndex) {
+  if (!isObject(point) || !isFiniteNumber(point.x) || !isFiniteNumber(point.y)) {
+    throw new Error(`Region at index ${regionIndex} has invalid point at index ${pointIndex}`)
+  }
+}
+
+function validatePolygonRegion(region, index) {
+  if (!Array.isArray(region.points) || region.points.length < 3) {
+    throw new Error(`Region at index ${index} has invalid polygon points`)
+  }
+
+  region.points.forEach((point, pointIndex) => {
+    validatePoint(point, index, pointIndex)
+  })
+}
+
 function validateRegionCommonFields(region, index) {
   if (!isObject(region)) {
     throw new Error(`Region at index ${index} must be an object`)
@@ -182,6 +198,10 @@ function validateRegionCommonFields(region, index) {
 
   if (region.type === 'rectangle') {
     validateRectangleRegion(region, index)
+  }
+
+  if (region.type === 'polygon') {
+    validatePolygonRegion(region, index)
   }
 }
 
