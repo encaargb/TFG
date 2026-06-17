@@ -141,6 +141,20 @@ function isObject(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+function isFiniteNumber(value) {
+  return typeof value === 'number' && Number.isFinite(value)
+}
+
+function validateRectangleRegion(region, index) {
+  const hasValidCoordinates = ['left', 'top', 'right', 'bottom'].every((coordinate) =>
+    isFiniteNumber(region[coordinate])
+  )
+
+  if (!hasValidCoordinates) {
+    throw new Error(`Region at index ${index} has invalid rectangle coordinates`)
+  }
+}
+
 function validateRegionCommonFields(region, index) {
   if (!isObject(region)) {
     throw new Error(`Region at index ${index} must be an object`)
@@ -164,6 +178,10 @@ function validateRegionCommonFields(region, index) {
 
   if (!Array.isArray(region.annotations)) {
     throw new Error(`Region at index ${index} has invalid annotations`)
+  }
+
+  if (region.type === 'rectangle') {
+    validateRectangleRegion(region, index)
   }
 }
 

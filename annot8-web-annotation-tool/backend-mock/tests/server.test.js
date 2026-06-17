@@ -247,6 +247,106 @@ describe('mock backend', () => {
     )
   })
 
+  it('accepts rectangle regions with finite numeric coordinates', async () => {
+    const regions = [
+      rectangleRegion(),
+      rectangleRegion({
+        id: 'decimal-region',
+        left: 10.5,
+        top: 20.25,
+        right: 40.75,
+        bottom: 60.125,
+      }),
+      rectangleRegion({
+        id: 'zero-region',
+        left: 0,
+        top: 0,
+        right: 0,
+        bottom: 0,
+      }),
+      rectangleRegion({
+        id: 'negative-region',
+        left: -10,
+        top: -20,
+        right: -5,
+        bottom: -1,
+      }),
+    ]
+
+    const response = await saveRegions(regions)
+    const body = await response.json()
+
+    assert.equal(response.status, 200)
+    assert.deepEqual(body, { regions })
+    assert.deepEqual(await getDocumentRegions(), regions)
+  })
+
+  it('rejects rectangle regions with missing coordinates', async () => {
+    const existingRegions = [rectangleRegion()]
+    const initialSaveResponse = await saveRegions(existingRegions)
+    assert.equal(initialSaveResponse.status, 200)
+
+    for (const coordinate of ['left', 'top', 'right', 'bottom']) {
+      const invalidRegion = rectangleRegion()
+      delete invalidRegion[coordinate]
+
+      await assertInvalidRegionsPreserveStoredRegions([invalidRegion], existingRegions)
+    }
+  })
+
+  it('rejects rectangle regions with non-finite or non-number coordinates', async () => {
+    const existingRegions = [rectangleRegion()]
+    const initialSaveResponse = await saveRegions(existingRegions)
+    assert.equal(initialSaveResponse.status, 200)
+
+    const invalidCoordinateValues = [
+      '10',
+      null,
+      NaN,
+      Infinity,
+      -Infinity,
+      [],
+      {},
+      true,
+    ]
+
+    for (const coordinateValue of invalidCoordinateValues) {
+      await assertInvalidRegionsPreserveStoredRegions(
+        [rectangleRegion({ left: coordinateValue })],
+        existingRegions
+      )
+    }
+  })
+
+  it('does not store any regions when a multi-region payload contains an invalid rectangle', async () => {
+    const existingRegions = [rectangleRegion({ id: 'existing-region' })]
+    const initialSaveResponse = await saveRegions(existingRegions)
+    assert.equal(initialSaveResponse.status, 200)
+
+    await assertInvalidRegionsPreserveStoredRegions(
+      [
+        polygonRegion({ id: 'valid-polygon' }),
+        rectangleRegion({ id: 'invalid-rectangle', left: '10' }),
+        polylineRegion({ id: 'valid-polyline' }),
+      ],
+      existingRegions
+    )
+  })
+
+  it('continues accepting polygon and polyline payloads without geometry validation', async () => {
+    const regions = [
+      polygonRegion({ points: 'not validated in this task' }),
+      polylineRegion({ points: null }),
+    ]
+
+    const response = await saveRegions(regions)
+    const body = await response.json()
+
+    assert.equal(response.status, 200)
+    assert.deepEqual(body, { regions })
+    assert.deepEqual(await getDocumentRegions(), regions)
+  })
+
   it('rejects missing or invalid regions arrays without changing stored regions', async () => {
     const existingRegions = [rectangleRegion()]
     const invalidPayloads = [
