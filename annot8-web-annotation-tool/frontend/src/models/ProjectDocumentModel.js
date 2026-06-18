@@ -2,15 +2,13 @@ const SAMPLE_DOCUMENT_METADATA = {
   id: 'doc1',
   title: 'Sample document',
   pages: Array.from({ length: 15 }, (_, i) => `/documents/doc1/pages/pg${i + 1}.jpeg`),
-  regions: [],
 }
 
 class ProjectDocument {
-  constructor({ id, title, pages, regions = [] }) {
+  constructor({ id, title, pages }) {
     this.id = id
     this.title = title
     this.pages = pages
-    this.regions = regions
   }
 
   get regionsStorageKey() {

@@ -53,37 +53,6 @@ describe('documentApi', () => {
     ])
   })
 
-  it('saves regions through the API and keeps the local model in sync', async () => {
-    const regions = [
-      {
-        id: 'region-1',
-        pageIndex: 0,
-        type: 'rectangle',
-        left: 1,
-        top: 2,
-        right: 4,
-        bottom: 6,
-        color: '#0d6efd',
-        annotations: [],
-      },
-    ]
-    const fetchMock = mockFetch({ regions })
-
-    const { saveProjectRegions } = await loadDocumentApi('http://localhost:3001')
-    const { ProjectDocumentModel } = await import('../../src/models/ProjectDocumentModel.js')
-    const response = await saveProjectRegions('doc1', regions)
-
-    expect(ProjectDocumentModel.regions).toBe(regions)
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:3001/api/documents/doc1/regions', {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ regions }),
-    })
-    expect(response).toEqual({ regions })
-  })
-
   it('throws when the API cannot load a document', async () => {
     mockFetch({}, false)
 

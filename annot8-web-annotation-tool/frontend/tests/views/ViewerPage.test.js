@@ -8,7 +8,6 @@ const updateZoomSpy = vi.fn()
 let fetchProjectDocumentSpy
 let loadRegionsSpy
 let saveRegionsSpy
-let saveProjectRegionsSpy
 const SAVE_DELAY_MS = 500
 
 const PageSidebarStub = {
@@ -273,7 +272,6 @@ describe('ViewerPage', () => {
       { length: 15 },
       (_, index) => `/documents/doc1/pages/pg${index + 1}.jpeg`
     )
-    ProjectDocumentModel.regions = []
     updateZoomSpy.mockClear()
     fetchProjectDocumentSpy = vi.spyOn(documentApi, 'fetchProjectDocument').mockResolvedValue({
       id: 'doc1',
@@ -283,9 +281,6 @@ describe('ViewerPage', () => {
     })
     loadRegionsSpy = vi.spyOn(ProjectDocumentModel, 'loadRegions').mockReturnValue([])
     saveRegionsSpy = vi.spyOn(ProjectDocumentModel, 'save').mockImplementation(() => {})
-    saveProjectRegionsSpy = vi
-      .spyOn(documentApi, 'saveProjectRegions')
-      .mockResolvedValue([])
   })
 
   afterEach(() => {
@@ -568,7 +563,6 @@ describe('ViewerPage', () => {
         pageIndex: 0,
       }),
     ])
-    expect(saveProjectRegionsSpy).not.toHaveBeenCalled()
   })
 
   it('rejects invalid page navigation targets without changing the current page', async () => {
@@ -792,7 +786,6 @@ describe('ViewerPage', () => {
     await advanceSaveDelay(wrapper)
 
     expect(saveRegionsSpy).toHaveBeenCalledTimes(4)
-    expect(saveProjectRegionsSpy).not.toHaveBeenCalled()
   })
 
   it('returns to select mode without selecting new polygon and polyline regions', async () => {

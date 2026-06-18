@@ -80,13 +80,6 @@ describe('ProjectDocumentModel', () => {
     expect(document.pages).toBe(pages)
   })
 
-  it('preserves an initial regions array for temporary compatibility', () => {
-    const regions = [rectangleRegion()]
-    const document = createDocument({ regions })
-
-    expect(document.regions).toBe(regions)
-  })
-
   it('save() uses annot8:documents:doc1:regions for doc1', () => {
     const document = createDocument({ id: 'doc1' })
     const regions = [rectangleRegion()]
@@ -184,5 +177,12 @@ describe('ProjectDocumentModel', () => {
     })
 
     expect(() => document.save([rectangleRegion()])).toThrow(error)
+  })
+
+  it('does not expose a regions property', () => {
+    const document = createDocument()
+
+    expect('regions' in document).toBe(false)
+    expect('regions' in document).toBe(false)
   })
 })

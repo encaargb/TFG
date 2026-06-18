@@ -31,27 +31,3 @@ export async function fetchProjectDocument(documentId = ProjectDocumentModel.id)
     pages: document.pages.map((page) => (page.startsWith('/') ? `${apiBaseUrl}${page}` : page)),
   }
 }
-
-/**
- * Persists the current region list in the mock backend.
- * The local model is also updated so the viewer keeps working without an API.
- */
-export async function saveProjectRegions(documentId, regions) {
-  ProjectDocumentModel.regions = regions
-
-  if (!useApi) return regions
-
-  const response = await fetch(`${apiBaseUrl}/api/documents/${documentId}/regions`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ regions }),
-  })
-
-  if (!response.ok) {
-    throw new Error(`Unable to save regions for document ${documentId}`)
-  }
-
-  return response.json()
-}

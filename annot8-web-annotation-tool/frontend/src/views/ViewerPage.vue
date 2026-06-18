@@ -15,7 +15,7 @@ import {
 
 const documentId = ref(ProjectDocumentModel.id)
 const pages = ref(ProjectDocumentModel.pages)
-const regions = ref(ProjectDocumentModel.regions)
+const regions = ref([])
 const selectedIndex = ref(0)
 
 const MIN_ZOOM = 0.25
