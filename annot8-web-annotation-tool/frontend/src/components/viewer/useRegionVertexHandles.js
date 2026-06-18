@@ -11,7 +11,6 @@ export function useRegionVertexHandles({
   getRegionLayer,
   getSelectedPointRegionPoint,
   setSelectedPointRegionPoint,
-  getVertexHandles,
   setIsVertexHandleDragging,
   clearPolylineEndpointExtensionPreview,
   autoScrollCanvasWrapper,
@@ -26,16 +25,17 @@ export function useRegionVertexHandles({
     const { scaleX, scaleY } = getRegionScale()
     const visiblePoints = toVisiblePoints(region.points, scaleX, scaleY, getZoomLevel())
     const editedVisiblePoints = visiblePoints.map((point) => ({ ...point }))
+    let handles = []
 
     function selectVertexHandle(pointIndex, handle) {
       clearPolylineEndpointExtensionPreview(false)
       setSelectedPointRegionPoint({ regionId: region.id, pointIndex })
-      getVertexHandles().forEach((vertexHandle) => vertexHandle.fill('#ffffff'))
+      handles.forEach((vertexHandle) => vertexHandle.fill('#ffffff'))
       handle.fill(region.color)
       getRegionLayer().draw()
     }
 
-    return visiblePoints.map((point, index) => {
+    handles = visiblePoints.map((point, index) => {
       let isHandleHovered = false
       let isHandleDragging = false
 
@@ -157,6 +157,8 @@ export function useRegionVertexHandles({
 
       return handle
     })
+
+    return handles
   }
 
   return {
