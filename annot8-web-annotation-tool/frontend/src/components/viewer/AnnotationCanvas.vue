@@ -16,19 +16,18 @@ import {
   getAnchorAwareVisibleRectangle,
   getNodeVisibleRectangle,
   getTransformedRectangleEdges,
-  hasValidVisibleRectangleSize,
 } from './rectangleCanvasGeometry'
 import { useCanvasAutoScroll } from './useCanvasAutoScroll'
 import { useCanvasCursor } from './useCanvasCursor'
 import { useCanvasKeyboardShortcuts } from './useCanvasKeyboardShortcuts'
 import { useCanvasPageImage } from './useCanvasPageImage'
+import { useRectangleDrawing } from './useRectangleDrawing'
 import {
   clampPointToBounds,
   clampPolygonToBounds,
   clampRectangleToBounds,
   createPolygonRegion,
   createPolylineRegion,
-  createRectangleRegion,
   flattenPoints,
   isDrawableRegion,
   toDocumentPoints,
@@ -107,8 +106,7 @@ let stage = null
 let imageLayer = null
 let regionLayer = null
 let transformer = null
-let draftRegionNode = null
-let draftRegionStart = null
+let draftPointRegionNode = null
 let draftPointRegionPoints = []
 let polylineEndpointExtensionPreviewNode = null
 let skipNextPointRegionClick = false
@@ -146,13 +144,10 @@ const {
 })
 
 function hasActiveCanvasInteraction() {
-  return Boolean(draftRegionNode || getDraggedRegionId() || isVertexHandleDragging)
+  return Boolean(
+    hasDraftRectangle() || draftPointRegionNode || getDraggedRegionId() || isVertexHandleDragging
+  )
 }
-
-const { autoScrollCanvasWrapper } = useCanvasAutoScroll({
-  canvasWrapper,
-  isInteractionActive: hasActiveCanvasInteraction,
-})
 
 const {
   loadSelectedPage,
@@ -170,6 +165,37 @@ const {
   canvasWrapper,
   getZoomLevel: () => props.zoomLevel,
   renderRegions: () => renderRegions(),
+})
+
+const {
+  beginRectangleRegion,
+  updateDraftRectangleRegion,
+  commitDraftRectangleRegion,
+  cancelDraftRectangleRegion,
+  hasDraftRectangle,
+  disposeRectangleDrawing,
+} = useRectangleDrawing({
+  getStage: () => stage,
+  getRegionLayer: () => regionLayer,
+  hasPageImage,
+  getActiveTool: () => props.activeTool,
+  getPageIndex: () => props.pageIndex,
+  getNextRegionId: () => props.nextRegionId,
+  getZoomLevel: () => props.zoomLevel,
+  getRegionCreationColor,
+  getRegionScale,
+  getDocumentBounds,
+  getClampedDocumentPointer,
+  isPointerInsideVisibleDocument,
+  clampRectangleToBounds,
+  clearSelectedRegion: () => emit('clear-selected-region'),
+  addRegion: (region) => emit('add-region', region),
+  renderRegions,
+})
+
+const { autoScrollCanvasWrapper } = useCanvasAutoScroll({
+  canvasWrapper,
+  isInteractionActive: hasActiveCanvasInteraction,
 })
 
 function clearSelectedPointRegionPoint() {
@@ -778,72 +804,8 @@ function renderRegions() {
   regionLayer.draw()
 }
 
-function beginRectangleRegion() {
-  if (!stage || !regionLayer || !hasPageImage() || props.activeTool !== 'rectangle') return
-
-  const pointerPosition = stage.getPointerPosition()
-
-  if (!isPointerInsideVisibleDocument(pointerPosition)) return
-
-  const documentStart = getClampedDocumentPointer(pointerPosition)
-
-  if (!documentStart) return
-
-  emit('clear-selected-region')
-  draftRegionStart = documentStart
-
-  const { scaleX, scaleY } = getRegionScale()
-  const visibleStart = toVisibleRectangle(
-    {
-      left: documentStart.x,
-      top: documentStart.y,
-      right: documentStart.x,
-      bottom: documentStart.y,
-    },
-    scaleX,
-    scaleY,
-    props.zoomLevel
-  )
-
-  draftRegionNode = new Konva.Rect({
-    ...visibleStart,
-    fill: `${getRegionCreationColor()}26`,
-    stroke: getRegionCreationColor(),
-    strokeWidth: 2,
-    strokeScaleEnabled: false,
-    dash: [6, 4],
-  })
-
-  regionLayer.add(draftRegionNode)
-  regionLayer.draw()
-}
-
-function updateDraftRectangleRegion() {
-  if (!stage || !draftRegionNode || !draftRegionStart) return
-
-  const documentEnd = getClampedDocumentPointer()
-
-  if (!documentEnd) return
-
-  const draftRegion = createRectangleRegion({
-    id: 'draft-region',
-    pageIndex: props.pageIndex,
-    start: draftRegionStart,
-    end: documentEnd,
-    color: getRegionCreationColor(),
-  })
-  const { scaleX, scaleY } = getRegionScale()
-  const visibleRegion = toVisibleRectangle(draftRegion, scaleX, scaleY, props.zoomLevel)
-
-  draftRegionNode.x(visibleRegion.x)
-  draftRegionNode.y(visibleRegion.y)
-  draftRegionNode.width(visibleRegion.width)
-  draftRegionNode.height(visibleRegion.height)
-  regionLayer.draw()
-}
-
 function updateDraftPointRegion() {
-  if (!stage || !draftRegionNode || !['polygon', 'polyline'].includes(props.activeTool)) return
+  if (!stage || !draftPointRegionNode || !['polygon', 'polyline'].includes(props.activeTool)) return
 
   const pointerPosition = stage.getPointerPosition()
   const shouldClosePolygon =
@@ -859,9 +821,9 @@ function updateDraftPointRegion() {
     props.zoomLevel
   )
 
-  draftRegionNode.points(flattenPoints(visiblePoints))
-  draftRegionNode.closed(shouldClosePolygon)
-  draftRegionNode.fill(
+  draftPointRegionNode.points(flattenPoints(visiblePoints))
+  draftPointRegionNode.closed(shouldClosePolygon)
+  draftPointRegionNode.fill(
     shouldClosePolygon ? `${getRegionCreationColor()}26` : `${getRegionCreationColor()}12`
   )
   regionLayer.draw()
@@ -910,57 +872,6 @@ function hasValidPointRegionSegments(points, type) {
   return hasValidVisiblePointRegionSegments(visiblePoints, type, MIN_VISIBLE_SEGMENT_LENGTH)
 }
 
-function hasValidDraftRectangleSize(region) {
-  const { scaleX, scaleY } = getRegionScale()
-  const visibleRectangle = toVisibleRectangle(region, scaleX, scaleY, props.zoomLevel)
-
-  return hasValidVisibleRectangleSize(visibleRectangle, MIN_VISIBLE_RECTANGLE_SIZE)
-}
-
-function commitDraftRectangleRegion() {
-  if (!stage || !draftRegionNode || !draftRegionStart) return
-
-  const documentEnd = getClampedDocumentPointer()
-
-  let draftRegion = null
-
-  if (documentEnd) {
-    const region = createRectangleRegion({
-      id: props.nextRegionId,
-      pageIndex: props.pageIndex,
-      start: draftRegionStart,
-      end: documentEnd,
-      color: getRegionCreationColor(),
-    })
-
-    draftRegion = {
-      ...region,
-      ...clampRectangleToBounds(region, getDocumentBounds()),
-    }
-  }
-
-  draftRegionNode.destroy()
-  draftRegionNode = null
-  draftRegionStart = null
-
-  if (draftRegion && hasValidDraftRectangleSize(draftRegion)) {
-    emit('add-region', draftRegion)
-  } else {
-    renderRegions()
-  }
-}
-
-function cancelDraftRectangleRegion() {
-  if (!draftRegionNode || !draftRegionStart) return false
-
-  draftRegionNode.destroy()
-  draftRegionNode = null
-  draftRegionStart = null
-  regionLayer?.draw()
-
-  return true
-}
-
 function addDraftPointRegionPoint(pointerPosition, shouldClearSelection = true) {
   if (!stage || !regionLayer || !hasPageImage()) return
   if (!['polygon', 'polyline'].includes(props.activeTool)) return
@@ -982,8 +893,8 @@ function addDraftPointRegionPoint(pointerPosition, shouldClearSelection = true) 
 
   draftPointRegionPoints.push(clampPointToBounds(documentPoint, getDocumentBounds()))
 
-  if (!draftRegionNode) {
-    draftRegionNode = new Konva.Line({
+  if (!draftPointRegionNode) {
+    draftPointRegionNode = new Konva.Line({
       points: [],
       closed: false,
       fill: props.activeTool === 'polygon' ? `${getRegionCreationColor()}12` : 'transparent',
@@ -992,7 +903,7 @@ function addDraftPointRegionPoint(pointerPosition, shouldClearSelection = true) 
       strokeScaleEnabled: false,
       dash: [6, 4],
     })
-    regionLayer.add(draftRegionNode)
+    regionLayer.add(draftPointRegionNode)
   }
 
   updateDraftPointRegion()
@@ -1114,11 +1025,11 @@ function handleStageClick(event) {
 }
 
 function cancelDraftPointRegion(shouldRender = true) {
-  if (draftRegionNode) {
-    draftRegionNode.destroy()
+  if (draftPointRegionNode) {
+    draftPointRegionNode.destroy()
   }
 
-  draftRegionNode = null
+  draftPointRegionNode = null
   draftPointRegionPoints = []
   skipNextPointRegionClick = false
   skipNextPointRegionClickPosition = null
@@ -1147,7 +1058,7 @@ function resetTransientInteractionState() {
 }
 
 function commitDraftPointRegion() {
-  if (!draftRegionNode || !['polygon', 'polyline'].includes(props.activeTool)) return
+  if (!draftPointRegionNode || !['polygon', 'polyline'].includes(props.activeTool)) return
 
   const createRegion = props.activeTool === 'polygon' ? createPolygonRegion : createPolylineRegion
   const region = createRegion({
@@ -1161,8 +1072,8 @@ function commitDraftPointRegion() {
     ...clampPolygonToBounds(region, getDocumentBounds()),
   }
 
-  draftRegionNode.destroy()
-  draftRegionNode = null
+  draftPointRegionNode.destroy()
+  draftPointRegionNode = null
   draftPointRegionPoints = []
   skipNextPointRegionClick = false
   skipNextPointRegionClickPosition = null
@@ -1220,12 +1131,10 @@ function handleMouseMove(event) {
 
   emit('mouse-position-change', coordinates)
 
-  if (draftRegionNode) {
-    if (['polygon', 'polyline'].includes(props.activeTool)) {
-      updateDraftPointRegion()
-    } else {
-      updateDraftRectangleRegion()
-    }
+  if (hasDraftRectangle()) {
+    updateDraftRectangleRegion()
+  } else if (draftPointRegionNode) {
+    updateDraftPointRegion()
   } else {
     updatePolylineEndpointExtensionPreview(pos)
   }
@@ -1326,9 +1235,9 @@ onBeforeUnmount(() => {
   imageLayer = null
   regionLayer = null
   disposePageImage()
+  disposeRectangleDrawing()
   transformer = null
-  draftRegionNode = null
-  draftRegionStart = null
+  draftPointRegionNode = null
   draftPointRegionPoints = []
   polylineEndpointExtensionPreviewNode = null
   skipNextPointRegionClick = false
