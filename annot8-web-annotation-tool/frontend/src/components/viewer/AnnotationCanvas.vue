@@ -6,7 +6,6 @@ import {
   hasValidVisiblePointRegionSegments,
 } from '../../utils/pointRegionValidation'
 import {
-  clampVisiblePointRegionDelta,
   getClosestPointRegionSegmentIndex,
 } from './pointRegionCanvasGeometry'
 import {
@@ -17,6 +16,7 @@ import { useCanvasCursor } from './useCanvasCursor'
 import { useCanvasKeyboardShortcuts } from './useCanvasKeyboardShortcuts'
 import { useCanvasPageImage } from './useCanvasPageImage'
 import { usePointRegionDrawing } from './usePointRegionDrawing'
+import { usePointRegionDragging } from './usePointRegionDragging'
 import { useRectangleEditing } from './useRectangleEditing'
 import { useRectangleDrawing } from './useRectangleDrawing'
 import {
@@ -225,6 +225,25 @@ const { attachRectangleEditing, getRectangleDragBoundPosition } = useRectangleEd
   updateRegion: ({ id, changes }) => emit('update-region', { id, changes }),
 })
 
+const { getPointRegionDragBoundPosition, attachPointRegionDragging } = usePointRegionDragging({
+  getZoomLevel: () => props.zoomLevel,
+  getRegionLayer: () => regionLayer,
+  getVisibleBounds,
+  getDocumentBounds,
+  autoScrollCanvasWrapper,
+  beginRegionDrag,
+  endRegionDrag,
+  hideActiveEditHandles,
+  showActiveEditHandles,
+  getSelectedRegionId: () => props.selectedRegionId,
+  preparePointRegionDrag: () => {
+    suppressPointRegionClick = true
+    suppressPointRegionDoubleClick = true
+    clearSelectedPointRegionPoint()
+  },
+  updateRegion: ({ id, changes }) => emit('update-region', { id, changes }),
+})
+
 function clearSelectedPointRegionPoint() {
   selectedPointRegionPoint = null
   clearPolylineEndpointExtensionPreview()
@@ -399,11 +418,7 @@ function createPointRegionNode(region) {
     stroke: region.color,
     strokeWidth: props.selectedRegionId === region.id ? 3 : 2,
     strokeScaleEnabled: false,
-    dragBoundFunc: (position) => clampVisiblePointRegionDelta(
-      visiblePoints,
-      position,
-      getVisibleBounds()
-    ),
+    dragBoundFunc: (position) => getPointRegionDragBoundPosition(visiblePoints, position),
   })
 
   attachRegionCursorHandlers(node, region.id)
@@ -480,52 +495,7 @@ function createPointRegionNode(region) {
     emit('select-region', region.id)
   })
 
-  node.on('dragmove', (event) => {
-    autoScrollCanvasWrapper(event)
-    const delta = clampVisiblePointRegionDelta(
-      visiblePoints,
-      { x: node.x(), y: node.y() },
-      getVisibleBounds()
-    )
-    node.x(delta.x)
-    node.y(delta.y)
-    regionLayer.draw()
-  })
-
-  node.on('dragstart', () => {
-    suppressPointRegionClick = true
-    suppressPointRegionDoubleClick = true
-    clearSelectedPointRegionPoint()
-    beginRegionDrag(region.id)
-
-    if (props.selectedRegionId === region.id) {
-      hideActiveEditHandles()
-    }
-  })
-
-  node.on('dragend', () => {
-    const delta = clampVisiblePointRegionDelta(
-      visiblePoints,
-      { x: node.x(), y: node.y() },
-      getVisibleBounds()
-    )
-    const movedVisiblePoints = visiblePoints.map((point) => ({
-      x: point.x + delta.x,
-      y: point.y + delta.y,
-    }))
-    const documentPoints = toDocumentPoints(movedVisiblePoints, scaleX, scaleY, props.zoomLevel)
-
-    emit('update-region', {
-      id: region.id,
-      changes: clampPolygonToBounds({ points: documentPoints }, getDocumentBounds()),
-    })
-
-    if (props.selectedRegionId === region.id) {
-      showActiveEditHandles()
-    }
-
-    endRegionDrag(region.id)
-  })
+  attachPointRegionDragging({ node, region, visiblePoints, scaleX, scaleY })
 
   return node
 }
