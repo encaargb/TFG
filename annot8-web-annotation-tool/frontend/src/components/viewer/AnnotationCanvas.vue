@@ -19,12 +19,11 @@ import { usePointRegionDrawing } from './usePointRegionDrawing'
 import { usePointRegionDragging } from './usePointRegionDragging'
 import { useRectangleEditing } from './useRectangleEditing'
 import { useRectangleDrawing } from './useRectangleDrawing'
+import { useRegionVertexHandles } from './useRegionVertexHandles'
 import {
   clampPointToBounds,
-  clampPolygonToBounds,
   clampRectangleToBounds,
   flattenPoints,
-  toDocumentPoints,
   toVisiblePoints,
   toVisibleRectangle,
 } from '../../utils/regionGeometry'
@@ -32,7 +31,6 @@ import {
   MIN_VISIBLE_RECTANGLE_SIZE,
   MIN_VISIBLE_SEGMENT_LENGTH,
   POINT_REGION_SEGMENT_HIT_TOLERANCE,
-  POINT_REGION_VERTEX_HANDLE_RADIUS,
   RECTANGLE_TRANSFORMER_ANCHOR_CORNER_RADIUS,
   RECTANGLE_TRANSFORMER_ANCHOR_SIZE,
   REGION_COLOR,
@@ -242,6 +240,31 @@ const { getPointRegionDragBoundPosition, attachPointRegionDragging } = usePointR
     clearSelectedPointRegionPoint()
   },
   updateRegion: ({ id, changes }) => emit('update-region', { id, changes }),
+})
+
+const { createRegionVertexHandles } = useRegionVertexHandles({
+  getZoomLevel: () => props.zoomLevel,
+  getActiveTool: () => props.activeTool,
+  getRegionScale,
+  getVisibleBounds,
+  getDocumentBounds,
+  getRegionLayer: () => regionLayer,
+  getSelectedPointRegionPoint: () => selectedPointRegionPoint,
+  setSelectedPointRegionPoint: (point) => {
+    selectedPointRegionPoint = point
+  },
+  getVertexHandles: () => vertexHandles,
+  setIsVertexHandleDragging: (isDragging) => {
+    isVertexHandleDragging = isDragging
+  },
+  clearPolylineEndpointExtensionPreview,
+  autoScrollCanvasWrapper,
+  setStageCursor,
+  resetStageCursor,
+  hasValidPointRegionSegments,
+  selectRegion: (id) => emit('select-region', id),
+  updateRegion: ({ id, changes }) => emit('update-region', { id, changes }),
+  renderRegions,
 })
 
 function clearSelectedPointRegionPoint() {
@@ -500,143 +523,6 @@ function createPointRegionNode(region) {
   return node
 }
 
-function createPointRegionVertexHandles(region, pointRegionNode) {
-  const { scaleX, scaleY } = getRegionScale()
-  const visiblePoints = toVisiblePoints(region.points, scaleX, scaleY, props.zoomLevel)
-  const editedVisiblePoints = visiblePoints.map((point) => ({ ...point }))
-
-  function selectVertexHandle(pointIndex, handle) {
-    clearPolylineEndpointExtensionPreview(false)
-    selectedPointRegionPoint = { regionId: region.id, pointIndex }
-    vertexHandles.forEach((vertexHandle) => vertexHandle.fill('#ffffff'))
-    handle.fill(region.color)
-    regionLayer.draw()
-  }
-
-  return visiblePoints.map((point, index) => {
-    let isHandleHovered = false
-    let isHandleDragging = false
-
-    const handle = new Konva.Circle({
-      x: point.x,
-      y: point.y,
-      radius: POINT_REGION_VERTEX_HANDLE_RADIUS,
-      draggable: true,
-      fill:
-        selectedPointRegionPoint?.regionId === region.id &&
-        selectedPointRegionPoint.pointIndex === index
-          ? region.color
-          : '#ffffff',
-      stroke: region.color,
-      strokeWidth: 2,
-      strokeScaleEnabled: false,
-      hitStrokeWidth: 12,
-      dragBoundFunc: (position) => {
-        const bounds = getVisibleBounds()
-
-        return {
-          x: Math.max(0, Math.min(bounds.width, position.x)),
-          y: Math.max(0, Math.min(bounds.height, position.y)),
-        }
-      },
-    })
-
-    handle.on('mouseenter', () => {
-      if (props.activeTool !== 'select') return
-
-      isHandleHovered = true
-      setStageCursor('grab')
-    })
-
-    handle.on('mouseleave', () => {
-      isHandleHovered = false
-      if (isHandleDragging) return
-
-      resetStageCursor()
-    })
-
-    handle.on('click tap', (event) => {
-      if (props.activeTool !== 'select') return
-      if (event) {
-        event.cancelBubble = true
-      }
-
-      selectVertexHandle(index, handle)
-
-      emit('select-region', region.id)
-    })
-
-    handle.on('mousedown touchstart', (event) => {
-      if (props.activeTool !== 'select') return
-      if (event) {
-        event.cancelBubble = true
-      }
-
-      selectVertexHandle(index, handle)
-      emit('select-region', region.id)
-    })
-
-    handle.on('dragstart', () => {
-      if (props.activeTool !== 'select') return
-
-      isHandleDragging = true
-      isVertexHandleDragging = true
-      setStageCursor('grabbing')
-    })
-
-    handle.on('dblclick dbltap', (event) => {
-      if (event) {
-        event.cancelBubble = true
-      }
-    })
-
-    handle.on('dragmove', (event) => {
-      autoScrollCanvasWrapper(event)
-      const bounds = getVisibleBounds()
-      const nextPoint = {
-        x: Math.max(0, Math.min(bounds.width, handle.x())),
-        y: Math.max(0, Math.min(bounds.height, handle.y())),
-      }
-
-      handle.x(nextPoint.x)
-      handle.y(nextPoint.y)
-      editedVisiblePoints[index] = nextPoint
-      pointRegionNode.points(flattenPoints(editedVisiblePoints))
-      regionLayer.draw()
-    })
-
-    handle.on('dragend', () => {
-      const documentPoints = toDocumentPoints(
-        editedVisiblePoints,
-        scaleX,
-        scaleY,
-        props.zoomLevel
-      )
-
-      if (hasValidPointRegionSegments(documentPoints, region.type)) {
-        emit('update-region', {
-          id: region.id,
-          changes: clampPolygonToBounds({ points: documentPoints }, getDocumentBounds()),
-        })
-      } else {
-        renderRegions()
-      }
-
-      isHandleDragging = false
-      isVertexHandleDragging = false
-
-      if (props.activeTool === 'select' && isHandleHovered) {
-        setStageCursor('grab')
-        return
-      }
-
-      resetStageCursor()
-    })
-
-    return handle
-  })
-}
-
 function createRegionNode(region) {
   if (region.type === 'polygon' || region.type === 'polyline') {
     return createPointRegionNode(region)
@@ -690,7 +576,7 @@ function renderRegions() {
       region.id === props.selectedRegionId &&
       props.activeTool === 'select'
     ) {
-      vertexHandles = createPointRegionVertexHandles(region, node)
+      vertexHandles = createRegionVertexHandles(region, node)
       vertexHandles.forEach((handle) => regionLayer.add(handle))
     }
   })
