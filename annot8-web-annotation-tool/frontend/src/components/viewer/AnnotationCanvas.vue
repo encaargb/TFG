@@ -25,6 +25,7 @@ import {
 } from './rectangleCanvasGeometry'
 import { useCanvasAutoScroll } from './useCanvasAutoScroll'
 import { useCanvasCursor } from './useCanvasCursor'
+import { useCanvasKeyboardShortcuts } from './useCanvasKeyboardShortcuts'
 import {
   clampPointToBounds,
   clampPolygonToBounds,
@@ -1256,38 +1257,6 @@ function deleteSelectedPointRegionPoint() {
   return true
 }
 
-function handleKeydown(event) {
-  if (['polygon', 'polyline'].includes(props.activeTool) && event.key === 'Enter') {
-    commitDraftPointRegion()
-    return
-  }
-
-  if (['polygon', 'polyline'].includes(props.activeTool) && event.key === 'Escape') {
-    cancelDraftPointRegion()
-    return
-  }
-
-  if (
-    props.activeTool === 'rectangle' &&
-    event.key === 'Escape' &&
-    cancelDraftRectangleRegion()
-  ) {
-    return
-  }
-
-  if (event.key === 'Escape') {
-    clearSelectedPointRegionPoint()
-    emit('clear-selected-region')
-    return
-  }
-
-  if (event.key !== 'Delete' && event.key !== 'Backspace') return
-
-  if (deleteSelectedPointRegionPoint()) return
-
-  emit('delete-selected-region')
-}
-
 function loadSelectedPageInKonva(src) {
   if (!imageLayer || !stage || !src) return
 
@@ -1373,6 +1342,17 @@ function handleMouseLeave() {
   emit('mouse-position-change', null)
 }
 
+useCanvasKeyboardShortcuts({
+  getActiveTool: () => props.activeTool,
+  commitDraftPointRegion,
+  cancelDraftPointRegion,
+  cancelDraftRectangleRegion,
+  clearSelectedPointRegionPoint,
+  deleteSelectedPointRegionPoint,
+  clearSelectedRegion: () => emit('clear-selected-region'),
+  deleteSelectedRegion: () => emit('delete-selected-region'),
+})
+
 onMounted(() => {
   stage = new Konva.Stage({
     container: canvasContainer.value,
@@ -1391,7 +1371,6 @@ onMounted(() => {
   stage.on('click', handleStageClick)
   stage.on('mouseup', handleStageMouseUp)
   stage.on('dblclick', commitDraftPointRegion)
-  window.addEventListener('keydown', handleKeydown)
 
   loadSelectedPageInKonva(props.selectedPage)
 })
@@ -1448,8 +1427,6 @@ onBeforeUnmount(() => {
     stage.destroy()
     stage = null
   }
-
-  window.removeEventListener('keydown', handleKeydown)
 
   imageLayer = null
   regionLayer = null
