@@ -10,18 +10,14 @@ import {
   getClosestPointRegionSegmentIndex,
 } from './pointRegionCanvasGeometry'
 import {
-  applyVisibleRectangleToNode,
   clampTransformerBox,
-  clampVisibleRectangle,
-  getAnchorAwareVisibleRectangle,
-  getNodeVisibleRectangle,
-  getTransformedRectangleEdges,
 } from './rectangleCanvasGeometry'
 import { useCanvasAutoScroll } from './useCanvasAutoScroll'
 import { useCanvasCursor } from './useCanvasCursor'
 import { useCanvasKeyboardShortcuts } from './useCanvasKeyboardShortcuts'
 import { useCanvasPageImage } from './useCanvasPageImage'
 import { usePointRegionDrawing } from './usePointRegionDrawing'
+import { useRectangleEditing } from './useRectangleEditing'
 import { useRectangleDrawing } from './useRectangleDrawing'
 import {
   clampPointToBounds,
@@ -29,7 +25,6 @@ import {
   clampRectangleToBounds,
   flattenPoints,
   toDocumentPoints,
-  toDocumentRectangle,
   toVisiblePoints,
   toVisibleRectangle,
 } from '../../utils/regionGeometry'
@@ -215,6 +210,21 @@ const { autoScrollCanvasWrapper } = useCanvasAutoScroll({
   isInteractionActive: hasActiveCanvasInteraction,
 })
 
+const { attachRectangleEditing, getRectangleDragBoundPosition } = useRectangleEditing({
+  getZoomLevel: () => props.zoomLevel,
+  getRegionLayer: () => regionLayer,
+  getVisibleBounds,
+  getDocumentBounds,
+  clampRectangleToBounds,
+  autoScrollCanvasWrapper,
+  beginRegionDrag,
+  endRegionDrag,
+  hideActiveEditHandles,
+  showActiveEditHandles,
+  getSelectedRegionId: () => props.selectedRegionId,
+  updateRegion: ({ id, changes }) => emit('update-region', { id, changes }),
+})
+
 function clearSelectedPointRegionPoint() {
   selectedPointRegionPoint = null
   clearPolylineEndpointExtensionPreview()
@@ -345,35 +355,12 @@ function showActiveEditHandles() {
   regionLayer?.draw()
 }
 
-function syncTransformedRectangleNode(node) {
-  const visibleRectangle = clampVisibleRectangle(
-    getNodeVisibleRectangle(node),
-    getVisibleBounds(),
-    MIN_VISIBLE_RECTANGLE_SIZE
-  )
-  applyVisibleRectangleToNode(node, visibleRectangle)
-
-  return visibleRectangle
-}
-
-function syncResizedRectangleNode(node, region, scaleX, scaleY) {
-  const visibleRectangle = getAnchorAwareVisibleRectangle(
-    toVisibleRectangle(region, scaleX, scaleY, props.zoomLevel),
-    getNodeVisibleRectangle(node),
-    transformer?.getActiveAnchor?.(),
-    getVisibleBounds(),
-    MIN_VISIBLE_RECTANGLE_SIZE
-  )
-  applyVisibleRectangleToNode(node, visibleRectangle)
-
-  return visibleRectangle
-}
-
 function createRectangleRegionNode(region) {
   const { scaleX, scaleY } = getRegionScale()
   const visibleRegion = toVisibleRectangle(region, scaleX, scaleY, props.zoomLevel)
+  let node
 
-  const node = new Konva.Rect({
+  node = new Konva.Rect({
     ...visibleRegion,
     id: region.id,
     draggable: props.activeTool === 'select',
@@ -381,22 +368,7 @@ function createRectangleRegionNode(region) {
     stroke: region.color,
     strokeWidth: props.selectedRegionId === region.id ? 3 : 2,
     strokeScaleEnabled: false,
-    dragBoundFunc: (position) => {
-      const clamped = clampVisibleRectangle(
-        {
-          x: position.x,
-          y: position.y,
-          width: node.width(),
-          height: node.height(),
-        },
-        getVisibleBounds()
-      )
-
-      return {
-        x: clamped.x,
-        y: clamped.y,
-      }
-    },
+    dragBoundFunc: (position) => getRectangleDragBoundPosition(node, position),
   })
 
   attachRegionCursorHandlers(node, region.id)
@@ -407,58 +379,7 @@ function createRectangleRegionNode(region) {
     emit('select-region', region.id)
   })
 
-  node.on('dragmove', (event) => {
-    autoScrollCanvasWrapper(event)
-    applyVisibleRectangleToNode(
-      node,
-      clampVisibleRectangle(getNodeVisibleRectangle(node), getVisibleBounds())
-    )
-    regionLayer.draw()
-  })
-
-  node.on('dragstart', () => {
-    beginRegionDrag(region.id)
-
-    if (props.selectedRegionId === region.id) {
-      hideActiveEditHandles()
-    }
-  })
-
-  node.on('transform', () => {
-    syncResizedRectangleNode(node, region, scaleX, scaleY)
-    regionLayer.draw()
-  })
-
-  const commitRegionChange = () => {
-    const visibleRectangle = transformer?.getActiveAnchor?.()
-      ? syncResizedRectangleNode(node, region, scaleX, scaleY)
-      : syncTransformedRectangleNode(node)
-
-    const documentRectangle = getTransformedRectangleEdges(
-      region,
-      clampRectangleToBounds(
-        toDocumentRectangle(visibleRectangle, scaleX, scaleY, props.zoomLevel),
-        getDocumentBounds()
-      ),
-      transformer?.getActiveAnchor?.()
-    )
-
-    emit('update-region', { id: region.id, changes: documentRectangle })
-
-    if (typeof node.scaleX === 'function') node.scaleX(1)
-    if (typeof node.scaleY === 'function') node.scaleY(1)
-
-    if (props.selectedRegionId === region.id) {
-      showActiveEditHandles()
-    }
-  }
-
-  node.on('dragend', () => {
-    commitRegionChange()
-    endRegionDrag(region.id)
-  })
-
-  node.on('transformend', commitRegionChange)
+  attachRectangleEditing({ node, region, transformer, scaleX, scaleY })
 
   return node
 }
