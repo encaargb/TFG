@@ -1,5 +1,3 @@
-import { ProjectDocumentModel } from '../models/ProjectDocumentModel'
-
 // Vite only exposes client-side environment variables prefixed with VITE_.
 // During local development, the mock backend runs on port 3001 by default.
 // In production, an empty base URL means the API is served from the same origin.
@@ -8,13 +6,18 @@ const apiBaseUrl = (
   (import.meta.env.DEV && import.meta.env.MODE !== 'test' ? 'http://localhost:3001' : '')
 ).replace(/\/$/, '')
 const useApi = Boolean(apiBaseUrl) || import.meta.env.PROD
+const fallbackDocument = {
+  id: 'doc1',
+  title: 'Sample document',
+  pages: Array.from({ length: 15 }, (_, index) => `/documents/doc1/pages/pg${index + 1}.jpeg`),
+}
 
 /**
  * Loads the active project document from the backend when an API URL is available.
- * The local model remains as a fallback for tests and static-only execution.
+ * Local document metadata remains as a fallback for tests and static-only execution.
  */
-export async function fetchProjectDocument(documentId = ProjectDocumentModel.id) {
-  if (!useApi) return ProjectDocumentModel
+export async function fetchProjectDocument(documentId = fallbackDocument.id) {
+  if (!useApi) return fallbackDocument
 
   const response = await fetch(`${apiBaseUrl}/api/documents/${documentId}`)
 

@@ -24,15 +24,21 @@ describe('documentApi', () => {
     vi.unstubAllEnvs()
   })
 
-  it('falls back to the local document model when no API URL is configured in tests', async () => {
+  it('falls back to local document metadata when no API URL is configured in tests', async () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
 
     const { fetchProjectDocument } = await loadDocumentApi()
-    const { ProjectDocumentModel } = await import('../../src/models/ProjectDocumentModel.js')
     const document = await fetchProjectDocument()
 
-    expect(document).toBe(ProjectDocumentModel)
+    expect(document).toEqual({
+      id: 'doc1',
+      title: 'Sample document',
+      pages: Array.from(
+        { length: 15 },
+        (_, index) => `/documents/doc1/pages/pg${index + 1}.jpeg`
+      ),
+    })
     expect(fetchMock).not.toHaveBeenCalled()
   })
 

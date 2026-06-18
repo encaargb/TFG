@@ -1,9 +1,3 @@
-const SAMPLE_DOCUMENT_METADATA = {
-  id: 'doc1',
-  title: 'Sample document',
-  pages: Array.from({ length: 15 }, (_, i) => `/documents/doc1/pages/pg${i + 1}.jpeg`),
-}
-
 class ProjectDocument {
   constructor({ id, title, pages }) {
     this.id = id
@@ -38,5 +32,3 @@ class ProjectDocument {
 export function createProjectDocumentModel(document) {
   return new ProjectDocument(document)
 }
-
-export const ProjectDocumentModel = createProjectDocumentModel(SAMPLE_DOCUMENT_METADATA)
