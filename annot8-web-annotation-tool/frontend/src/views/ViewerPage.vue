@@ -5,7 +5,7 @@ import PageSidebar from '../components/viewer/PageSidebar.vue'
 import ViewerStatusBar from '../components/viewer/ViewerStatusBar.vue'
 import ViewerToolbar from '../components/viewer/ViewerToolbar.vue'
 import { REGION_COLOR } from '../components/viewer/annotationCanvasConstants'
-import { ProjectDocumentModel } from '../models/ProjectDocumentModel'
+import { createProjectDocumentModel } from '../models/ProjectDocumentModel'
 import { fetchProjectDocument } from '../services/documentApi'
 import {
   getNextZoom,
@@ -13,10 +13,10 @@ import {
   getZoomPercentage,
 } from '../utils/viewerMath'
 
-const documentId = ref(ProjectDocumentModel.id)
-const pages = ref(ProjectDocumentModel.pages)
+const pages = ref([])
 const regions = ref([])
 const selectedIndex = ref(0)
+let projectDocument = null
 
 const MIN_ZOOM = 0.25
 const MAX_ZOOM = 8
@@ -111,6 +111,8 @@ function clearSelectedRegion() {
 }
 
 function persistRegions() {
+  if (!projectDocument) return
+
   saveStatus.value = 'saving'
 
   if (saveTimeout !== null) {
@@ -119,7 +121,9 @@ function persistRegions() {
 
   saveTimeout = setTimeout(() => {
     try {
-      ProjectDocumentModel.save(regions.value)
+      if (!projectDocument) return
+
+      projectDocument.save(regions.value)
       saveStatus.value = 'saved'
     } catch (error) {
       saveStatus.value = 'error'
@@ -199,9 +203,9 @@ function setMousePosition(position) {
 onMounted(() => {
   fetchProjectDocument()
     .then((document) => {
-      documentId.value = document.id
-      pages.value = document.pages
-      regions.value = ProjectDocumentModel.loadRegions()
+      projectDocument = createProjectDocumentModel(document)
+      pages.value = projectDocument.pages
+      regions.value = projectDocument.loadRegions()
       updateRegionSequence()
     })
     .catch((error) => {
@@ -210,13 +214,13 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  if (saveTimeout === null) return
+  if (saveTimeout === null || !projectDocument) return
 
   clearTimeout(saveTimeout)
   saveTimeout = null
 
   try {
-    ProjectDocumentModel.save(regions.value)
+    projectDocument.save(regions.value)
     saveStatus.value = 'saved'
   } catch (error) {
     saveStatus.value = 'error'

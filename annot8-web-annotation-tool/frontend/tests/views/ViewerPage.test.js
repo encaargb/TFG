@@ -1,14 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import ViewerPage from '../../src/views/ViewerPage.vue'
-import { ProjectDocumentModel } from '../../src/models/ProjectDocumentModel'
+import * as projectDocumentModel from '../../src/models/ProjectDocumentModel'
 import * as documentApi from '../../src/services/documentApi'
 
 const updateZoomSpy = vi.fn()
 let fetchProjectDocumentSpy
+let createProjectDocumentModelSpy
 let loadRegionsSpy
 let saveRegionsSpy
 const SAVE_DELAY_MS = 500
+const samplePages = Array.from(
+  { length: 15 },
+  (_, index) => `/documents/doc1/pages/pg${index + 1}.jpeg`
+)
 
 const PageSidebarStub = {
   name: 'PageSidebar',
@@ -267,20 +272,24 @@ describe('ViewerPage', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.restoreAllMocks()
-    ProjectDocumentModel.id = 'doc1'
-    ProjectDocumentModel.pages = Array.from(
-      { length: 15 },
-      (_, index) => `/documents/doc1/pages/pg${index + 1}.jpeg`
-    )
     updateZoomSpy.mockClear()
     fetchProjectDocumentSpy = vi.spyOn(documentApi, 'fetchProjectDocument').mockResolvedValue({
       id: 'doc1',
       title: 'Sample document',
-      pages: ProjectDocumentModel.pages,
+      pages: samplePages,
       regions: [],
     })
-    loadRegionsSpy = vi.spyOn(ProjectDocumentModel, 'loadRegions').mockReturnValue([])
-    saveRegionsSpy = vi.spyOn(ProjectDocumentModel, 'save').mockImplementation(() => {})
+    loadRegionsSpy = vi.fn().mockReturnValue([])
+    saveRegionsSpy = vi.fn()
+    createProjectDocumentModelSpy = vi
+      .spyOn(projectDocumentModel, 'createProjectDocumentModel')
+      .mockImplementation((document) => ({
+        id: document.id,
+        title: document.title,
+        pages: document.pages,
+        loadRegions: loadRegionsSpy,
+        save: saveRegionsSpy,
+      }))
   })
 
   afterEach(() => {
@@ -300,7 +309,7 @@ describe('ViewerPage', () => {
 
     expect(sidebar.props()).toEqual(
       expect.objectContaining({
-        pages: ProjectDocumentModel.pages,
+        pages: samplePages,
         selectedIndex: 0,
         collapsed: false,
       })
@@ -346,7 +355,7 @@ describe('ViewerPage', () => {
     )
   })
 
-  it('loads stored regions from ProjectDocumentModel.loadRegions() when the document opens', async () => {
+  it('loads stored regions from the active document model when the document opens', async () => {
     const storedRegions = [storedRegion()]
     loadRegionsSpy.mockReturnValue(storedRegions)
 
@@ -360,17 +369,19 @@ describe('ViewerPage', () => {
 
   it('still loads backend document metadata and pages with fetchProjectDocument()', async () => {
     const backendPages = ['/documents/doc1/pages/backend-1.jpeg', '/documents/doc1/pages/backend-2.jpeg']
-    fetchProjectDocumentSpy.mockResolvedValue({
+    const backendDocument = {
       id: 'doc1',
       title: 'Backend document',
       pages: backendPages,
       regions: [storedRegion({ id: 'backend-region' })],
-    })
+    }
+    fetchProjectDocumentSpy.mockResolvedValue(backendDocument)
 
     const wrapper = mountViewerPage()
     await flushMountedFetch()
 
     expect(fetchProjectDocumentSpy).toHaveBeenCalledTimes(1)
+    expect(createProjectDocumentModelSpy).toHaveBeenCalledWith(backendDocument)
     expect(getStub(wrapper, PageSidebarStub).props('pages')).toEqual(backendPages)
     expect(getStub(wrapper, AnnotationCanvasStub).props('selectedPage')).toBe(backendPages[0])
   })
@@ -382,7 +393,7 @@ describe('ViewerPage', () => {
     fetchProjectDocumentSpy.mockResolvedValue({
       id: 'doc1',
       title: 'Backend document',
-      pages: ProjectDocumentModel.pages,
+      pages: samplePages,
       regions: backendRegions,
     })
 
