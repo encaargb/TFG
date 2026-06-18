@@ -1,13 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import Konva from 'konva'
-import {
-  getPointRegionMinimumPointCount,
-  hasValidVisiblePointRegionSegments,
-} from '../../utils/pointRegionValidation'
-import {
-  getClosestPointRegionSegmentIndex,
-} from './pointRegionCanvasGeometry'
+import { hasValidVisiblePointRegionSegments } from '../../utils/pointRegionValidation'
 import {
   clampTransformerBox,
 } from './rectangleCanvasGeometry'
@@ -19,6 +13,7 @@ import { usePointRegionDrawing } from './usePointRegionDrawing'
 import { usePointRegionDragging } from './usePointRegionDragging'
 import { useRectangleEditing } from './useRectangleEditing'
 import { useRectangleDrawing } from './useRectangleDrawing'
+import { useRegionPointEditing } from './useRegionPointEditing'
 import { useRegionVertexHandles } from './useRegionVertexHandles'
 import {
   clampPointToBounds,
@@ -30,7 +25,6 @@ import {
 import {
   MIN_VISIBLE_RECTANGLE_SIZE,
   MIN_VISIBLE_SEGMENT_LENGTH,
-  POINT_REGION_SEGMENT_HIT_TOLERANCE,
   RECTANGLE_TRANSFORMER_ANCHOR_CORNER_RADIUS,
   RECTANGLE_TRANSFORMER_ANCHOR_SIZE,
   REGION_COLOR,
@@ -95,12 +89,8 @@ let stage = null
 let imageLayer = null
 let regionLayer = null
 let transformer = null
-let polylineEndpointExtensionPreviewNode = null
 let vertexHandles = []
 let isVertexHandleDragging = false
-let selectedPointRegionPoint = null
-let suppressPointRegionClick = false
-let suppressPointRegionDoubleClick = false
 
 function getRegionCreationColor() {
   return /^#[0-9a-fA-F]{6}$/.test(props.regionCreationColor)
@@ -208,6 +198,38 @@ const { autoScrollCanvasWrapper } = useCanvasAutoScroll({
   isInteractionActive: hasActiveCanvasInteraction,
 })
 
+const {
+  clearSelectedPoint,
+  deleteSelectedPoint,
+  insertPointIntoSegment,
+  insertPolylineEndpoint,
+  updatePolylineEndpointPreview,
+  clearPolylineEndpointPreview,
+  getSelectedPoint,
+  setSelectedPoint,
+  prepareRegionClick,
+  handleRegionClickSuppression,
+  handleRegionDoubleClickSuppression,
+  resetPointEditing,
+  disposePointEditing,
+} = useRegionPointEditing({
+  getActiveTool: () => props.activeTool,
+  getSelectedRegionId: () => props.selectedRegionId,
+  getRegions: () => props.regions,
+  getStage: () => stage,
+  getRegionLayer: () => regionLayer,
+  getRegionScale,
+  getZoomLevel: () => props.zoomLevel,
+  getDocumentBounds,
+  getDocumentCoordinatesFromPointer,
+  getClampedDocumentPointer,
+  isPointerInsideVisibleDocument,
+  isVertexHandleDragging: () => isVertexHandleDragging,
+  hasValidPointRegionSegments,
+  deleteSelectedRegion: () => emit('delete-selected-region'),
+  updateRegion: ({ id, changes }) => emit('update-region', { id, changes }),
+})
+
 const { attachRectangleEditing, getRectangleDragBoundPosition } = useRectangleEditing({
   getZoomLevel: () => props.zoomLevel,
   getRegionLayer: () => regionLayer,
@@ -234,11 +256,7 @@ const { getPointRegionDragBoundPosition, attachPointRegionDragging } = usePointR
   hideActiveEditHandles,
   showActiveEditHandles,
   getSelectedRegionId: () => props.selectedRegionId,
-  preparePointRegionDrag: () => {
-    suppressPointRegionClick = true
-    suppressPointRegionDoubleClick = true
-    clearSelectedPointRegionPoint()
-  },
+  preparePointRegionDrag: prepareRegionClick,
   updateRegion: ({ id, changes }) => emit('update-region', { id, changes }),
 })
 
@@ -249,15 +267,13 @@ const { createRegionVertexHandles } = useRegionVertexHandles({
   getVisibleBounds,
   getDocumentBounds,
   getRegionLayer: () => regionLayer,
-  getSelectedPointRegionPoint: () => selectedPointRegionPoint,
-  setSelectedPointRegionPoint: (point) => {
-    selectedPointRegionPoint = point
-  },
+  getSelectedPointRegionPoint: getSelectedPoint,
+  setSelectedPointRegionPoint: setSelectedPoint,
   getVertexHandles: () => vertexHandles,
   setIsVertexHandleDragging: (isDragging) => {
     isVertexHandleDragging = isDragging
   },
-  clearPolylineEndpointExtensionPreview,
+  clearPolylineEndpointExtensionPreview: clearPolylineEndpointPreview,
   autoScrollCanvasWrapper,
   setStageCursor,
   resetStageCursor,
@@ -266,83 +282,6 @@ const { createRegionVertexHandles } = useRegionVertexHandles({
   updateRegion: ({ id, changes }) => emit('update-region', { id, changes }),
   renderRegions,
 })
-
-function clearSelectedPointRegionPoint() {
-  selectedPointRegionPoint = null
-  clearPolylineEndpointExtensionPreview()
-}
-
-function clearPolylineEndpointExtensionPreview(shouldDraw = true) {
-  if (!polylineEndpointExtensionPreviewNode) return
-
-  polylineEndpointExtensionPreviewNode.destroy()
-  polylineEndpointExtensionPreviewNode = null
-
-  if (shouldDraw) {
-    regionLayer?.draw()
-  }
-}
-
-function getPolylineEndpointExtensionPreviewContext() {
-  if (props.activeTool !== 'select' || !selectedPointRegionPoint) return null
-  if (isVertexHandleDragging) return null
-
-  const { regionId, pointIndex } = selectedPointRegionPoint
-  const region = props.regions.find((candidate) => candidate.id === regionId)
-
-  if (!region || region.type !== 'polyline' || props.selectedRegionId !== region.id) return null
-  if (pointIndex !== 0 && pointIndex !== region.points.length - 1) return null
-
-  return {
-    endpoint: region.points[pointIndex],
-    isFirstEndpoint: pointIndex === 0,
-    region,
-  }
-}
-
-function updatePolylineEndpointExtensionPreview(pointerPosition = stage?.getPointerPosition()) {
-  if (!stage || !regionLayer || !isPointerInsideVisibleDocument(pointerPosition)) {
-    clearPolylineEndpointExtensionPreview()
-    return
-  }
-
-  const previewContext = getPolylineEndpointExtensionPreviewContext()
-  const documentHoverPoint = getClampedDocumentPointer(pointerPosition)
-
-  if (!previewContext || !documentHoverPoint) {
-    clearPolylineEndpointExtensionPreview()
-    return
-  }
-
-  const { endpoint, isFirstEndpoint, region } = previewContext
-  const previewDocumentPoints = isFirstEndpoint
-    ? [documentHoverPoint, endpoint]
-    : [endpoint, documentHoverPoint]
-  const { scaleX, scaleY } = getRegionScale()
-  const previewVisiblePoints = toVisiblePoints(
-    previewDocumentPoints,
-    scaleX,
-    scaleY,
-    props.zoomLevel
-  )
-
-  if (!polylineEndpointExtensionPreviewNode) {
-    polylineEndpointExtensionPreviewNode = new Konva.Line({
-      points: [],
-      closed: false,
-      fill: 'transparent',
-      stroke: region.color || REGION_COLOR,
-      strokeWidth: 2,
-      strokeScaleEnabled: false,
-      dash: [6, 4],
-      listening: false,
-    })
-    regionLayer.add(polylineEndpointExtensionPreviewNode)
-  }
-
-  polylineEndpointExtensionPreviewNode.points(flattenPoints(previewVisiblePoints))
-  regionLayer.draw()
-}
 
 function getClampedDocumentPointer(pointerPosition = stage?.getPointerPosition()) {
   const documentPoint = getDocumentCoordinatesFromPointer(pointerPosition)
@@ -417,7 +356,7 @@ function createRectangleRegionNode(region) {
 
   node.on('click tap', () => {
     if (props.activeTool !== 'select') return
-    clearSelectedPointRegionPoint()
+    clearSelectedPoint()
     emit('select-region', region.id)
   })
 
@@ -446,60 +385,9 @@ function createPointRegionNode(region) {
 
   attachRegionCursorHandlers(node, region.id)
 
-  function insertPointIntoSelectedRegionSegment(pointerPosition) {
-    if (
-      !['polygon', 'polyline'].includes(region.type) ||
-      props.activeTool !== 'select' ||
-      props.selectedRegionId !== region.id
-    ) {
-      return false
-    }
-
-    const segmentIndex = getClosestPointRegionSegmentIndex(
-      pointerPosition,
-      visiblePoints,
-      isPolygon,
-      POINT_REGION_SEGMENT_HIT_TOLERANCE
-    )
-    const documentPoint = getDocumentCoordinatesFromPointer(pointerPosition)
-
-    if (segmentIndex === -1 || !documentPoint) return false
-
-    const insertIndex = segmentIndex + 1
-    const points = [
-      ...region.points.slice(0, insertIndex),
-      documentPoint,
-      ...region.points.slice(insertIndex),
-    ]
-
-    if (!hasValidPointRegionSegments(points, region.type)) return false
-
-    clearSelectedPointRegionPoint()
-
-    emit('update-region', {
-      id: region.id,
-      changes: {
-        points,
-      },
-    })
-
-    return true
-  }
-
   node.on('click tap', (event) => {
     if (props.activeTool !== 'select') return
-    clearSelectedPointRegionPoint()
-
-    if (suppressPointRegionClick) {
-      suppressPointRegionClick = false
-      return
-    }
-
-    if (props.selectedRegionId !== region.id) {
-      suppressPointRegionDoubleClick = true
-    } else if ((event?.evt?.detail ?? 1) <= 1) {
-      suppressPointRegionDoubleClick = false
-    }
+    if (handleRegionClickSuppression(region, event)) return
 
     emit('select-region', region.id)
   })
@@ -507,13 +395,18 @@ function createPointRegionNode(region) {
   node.on('dblclick dbltap', () => {
     if (props.activeTool !== 'select') return
 
-    if (suppressPointRegionClick || suppressPointRegionDoubleClick) {
-      suppressPointRegionClick = false
-      suppressPointRegionDoubleClick = false
+    if (handleRegionDoubleClickSuppression()) return
+
+    if (
+      insertPointIntoSegment({
+        region,
+        visiblePoints,
+        isPolygon,
+        pointerPosition: stage.getPointerPosition(),
+      })
+    ) {
       return
     }
-
-    if (insertPointIntoSelectedRegionSegment(stage.getPointerPosition())) return
 
     emit('select-region', region.id)
   })
@@ -534,7 +427,7 @@ function createRegionNode(region) {
 function renderRegions() {
   if (!regionLayer || !hasPageImage()) return
 
-  clearPolylineEndpointExtensionPreview(false)
+  clearPolylineEndpointPreview(false)
   regionLayer.destroyChildren()
   vertexHandles = []
   const selectedRectangle = currentPageRegions.value.find(
@@ -615,38 +508,6 @@ function handleStageMouseUp() {
   addPointRegionDragReleasePoint()
 }
 
-function insertPolylineEndpointPoint(pointerPosition) {
-  if (props.activeTool !== 'select' || !selectedPointRegionPoint) return false
-  if (!isPointerInsideVisibleDocument(pointerPosition)) return false
-
-  const { regionId, pointIndex } = selectedPointRegionPoint
-  const region = props.regions.find((candidate) => candidate.id === regionId)
-
-  if (!region || region.type !== 'polyline' || props.selectedRegionId !== region.id) return false
-  if (pointIndex !== 0 && pointIndex !== region.points.length - 1) return false
-
-  const documentPoint = getDocumentCoordinatesFromPointer(pointerPosition)
-
-  if (!documentPoint) return false
-
-  const points =
-    pointIndex === 0
-      ? [documentPoint, ...region.points]
-      : [...region.points, documentPoint]
-
-  if (!hasValidPointRegionSegments(points, region.type)) return false
-
-  clearSelectedPointRegionPoint()
-  emit('update-region', {
-    id: region.id,
-    changes: {
-      points,
-    },
-  })
-
-  return true
-}
-
 function handleStageClick(event) {
   if (event?.evt?.detail > 1) return
 
@@ -658,50 +519,20 @@ function handleStageClick(event) {
 
   if (clickTarget && clickTarget !== stage && !isPageImageNode(clickTarget)) return
 
-  if (insertPolylineEndpointPoint(stage.getPointerPosition())) return
+  if (insertPolylineEndpoint(stage.getPointerPosition())) return
 
-  clearSelectedPointRegionPoint()
+  clearSelectedPoint()
   emit('clear-selected-region')
 }
 
 function resetTransientInteractionState() {
   cancelDraftRectangleRegion()
   cancelDraftPointRegion(false)
-  clearSelectedPointRegionPoint()
-  clearPolylineEndpointExtensionPreview(false)
+  resetPointEditing()
   clearRegionCursorState()
   resetStageCursor()
 
   isVertexHandleDragging = false
-  selectedPointRegionPoint = null
-  suppressPointRegionClick = false
-  suppressPointRegionDoubleClick = false
-}
-
-function deleteSelectedPointRegionPoint() {
-  if (!selectedPointRegionPoint) return false
-
-  const { regionId, pointIndex } = selectedPointRegionPoint
-  const region = props.regions.find((candidate) => candidate.id === regionId)
-  clearSelectedPointRegionPoint()
-
-  if (!region || !['polygon', 'polyline'].includes(region.type)) return false
-
-  const minimumPointCount = getPointRegionMinimumPointCount(region.type)
-
-  if (region.points.length <= minimumPointCount) {
-    emit('delete-selected-region')
-    return true
-  }
-
-  emit('update-region', {
-    id: region.id,
-    changes: {
-      points: region.points.filter((_, index) => index !== pointIndex),
-    },
-  })
-
-  return true
 }
 
 function handleMouseMove(event) {
@@ -714,7 +545,7 @@ function handleMouseMove(event) {
   const coordinates = getDocumentCoordinatesFromPointer(pos)
 
   if (!coordinates) {
-    clearPolylineEndpointExtensionPreview()
+    clearPolylineEndpointPreview()
     return
   }
 
@@ -725,13 +556,13 @@ function handleMouseMove(event) {
   } else if (hasDraftPointRegion()) {
     updateDraftPointPreview()
   } else {
-    updatePolylineEndpointExtensionPreview(pos)
+    updatePolylineEndpointPreview(pos)
   }
 }
 
 function handleMouseLeave() {
   resetStageCursor()
-  clearPolylineEndpointExtensionPreview()
+  clearPolylineEndpointPreview()
   emit('mouse-position-change', null)
 }
 
@@ -740,8 +571,8 @@ useCanvasKeyboardShortcuts({
   commitDraftPointRegion,
   cancelDraftPointRegion,
   cancelDraftRectangleRegion,
-  clearSelectedPointRegionPoint,
-  deleteSelectedPointRegionPoint,
+  clearSelectedPointRegionPoint: clearSelectedPoint,
+  deleteSelectedPointRegionPoint: deleteSelectedPoint,
   clearSelectedRegion: () => emit('clear-selected-region'),
   deleteSelectedRegion: () => emit('delete-selected-region'),
 })
@@ -781,10 +612,10 @@ watch(() => props.pageIndex, () => {
 })
 
 watch(() => props.selectedRegionId, (newSelectedRegionId) => {
-  if (selectedPointRegionPoint?.regionId !== newSelectedRegionId) {
-    clearSelectedPointRegionPoint()
+  if (getSelectedPoint()?.regionId !== newSelectedRegionId) {
+    clearSelectedPoint()
   } else {
-    clearPolylineEndpointExtensionPreview()
+    clearPolylineEndpointPreview()
   }
 })
 
@@ -808,7 +639,7 @@ watch(() => props.activeTool, (newTool, previousTool) => {
   if (previousTool === 'select' && newTool !== previousTool) {
     clearRegionCursorState()
     isVertexHandleDragging = false
-    clearSelectedPointRegionPoint()
+    clearSelectedPoint()
     resetStageCursor()
   }
 })
@@ -826,14 +657,11 @@ onBeforeUnmount(() => {
   disposePageImage()
   disposeRectangleDrawing()
   disposePointRegionDrawing()
+  disposePointEditing()
   transformer = null
-  polylineEndpointExtensionPreviewNode = null
   vertexHandles = []
   clearRegionCursorState()
   isVertexHandleDragging = false
-  selectedPointRegionPoint = null
-  suppressPointRegionClick = false
-  suppressPointRegionDoubleClick = false
 })
 
 defineExpose({
