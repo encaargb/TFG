@@ -1,12 +1,12 @@
 <script setup>
-import { computed, nextTick, ref, onMounted } from 'vue'
+import { computed, nextTick, ref, onBeforeUnmount, onMounted } from 'vue'
 import AnnotationCanvas from '../components/viewer/AnnotationCanvas.vue'
 import PageSidebar from '../components/viewer/PageSidebar.vue'
 import ViewerStatusBar from '../components/viewer/ViewerStatusBar.vue'
 import ViewerToolbar from '../components/viewer/ViewerToolbar.vue'
 import { REGION_COLOR } from '../components/viewer/annotationCanvasConstants'
 import { ProjectDocumentModel } from '../models/ProjectDocumentModel'
-import { fetchProjectDocument, saveProjectRegions } from '../services/documentApi'
+import { fetchProjectDocument } from '../services/documentApi'
 import {
   getNextZoom,
   getPreviousZoom,
@@ -22,6 +22,7 @@ const MIN_ZOOM = 0.25
 const MAX_ZOOM = 8
 const ZOOM_STEP = 0.25
 const DEFAULT_ZOOM = 1
+const SAVE_DELAY_MS = 500
 
 const zoomLevel = ref(DEFAULT_ZOOM)
 const activeTool = ref('select')
@@ -51,6 +52,7 @@ const nextRegionId = computed(() => `region-${regionSequence.value + 1}`)
 
 const mousePos = ref(null)
 const saveStatus = ref('saved')
+let saveTimeout = null
 
 // Page changes always return to the default zoom so every page starts from
 // a predictable view state.
@@ -98,7 +100,6 @@ function deleteSelectedRegion() {
   if (!selectedRegionId.value) return
 
   regions.value = regions.value.filter((region) => region.id !== selectedRegionId.value)
-  ProjectDocumentModel.regions = regions.value
   persistRegions()
   selectedRegionId.value = null
 }
@@ -109,19 +110,24 @@ function clearSelectedRegion() {
   selectedRegionId.value = null
 }
 
-// Saves the whole region list. The mock API intentionally stores a full
-// replacement instead of individual region patches.
 function persistRegions() {
   saveStatus.value = 'saving'
 
-  void saveProjectRegions(documentId.value, regions.value)
-    .then(() => {
+  if (saveTimeout !== null) {
+    clearTimeout(saveTimeout)
+  }
+
+  saveTimeout = setTimeout(() => {
+    try {
+      ProjectDocumentModel.save(regions.value)
       saveStatus.value = 'saved'
-    })
-    .catch((error) => {
+    } catch (error) {
       saveStatus.value = 'error'
       console.error(error)
-    })
+    } finally {
+      saveTimeout = null
+    }
+  }, SAVE_DELAY_MS)
 }
 
 // Keeps generated region ids increasing after data is loaded from the backend.
@@ -155,7 +161,6 @@ function setZoomLevel(value) {
 function addRegion(region) {
   regionSequence.value += 1
   regions.value.push(region)
-  ProjectDocumentModel.regions = regions.value
   persistRegions()
   activeTool.value = 'select'
   selectedRegionId.value = null
@@ -166,7 +171,6 @@ function updateRegion({ id, changes }) {
   if (!region) return
 
   Object.assign(region, changes)
-  ProjectDocumentModel.regions = regions.value
   persistRegions()
 }
 
@@ -195,17 +199,29 @@ function setMousePosition(position) {
 onMounted(() => {
   fetchProjectDocument()
     .then((document) => {
-      if (document === ProjectDocumentModel) return
-
       documentId.value = document.id
       pages.value = document.pages
-      regions.value = document.regions
-      ProjectDocumentModel.regions = document.regions
+      regions.value = ProjectDocumentModel.loadRegions()
       updateRegionSequence()
     })
     .catch((error) => {
       console.error(error)
     })
+})
+
+onBeforeUnmount(() => {
+  if (saveTimeout === null) return
+
+  clearTimeout(saveTimeout)
+  saveTimeout = null
+
+  try {
+    ProjectDocumentModel.save(regions.value)
+    saveStatus.value = 'saved'
+  } catch (error) {
+    saveStatus.value = 'error'
+    console.error(error)
+  }
 })
 </script>
 

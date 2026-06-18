@@ -1,11 +1,15 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { flushPromises, mount } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { mount } from '@vue/test-utils'
 import ViewerPage from '../../src/views/ViewerPage.vue'
 import { ProjectDocumentModel } from '../../src/models/ProjectDocumentModel'
 import * as documentApi from '../../src/services/documentApi'
 
 const updateZoomSpy = vi.fn()
+let fetchProjectDocumentSpy
+let loadRegionsSpy
+let saveRegionsSpy
 let saveProjectRegionsSpy
+const SAVE_DELAY_MS = 500
 
 const PageSidebarStub = {
   name: 'PageSidebar',
@@ -229,14 +233,40 @@ function mountViewerPage() {
 
 async function flushMountedFetch() {
   await Promise.resolve()
+  await Promise.resolve()
 }
 
 function getStub(wrapper, component) {
   return wrapper.findComponent(component)
 }
 
+function currentRegions(wrapper) {
+  return getStub(wrapper, AnnotationCanvasStub).props('regions')
+}
+
+async function advanceSaveDelay(wrapper) {
+  vi.advanceTimersByTime(SAVE_DELAY_MS)
+  await wrapper.vm.$nextTick()
+}
+
+function storedRegion(overrides = {}) {
+  return {
+    id: 'region-7',
+    pageIndex: 0,
+    type: 'rectangle',
+    left: 10,
+    top: 20,
+    right: 40,
+    bottom: 60,
+    color: '#0d6efd',
+    annotations: [],
+    ...overrides,
+  }
+}
+
 describe('ViewerPage', () => {
   beforeEach(() => {
+    vi.useFakeTimers()
     vi.restoreAllMocks()
     ProjectDocumentModel.id = 'doc1'
     ProjectDocumentModel.pages = Array.from(
@@ -245,9 +275,23 @@ describe('ViewerPage', () => {
     )
     ProjectDocumentModel.regions = []
     updateZoomSpy.mockClear()
+    fetchProjectDocumentSpy = vi.spyOn(documentApi, 'fetchProjectDocument').mockResolvedValue({
+      id: 'doc1',
+      title: 'Sample document',
+      pages: ProjectDocumentModel.pages,
+      regions: [],
+    })
+    loadRegionsSpy = vi.spyOn(ProjectDocumentModel, 'loadRegions').mockReturnValue([])
+    saveRegionsSpy = vi.spyOn(ProjectDocumentModel, 'save').mockImplementation(() => {})
     saveProjectRegionsSpy = vi
       .spyOn(documentApi, 'saveProjectRegions')
-      .mockResolvedValue(ProjectDocumentModel.regions)
+      .mockResolvedValue([])
+  })
+
+  afterEach(() => {
+    vi.clearAllTimers()
+    vi.useRealTimers()
+    vi.restoreAllMocks()
   })
 
   it('passes initial viewer state to the extracted child components', async () => {
@@ -305,6 +349,53 @@ describe('ViewerPage', () => {
         defaultZoomLevel: 1,
       })
     )
+  })
+
+  it('loads stored regions from ProjectDocumentModel.loadRegions() when the document opens', async () => {
+    const storedRegions = [storedRegion()]
+    loadRegionsSpy.mockReturnValue(storedRegions)
+
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
+
+    expect(loadRegionsSpy).toHaveBeenCalledTimes(1)
+    expect(currentRegions(wrapper)).toEqual(storedRegions)
+    expect(getStub(wrapper, ViewerToolbarStub).props('regionCount')).toBe(1)
+  })
+
+  it('still loads backend document metadata and pages with fetchProjectDocument()', async () => {
+    const backendPages = ['/documents/doc1/pages/backend-1.jpeg', '/documents/doc1/pages/backend-2.jpeg']
+    fetchProjectDocumentSpy.mockResolvedValue({
+      id: 'doc1',
+      title: 'Backend document',
+      pages: backendPages,
+      regions: [storedRegion({ id: 'backend-region' })],
+    })
+
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
+
+    expect(fetchProjectDocumentSpy).toHaveBeenCalledTimes(1)
+    expect(getStub(wrapper, PageSidebarStub).props('pages')).toEqual(backendPages)
+    expect(getStub(wrapper, AnnotationCanvasStub).props('selectedPage')).toBe(backendPages[0])
+  })
+
+  it('does not use backend-provided regions as the active region state', async () => {
+    const localRegions = [storedRegion({ id: 'local-region' })]
+    const backendRegions = [storedRegion({ id: 'backend-region' })]
+    loadRegionsSpy.mockReturnValue(localRegions)
+    fetchProjectDocumentSpy.mockResolvedValue({
+      id: 'doc1',
+      title: 'Backend document',
+      pages: ProjectDocumentModel.pages,
+      regions: backendRegions,
+    })
+
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
+
+    expect(currentRegions(wrapper)).toEqual(localRegions)
+    expect(currentRegions(wrapper)).not.toEqual(backendRegions)
   })
 
   it('wires sidebar page selection and collapse events to parent state', async () => {
@@ -427,7 +518,7 @@ describe('ViewerPage', () => {
         selectedRegionId: null,
       })
     )
-    expect(ProjectDocumentModel.regions).toHaveLength(1)
+    expect(currentRegions(wrapper)).toHaveLength(1)
   })
 
   it('clears selected region when selecting a page from the sidebar', async () => {
@@ -445,7 +536,7 @@ describe('ViewerPage', () => {
       })
     )
     expect(getStub(wrapper, AnnotationCanvasStub).props('selectedRegionId')).toBe(null)
-    expect(ProjectDocumentModel.regions).toHaveLength(1)
+    expect(currentRegions(wrapper)).toHaveLength(1)
   })
 
   it('disables delete after navigating away from a selected region', async () => {
@@ -471,13 +562,13 @@ describe('ViewerPage', () => {
     getStub(wrapper, ViewerToolbarStub).vm.$emit('delete-selected-region')
     await wrapper.vm.$nextTick()
 
-    expect(ProjectDocumentModel.regions).toEqual([
+    expect(currentRegions(wrapper)).toEqual([
       expect.objectContaining({
         id: 'region-1',
         pageIndex: 0,
       }),
     ])
-    expect(saveProjectRegionsSpy).toHaveBeenCalledTimes(1)
+    expect(saveProjectRegionsSpy).not.toHaveBeenCalled()
   })
 
   it('rejects invalid page navigation targets without changing the current page', async () => {
@@ -538,15 +629,17 @@ describe('ViewerPage', () => {
 
     await wrapper.find('[data-testid="add-region"]').trigger('click')
 
-    expect(ProjectDocumentModel.regions).toEqual([
+    expect(currentRegions(wrapper)).toEqual([
       expect.objectContaining({
         id: 'region-1',
         pageIndex: 0,
         type: 'rectangle',
       }),
     ])
-    expect(saveProjectRegionsSpy).toHaveBeenLastCalledWith('doc1', ProjectDocumentModel.regions)
-    await flushPromises()
+    expect(getStub(wrapper, ViewerStatusBarStub).props('saveStatus')).toBe('saving')
+    expect(saveRegionsSpy).not.toHaveBeenCalled()
+    await advanceSaveDelay(wrapper)
+    expect(saveRegionsSpy).toHaveBeenLastCalledWith(currentRegions(wrapper))
     expect(getStub(wrapper, ViewerStatusBarStub).props('saveStatus')).toBe('saved')
     expect(getStub(wrapper, ViewerToolbarStub).props()).toEqual(
       expect.objectContaining({
@@ -588,6 +681,120 @@ describe('ViewerPage', () => {
     expect(getStub(wrapper, ViewerStatusBarStub).props('selectedRegion')).toBe(null)
   })
 
+  it('debounces local saves and stores the latest region state once', async () => {
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
+
+    await wrapper.find('[data-testid="add-region"]').trigger('click')
+
+    expect(getStub(wrapper, ViewerStatusBarStub).props('saveStatus')).toBe('saving')
+    expect(saveRegionsSpy).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(1)
+
+    vi.advanceTimersByTime(SAVE_DELAY_MS - 1)
+    expect(saveRegionsSpy).not.toHaveBeenCalled()
+
+    await wrapper.find('[data-testid="add-polygon-region"]').trigger('click')
+
+    expect(vi.getTimerCount()).toBe(1)
+    vi.advanceTimersByTime(SAVE_DELAY_MS - 1)
+    expect(saveRegionsSpy).not.toHaveBeenCalled()
+
+    await wrapper.find('[data-testid="add-polyline-region"]').trigger('click')
+
+    const latestRegions = currentRegions(wrapper)
+    expect(vi.getTimerCount()).toBe(1)
+
+    await advanceSaveDelay(wrapper)
+
+    expect(saveRegionsSpy).toHaveBeenCalledTimes(1)
+    expect(saveRegionsSpy).toHaveBeenLastCalledWith(latestRegions)
+    expect(latestRegions).toEqual([
+      expect.objectContaining({ id: 'region-1', type: 'rectangle' }),
+      expect.objectContaining({ id: 'region-2', type: 'polygon' }),
+      expect.objectContaining({ id: 'region-3', type: 'polyline' }),
+    ])
+    expect(getStub(wrapper, ViewerStatusBarStub).props('saveStatus')).toBe('saved')
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('allows a later local save retry after a storage error', async () => {
+    const error = new Error('save failed')
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    saveRegionsSpy.mockImplementationOnce(() => {
+      throw error
+    })
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
+
+    await wrapper.find('[data-testid="add-region"]').trigger('click')
+    await advanceSaveDelay(wrapper)
+
+    expect(getStub(wrapper, ViewerStatusBarStub).props('saveStatus')).toBe('error')
+    expect(consoleErrorSpy).toHaveBeenCalledWith(error)
+
+    await wrapper.find('[data-testid="add-polygon-region"]').trigger('click')
+    expect(getStub(wrapper, ViewerStatusBarStub).props('saveStatus')).toBe('saving')
+
+    await advanceSaveDelay(wrapper)
+
+    expect(saveRegionsSpy).toHaveBeenCalledTimes(2)
+    expect(saveRegionsSpy).toHaveBeenLastCalledWith(currentRegions(wrapper))
+    expect(getStub(wrapper, ViewerStatusBarStub).props('saveStatus')).toBe('saved')
+
+    consoleErrorSpy.mockRestore()
+  })
+
+  it('saves immediately on unmount when a local save is pending', async () => {
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
+
+    await wrapper.find('[data-testid="add-region"]').trigger('click')
+    const latestRegions = currentRegions(wrapper)
+
+    expect(vi.getTimerCount()).toBe(1)
+
+    wrapper.unmount()
+
+    expect(saveRegionsSpy).toHaveBeenCalledTimes(1)
+    expect(saveRegionsSpy).toHaveBeenLastCalledWith(latestRegions)
+    expect(vi.getTimerCount()).toBe(0)
+
+    vi.advanceTimersByTime(SAVE_DELAY_MS)
+
+    expect(saveRegionsSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not save on unmount when no local save is pending', async () => {
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
+
+    wrapper.unmount()
+
+    expect(saveRegionsSpy).not.toHaveBeenCalled()
+  })
+
+  it('requests local persistence for add, update, color, and delete operations', async () => {
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
+
+    await wrapper.find('[data-testid="add-region"]').trigger('click')
+    await advanceSaveDelay(wrapper)
+
+    await wrapper.find('[data-testid="update-region"]').trigger('click')
+    await advanceSaveDelay(wrapper)
+
+    await wrapper.find('[data-testid="select-region"]').trigger('click')
+    await wrapper.find('[data-testid="set-region-color"]').trigger('click')
+    await advanceSaveDelay(wrapper)
+
+    await wrapper.find('[data-testid="delete-region"]').trigger('click')
+    await advanceSaveDelay(wrapper)
+
+    expect(saveRegionsSpy).toHaveBeenCalledTimes(4)
+    expect(saveProjectRegionsSpy).not.toHaveBeenCalled()
+  })
+
   it('returns to select mode without selecting new polygon and polyline regions', async () => {
     const wrapper = mountViewerPage()
     await flushMountedFetch()
@@ -595,7 +802,7 @@ describe('ViewerPage', () => {
     await wrapper.find('[data-testid="tool-rectangle"]').trigger('click')
     await wrapper.find('[data-testid="add-polygon-region"]').trigger('click')
 
-    expect(ProjectDocumentModel.regions).toEqual([
+    expect(currentRegions(wrapper)).toEqual([
       expect.objectContaining({
         id: 'region-1',
         type: 'polygon',
@@ -618,7 +825,7 @@ describe('ViewerPage', () => {
     await wrapper.find('[data-testid="tool-rectangle"]').trigger('click')
     await wrapper.find('[data-testid="add-polyline-region"]').trigger('click')
 
-    expect(ProjectDocumentModel.regions).toEqual([
+    expect(currentRegions(wrapper)).toEqual([
       expect.objectContaining({
         id: 'region-1',
         type: 'polygon',
@@ -650,7 +857,7 @@ describe('ViewerPage', () => {
     await wrapper.find('[data-testid="add-region"]').trigger('click')
     await wrapper.find('[data-testid="update-region"]').trigger('click')
 
-    expect(ProjectDocumentModel.regions[0]).toEqual(
+    expect(currentRegions(wrapper)[0]).toEqual(
       expect.objectContaining({
         id: 'region-1',
         left: 99,
@@ -659,13 +866,14 @@ describe('ViewerPage', () => {
         bottom: 128,
       })
     )
-    expect(saveProjectRegionsSpy).toHaveBeenLastCalledWith('doc1', ProjectDocumentModel.regions)
+    expect(saveRegionsSpy).not.toHaveBeenCalled()
 
     await wrapper.find('[data-testid="select-region"]').trigger('click')
     await wrapper.find('[data-testid="delete-selected"]').trigger('click')
 
-    expect(ProjectDocumentModel.regions).toEqual([])
-    expect(saveProjectRegionsSpy).toHaveBeenLastCalledWith('doc1', [])
+    expect(currentRegions(wrapper)).toEqual([])
+    await advanceSaveDelay(wrapper)
+    expect(saveRegionsSpy).toHaveBeenLastCalledWith([])
     expect(getStub(wrapper, ViewerToolbarStub).props()).toEqual(
       expect.objectContaining({
         regionCount: 0,
@@ -699,7 +907,7 @@ describe('ViewerPage', () => {
 
     await wrapper.find('[data-testid="add-region"]').trigger('click')
 
-    expect(ProjectDocumentModel.regions[0]).toEqual(
+    expect(currentRegions(wrapper)[0]).toEqual(
       expect.objectContaining({
         id: 'region-1',
         color: '#0d6efd',
@@ -708,7 +916,7 @@ describe('ViewerPage', () => {
 
     await wrapper.find('[data-testid="set-region-color"]').trigger('click')
 
-    expect(ProjectDocumentModel.regions[0]).toEqual(
+    expect(currentRegions(wrapper)[0]).toEqual(
       expect.objectContaining({
         id: 'region-1',
         color: '#0d6efd',
@@ -738,7 +946,7 @@ describe('ViewerPage', () => {
     await wrapper.find('[data-testid="add-polygon-region"]').trigger('click')
     await wrapper.find('[data-testid="add-polyline-region"]').trigger('click')
 
-    expect(ProjectDocumentModel.regions).toEqual([
+    expect(currentRegions(wrapper)).toEqual([
       expect.objectContaining({
         id: 'region-1',
         color: '#0d6efd',
@@ -759,7 +967,8 @@ describe('ViewerPage', () => {
         color: '#ff00aa',
       }),
     ])
-    expect(saveProjectRegionsSpy).toHaveBeenLastCalledWith('doc1', ProjectDocumentModel.regions)
+    await advanceSaveDelay(wrapper)
+    expect(saveRegionsSpy).toHaveBeenLastCalledWith(currentRegions(wrapper))
   })
 
   it('edits a selected region color without overwriting the creation color', async () => {
@@ -778,7 +987,7 @@ describe('ViewerPage', () => {
 
     await wrapper.find('[data-testid="set-region-color"]').trigger('click')
 
-    expect(ProjectDocumentModel.regions[0]).toEqual(
+    expect(currentRegions(wrapper)[0]).toEqual(
       expect.objectContaining({
         id: 'region-1',
         color: '#ff00aa',
@@ -786,7 +995,8 @@ describe('ViewerPage', () => {
     )
     expect(getStub(wrapper, ViewerToolbarStub).props('toolbarColor')).toBe('#ff00aa')
     expect(getStub(wrapper, AnnotationCanvasStub).props('regionCreationColor')).toBe('#0d6efd')
-    expect(saveProjectRegionsSpy).toHaveBeenLastCalledWith('doc1', ProjectDocumentModel.regions)
+    await advanceSaveDelay(wrapper)
+    expect(saveRegionsSpy).toHaveBeenLastCalledWith(currentRegions(wrapper))
 
     await wrapper.find('[data-testid="clear-region"]').trigger('click')
 
@@ -796,7 +1006,7 @@ describe('ViewerPage', () => {
         toolbarColor: '#0d6efd',
       })
     )
-    expect(ProjectDocumentModel.regions[0]).toEqual(
+    expect(currentRegions(wrapper)[0]).toEqual(
       expect.objectContaining({
         color: '#ff00aa',
       })
@@ -804,7 +1014,7 @@ describe('ViewerPage', () => {
 
     await wrapper.find('[data-testid="add-region"]').trigger('click')
 
-    expect(ProjectDocumentModel.regions).toEqual([
+    expect(currentRegions(wrapper)).toEqual([
       expect.objectContaining({
         id: 'region-1',
         color: '#ff00aa',
@@ -824,8 +1034,9 @@ describe('ViewerPage', () => {
     await wrapper.find('[data-testid="select-region"]').trigger('click')
     await wrapper.find('[data-testid="delete-region"]').trigger('click')
 
-    expect(ProjectDocumentModel.regions).toEqual([])
-    expect(saveProjectRegionsSpy).toHaveBeenLastCalledWith('doc1', [])
+    expect(currentRegions(wrapper)).toEqual([])
+    await advanceSaveDelay(wrapper)
+    expect(saveRegionsSpy).toHaveBeenLastCalledWith([])
     expect(getStub(wrapper, ViewerToolbarStub).props()).toEqual(
       expect.objectContaining({
         regionCount: 0,
@@ -837,13 +1048,15 @@ describe('ViewerPage', () => {
   it('sets save status to error when persistence fails', async () => {
     const error = new Error('save failed')
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    saveProjectRegionsSpy.mockRejectedValueOnce(error)
+    saveRegionsSpy.mockImplementationOnce(() => {
+      throw error
+    })
     const wrapper = mountViewerPage()
     await flushMountedFetch()
 
     await wrapper.find('[data-testid="add-region"]').trigger('click')
 
-    await flushPromises()
+    await advanceSaveDelay(wrapper)
     expect(getStub(wrapper, ViewerStatusBarStub).props('saveStatus')).toBe('error')
     expect(consoleErrorSpy).toHaveBeenCalledWith(error)
 
