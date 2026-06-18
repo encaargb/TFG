@@ -20,9 +20,6 @@ const documents = new Map([
   ],
 ])
 
-/**
- * Sends a JSON response with the CORS headers required by the Vite frontend.
- */
 function sendJson(response, statusCode, payload) {
   response.writeHead(statusCode, {
     'Access-Control-Allow-Origin': FRONTEND_ORIGIN,
@@ -33,9 +30,6 @@ function sendJson(response, statusCode, payload) {
   response.end(JSON.stringify(payload))
 }
 
-/**
- * Maps file extensions to the MIME types used by the browser.
- */
 function getContentType(filePath) {
   const extension = path.extname(filePath).toLowerCase()
 
@@ -50,10 +44,6 @@ function getContentType(filePath) {
   }[extension] ?? 'application/octet-stream'
 }
 
-/**
- * Streams document assets from backend-mock/public.
- * The resolved path check prevents requests from escaping the public directory.
- */
 function sendStaticFile(response, pathname, rootDir = PUBLIC_DIR) {
   const relativePath = decodeURIComponent(pathname.replace(/^\//, ''))
   const filePath = path.resolve(rootDir, relativePath)
@@ -77,10 +67,6 @@ function sendStaticFile(response, pathname, rootDir = PUBLIC_DIR) {
   })
 }
 
-/**
- * Serves the production Vue build when the backend is used as a single
- * deployable service, for example inside the Docker image.
- */
 function sendFrontendFile(response, pathname) {
   const requestedPath = pathname === '/' ? '/index.html' : pathname
   const filePath = path.join(FRONTEND_DIST_DIR, requestedPath)
@@ -90,9 +76,6 @@ function sendFrontendFile(response, pathname) {
   })
 }
 
-/**
- * Extracts the document id from supported document API routes.
- */
 function getDocumentId(pathname) {
   const match = pathname.match(/^\/api\/documents\/([^/]+)$/)
   return match?.[1]

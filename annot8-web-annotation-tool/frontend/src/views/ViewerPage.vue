@@ -54,8 +54,6 @@ const mousePos = ref(null)
 const saveStatus = ref('saved')
 let saveTimeout = null
 
-// Page changes always return to the default zoom so every page starts from
-// a predictable view state.
 function resetZoom() {
   zoomLevel.value = DEFAULT_ZOOM
 }
@@ -134,7 +132,6 @@ function persistRegions() {
   }, SAVE_DELAY_MS)
 }
 
-// Keeps generated region ids increasing after data is loaded from the backend.
 function updateRegionSequence() {
   regionSequence.value = regions.value.reduce((highestId, region) => {
     const match = String(region.id).match(/^region-(\d+)$/)

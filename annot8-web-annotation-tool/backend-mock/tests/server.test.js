@@ -19,7 +19,6 @@ function waitForBackend() {
           return
         }
       } catch (error) {
-        // The process may still be starting.
       }
 
       if (Date.now() - startedAt > 5000) {
