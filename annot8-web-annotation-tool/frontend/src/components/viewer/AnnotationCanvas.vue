@@ -2,11 +2,6 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import Konva from 'konva'
 import {
-  getDocumentCoordinates,
-  getFittedDimensions,
-  getVisibleDimensions,
-} from '../../utils/viewerMath'
-import {
   getPointRegionMinimumPointCount,
   hasValidVisiblePointRegionSegments,
 } from '../../utils/pointRegionValidation'
@@ -26,6 +21,7 @@ import {
 import { useCanvasAutoScroll } from './useCanvasAutoScroll'
 import { useCanvasCursor } from './useCanvasCursor'
 import { useCanvasKeyboardShortcuts } from './useCanvasKeyboardShortcuts'
+import { useCanvasPageImage } from './useCanvasPageImage'
 import {
   clampPointToBounds,
   clampPolygonToBounds,
@@ -110,7 +106,6 @@ const currentPageRegions = computed(() =>
 let stage = null
 let imageLayer = null
 let regionLayer = null
-let pageImageNode = null
 let transformer = null
 let draftRegionNode = null
 let draftRegionStart = null
@@ -120,30 +115,10 @@ let skipNextPointRegionClick = false
 let skipNextPointRegionClickPosition = null
 let pointRegionDragStart = null
 let vertexHandles = []
-let imageLoadSequence = 0
 let isVertexHandleDragging = false
 let selectedPointRegionPoint = null
 let suppressPointRegionClick = false
 let suppressPointRegionDoubleClick = false
-
-let baseImageWidth = 0
-let baseImageHeight = 0
-let originalImageWidth = 0
-let originalImageHeight = 0
-
-function getRegionScale() {
-  return {
-    scaleX: baseImageWidth / originalImageWidth,
-    scaleY: baseImageHeight / originalImageHeight,
-  }
-}
-
-function getDocumentBounds() {
-  return {
-    width: originalImageWidth,
-    height: originalImageHeight,
-  }
-}
 
 function getRegionCreationColor() {
   return /^#[0-9a-fA-F]{6}$/.test(props.regionCreationColor)
@@ -177,6 +152,24 @@ function hasActiveCanvasInteraction() {
 const { autoScrollCanvasWrapper } = useCanvasAutoScroll({
   canvasWrapper,
   isInteractionActive: hasActiveCanvasInteraction,
+})
+
+const {
+  loadSelectedPage,
+  updateZoom,
+  getRegionScale,
+  getDocumentBounds,
+  getVisibleBounds,
+  getDocumentCoordinatesFromPointer,
+  hasPageImage,
+  isPageImageNode,
+  disposePageImage,
+} = useCanvasPageImage({
+  getStage: () => stage,
+  getImageLayer: () => imageLayer,
+  canvasWrapper,
+  getZoomLevel: () => props.zoomLevel,
+  renderRegions: () => renderRegions(),
 })
 
 function clearSelectedPointRegionPoint() {
@@ -257,20 +250,13 @@ function updatePolylineEndpointExtensionPreview(pointerPosition = stage?.getPoin
 }
 
 function getClampedDocumentPointer(pointerPosition = stage?.getPointerPosition()) {
-  const documentPoint = getDocumentCoordinates(
-    pointerPosition,
-    props.zoomLevel,
-    baseImageWidth,
-    baseImageHeight,
-    originalImageWidth,
-    originalImageHeight
-  )
+  const documentPoint = getDocumentCoordinatesFromPointer(pointerPosition)
 
   return documentPoint ? clampPointToBounds(documentPoint, getDocumentBounds()) : null
 }
 
 function isPointerInsideVisibleDocument(pointerPosition) {
-  if (!pointerPosition || !baseImageWidth || !baseImageHeight) return false
+  if (!pointerPosition || !hasPageImage()) return false
 
   const bounds = getVisibleBounds()
 
@@ -295,31 +281,6 @@ function updateCreationToolCursor(pointerPosition = stage?.getPointerPosition())
   }
 
   resetStageCursor()
-}
-
-function updateZoom() {
-  if (!stage || !pageImageNode) return
-
-  const { width: visibleWidth, height: visibleHeight } = getVisibleDimensions(
-    baseImageWidth,
-    baseImageHeight,
-    props.zoomLevel
-  )
-
-  stage.width(visibleWidth)
-  stage.height(visibleHeight)
-
-  pageImageNode.x(0)
-  pageImageNode.y(0)
-  pageImageNode.width(visibleWidth)
-  pageImageNode.height(visibleHeight)
-
-  imageLayer.draw()
-  renderRegions()
-}
-
-function getVisibleBounds() {
-  return getVisibleDimensions(baseImageWidth, baseImageHeight, props.zoomLevel)
 }
 
 function setNodeVisibility(nodes, isVisible) {
@@ -498,14 +459,7 @@ function createPointRegionNode(region) {
       isPolygon,
       POINT_REGION_SEGMENT_HIT_TOLERANCE
     )
-    const documentPoint = getDocumentCoordinates(
-      pointerPosition,
-      props.zoomLevel,
-      baseImageWidth,
-      baseImageHeight,
-      originalImageWidth,
-      originalImageHeight
-    )
+    const documentPoint = getDocumentCoordinatesFromPointer(pointerPosition)
 
     if (segmentIndex === -1 || !documentPoint) return false
 
@@ -758,7 +712,7 @@ function createRegionNode(region) {
 }
 
 function renderRegions() {
-  if (!regionLayer || !baseImageWidth || !baseImageHeight) return
+  if (!regionLayer || !hasPageImage()) return
 
   clearPolylineEndpointExtensionPreview(false)
   regionLayer.destroyChildren()
@@ -825,7 +779,7 @@ function renderRegions() {
 }
 
 function beginRectangleRegion() {
-  if (!stage || !regionLayer || !pageImageNode || props.activeTool !== 'rectangle') return
+  if (!stage || !regionLayer || !hasPageImage() || props.activeTool !== 'rectangle') return
 
   const pointerPosition = stage.getPointerPosition()
 
@@ -1008,7 +962,7 @@ function cancelDraftRectangleRegion() {
 }
 
 function addDraftPointRegionPoint(pointerPosition, shouldClearSelection = true) {
-  if (!stage || !regionLayer || !pageImageNode) return
+  if (!stage || !regionLayer || !hasPageImage()) return
   if (!['polygon', 'polyline'].includes(props.activeTool)) return
 
   const documentPoint = getClampedDocumentPointer(pointerPosition)
@@ -1102,14 +1056,7 @@ function insertPolylineEndpointPoint(pointerPosition) {
   if (!region || region.type !== 'polyline' || props.selectedRegionId !== region.id) return false
   if (pointIndex !== 0 && pointIndex !== region.points.length - 1) return false
 
-  const documentPoint = getDocumentCoordinates(
-    pointerPosition,
-    props.zoomLevel,
-    baseImageWidth,
-    baseImageHeight,
-    originalImageWidth,
-    originalImageHeight
-  )
+  const documentPoint = getDocumentCoordinatesFromPointer(pointerPosition)
 
   if (!documentPoint) return false
 
@@ -1158,7 +1105,7 @@ function handleStageClick(event) {
 
   const clickTarget = event?.target
 
-  if (clickTarget && clickTarget !== stage && clickTarget !== pageImageNode) return
+  if (clickTarget && clickTarget !== stage && !isPageImageNode(clickTarget)) return
 
   if (insertPolylineEndpointPoint(stage.getPointerPosition())) return
 
@@ -1257,51 +1204,6 @@ function deleteSelectedPointRegionPoint() {
   return true
 }
 
-function loadSelectedPageInKonva(src) {
-  if (!imageLayer || !stage || !src) return
-
-  const loadId = imageLoadSequence + 1
-  imageLoadSequence = loadId
-
-  const img = new window.Image()
-
-  img.onload = () => {
-    if (loadId !== imageLoadSequence || !stage || !imageLayer) return
-
-    if (pageImageNode) {
-      pageImageNode.destroy()
-      pageImageNode = null
-    }
-
-    const fittedDimensions = getFittedDimensions(img.width, img.height, 1000, 700)
-
-    originalImageWidth = img.width
-    originalImageHeight = img.height
-    baseImageWidth = fittedDimensions.width
-    baseImageHeight = fittedDimensions.height
-
-    stage.width(baseImageWidth)
-    stage.height(baseImageHeight)
-
-    pageImageNode = new Konva.Image({
-      x: 0,
-      y: 0,
-      image: img,
-      width: baseImageWidth,
-      height: baseImageHeight,
-    })
-
-    imageLayer.add(pageImageNode)
-    updateZoom()
-
-    canvasWrapper.value.scrollTop = 0
-    canvasWrapper.value.scrollLeft = 0
-  }
-
-  img.src = src
-
-}
-
 function handleMouseMove(event) {
   resetStaleRegionCursor(event)
   autoScrollCanvasWrapper(event)
@@ -1309,14 +1211,7 @@ function handleMouseMove(event) {
   const pos = stage.getPointerPosition()
   updateCreationToolCursor(pos)
 
-  const coordinates = getDocumentCoordinates(
-    pos,
-    props.zoomLevel,
-    baseImageWidth,
-    baseImageHeight,
-    originalImageWidth,
-    originalImageHeight
-  )
+  const coordinates = getDocumentCoordinatesFromPointer(pos)
 
   if (!coordinates) {
     clearPolylineEndpointExtensionPreview()
@@ -1372,11 +1267,11 @@ onMounted(() => {
   stage.on('mouseup', handleStageMouseUp)
   stage.on('dblclick', commitDraftPointRegion)
 
-  loadSelectedPageInKonva(props.selectedPage)
+  loadSelectedPage(props.selectedPage)
 })
 
 watch(() => props.selectedPage, (newPage) => {
-  loadSelectedPageInKonva(newPage)
+  loadSelectedPage(newPage)
 })
 
 watch(() => props.zoomLevel, () => {
@@ -1430,7 +1325,7 @@ onBeforeUnmount(() => {
 
   imageLayer = null
   regionLayer = null
-  pageImageNode = null
+  disposePageImage()
   transformer = null
   draftRegionNode = null
   draftRegionStart = null
