@@ -12,6 +12,10 @@ import {
   getPreviousZoom,
   getZoomPercentage,
 } from '../utils/viewerMath'
+import {
+  getNextRegionZIndex,
+  normalizeRegionZIndexes,
+} from '../utils/regionZIndex'
 
 const pages = ref([])
 // This is the runtime source of truth; the document model only serializes this array.
@@ -164,8 +168,13 @@ function setZoomLevel(value) {
 }
 
 function addRegion(region) {
+  const regionWithZIndex = {
+    ...region,
+    zIndex: getNextRegionZIndex(regions.value, region.pageIndex),
+  }
+
   regionSequence.value += 1
-  regions.value.push(region)
+  regions.value.push(regionWithZIndex)
   persistRegions()
   activeTool.value = 'select'
   selectedRegionId.value = null
@@ -206,7 +215,7 @@ onMounted(() => {
     .then((document) => {
       projectDocument = createProjectDocumentModel(document)
       pages.value = projectDocument.pages
-      regions.value = projectDocument.loadRegions()
+      regions.value = normalizeRegionZIndexes(projectDocument.loadRegions())
       updateRegionSequence()
     })
     .catch((error) => {

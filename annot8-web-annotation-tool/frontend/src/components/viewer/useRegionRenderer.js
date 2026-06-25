@@ -1,5 +1,6 @@
 import Konva from 'konva'
 import { flattenPoints, toVisiblePoints, toVisibleRectangle } from '../../utils/regionGeometry'
+import { compareRegionsBackToFront } from '../../utils/regionZIndex'
 import { clampTransformerBox } from './rectangleCanvasGeometry'
 import {
   MIN_VISIBLE_RECTANGLE_SIZE,
@@ -180,8 +181,13 @@ export function useRegionRenderer({
     })
 
     let selectedNode = null
+    let selectedPointRegion = null
+    const sortedPageRegions = currentPageRegions
+      .map((region, index) => ({ region, index }))
+      .sort(compareRegionsBackToFront)
+      .map(({ region }) => region)
 
-    currentPageRegions.forEach((region) => {
+    sortedPageRegions.forEach((region) => {
       const node = createRegionNode(region)
       regionLayer.add(node)
 
@@ -194,10 +200,17 @@ export function useRegionRenderer({
         region.id === getSelectedRegionId() &&
         getActiveTool() === 'select'
       ) {
-        vertexHandles = createRegionVertexHandles(region, node)
-        vertexHandles.forEach((handle) => regionLayer.add(handle))
+        selectedPointRegion = { region, node }
       }
     })
+
+    if (selectedPointRegion) {
+      vertexHandles = createRegionVertexHandles(
+        selectedPointRegion.region,
+        selectedPointRegion.node
+      )
+      vertexHandles.forEach((handle) => regionLayer.add(handle))
+    }
 
     regionLayer.add(transformer)
 

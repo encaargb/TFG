@@ -363,7 +363,12 @@ describe('ViewerPage', () => {
     await flushMountedFetch()
 
     expect(loadRegionsSpy).toHaveBeenCalledTimes(1)
-    expect(currentRegions(wrapper)).toEqual(storedRegions)
+    expect(currentRegions(wrapper)).toEqual([
+      expect.objectContaining({
+        ...storedRegions[0],
+        zIndex: 0,
+      }),
+    ])
     expect(getStub(wrapper, ViewerToolbarStub).props('regionCount')).toBe(1)
   })
 
@@ -400,7 +405,12 @@ describe('ViewerPage', () => {
     const wrapper = mountViewerPage()
     await flushMountedFetch()
 
-    expect(currentRegions(wrapper)).toEqual(localRegions)
+    expect(currentRegions(wrapper)).toEqual([
+      expect.objectContaining({
+        ...localRegions[0],
+        zIndex: 0,
+      }),
+    ])
     expect(currentRegions(wrapper)).not.toEqual(backendRegions)
   })
 
@@ -639,12 +649,16 @@ describe('ViewerPage', () => {
         id: 'region-1',
         pageIndex: 0,
         type: 'rectangle',
+        zIndex: 0,
       }),
     ])
     expect(getStub(wrapper, ViewerStatusBarStub).props('saveStatus')).toBe('saving')
     expect(saveRegionsSpy).not.toHaveBeenCalled()
     await advanceSaveDelay(wrapper)
     expect(saveRegionsSpy).toHaveBeenLastCalledWith(currentRegions(wrapper))
+    expect(saveRegionsSpy.mock.calls.at(-1)[0]).toEqual([
+      expect.objectContaining({ id: 'region-1', zIndex: 0 }),
+    ])
     expect(getStub(wrapper, ViewerStatusBarStub).props('saveStatus')).toBe('saved')
     expect(getStub(wrapper, ViewerToolbarStub).props()).toEqual(
       expect.objectContaining({
@@ -684,6 +698,101 @@ describe('ViewerPage', () => {
     expect(getStub(wrapper, ViewerToolbarStub).props('hasSelectedRegion')).toBe(false)
     expect(getStub(wrapper, AnnotationCanvasStub).props('selectedRegionId')).toBe(null)
     expect(getStub(wrapper, ViewerStatusBarStub).props('selectedRegion')).toBe(null)
+  })
+
+  it('assigns increasing z-index values on the active page', async () => {
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
+
+    await wrapper.find('[data-testid="add-region"]').trigger('click')
+    await wrapper.find('[data-testid="add-polygon-region"]').trigger('click')
+    await wrapper.find('[data-testid="add-polyline-region"]').trigger('click')
+
+    expect(currentRegions(wrapper).map((region) => [region.id, region.zIndex])).toEqual([
+      ['region-1', 0],
+      ['region-2', 1],
+      ['region-3', 2],
+    ])
+  })
+
+  it('does not reuse deleted z-index gaps', async () => {
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
+
+    await wrapper.find('[data-testid="add-region"]').trigger('click')
+    await wrapper.find('[data-testid="add-polygon-region"]').trigger('click')
+    await wrapper.find('[data-testid="add-polyline-region"]').trigger('click')
+    getStub(wrapper, AnnotationCanvasStub).vm.$emit('select-region', 'region-2')
+    await wrapper.vm.$nextTick()
+    await wrapper.find('[data-testid="delete-region"]').trigger('click')
+    await wrapper.find('[data-testid="add-region"]').trigger('click')
+
+    expect(currentRegions(wrapper).map((region) => [region.id, region.zIndex])).toEqual([
+      ['region-1', 0],
+      ['region-3', 2],
+      ['region-4', 3],
+    ])
+  })
+
+  it('starts a separate z-index sequence on each page', async () => {
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
+
+    await wrapper.find('[data-testid="add-region"]').trigger('click')
+    await wrapper.find('[data-testid="next-page"]').trigger('click')
+    await wrapper.find('[data-testid="add-region"]').trigger('click')
+
+    expect(currentRegions(wrapper)).toEqual([
+      expect.objectContaining({ id: 'region-1', pageIndex: 0, zIndex: 0 }),
+      expect.objectContaining({ id: 'region-2', pageIndex: 1, zIndex: 0 }),
+    ])
+  })
+
+  it('normalizes old stored regions without z-index values', async () => {
+    loadRegionsSpy.mockReturnValue([
+      storedRegion({ id: 'region-1' }),
+      storedRegion({ id: 'region-2' }),
+    ])
+
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
+
+    expect(currentRegions(wrapper)).toEqual([
+      expect.objectContaining({ id: 'region-1', zIndex: 0 }),
+      expect.objectContaining({ id: 'region-2', zIndex: 1 }),
+    ])
+  })
+
+  it('normalizes duplicate stored z-index values deterministically', async () => {
+    loadRegionsSpy.mockReturnValue([
+      storedRegion({ id: 'region-1', zIndex: 4 }),
+      storedRegion({ id: 'region-2', zIndex: 4 }),
+      storedRegion({ id: 'region-3', zIndex: 8 }),
+    ])
+
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
+
+    expect(currentRegions(wrapper)).toEqual([
+      expect.objectContaining({ id: 'region-1', zIndex: 0 }),
+      expect.objectContaining({ id: 'region-2', zIndex: 2 }),
+      expect.objectContaining({ id: 'region-3', zIndex: 1 }),
+    ])
+  })
+
+  it('keeps valid stored z-index values when no page requires migration', async () => {
+    loadRegionsSpy.mockReturnValue([
+      storedRegion({ id: 'region-1', zIndex: 4 }),
+      storedRegion({ id: 'region-2', zIndex: 8 }),
+    ])
+
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
+
+    expect(currentRegions(wrapper)).toEqual([
+      expect.objectContaining({ id: 'region-1', zIndex: 4 }),
+      expect.objectContaining({ id: 'region-2', zIndex: 8 }),
+    ])
   })
 
   it('debounces local saves and stores the latest region state once', async () => {

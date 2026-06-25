@@ -231,6 +231,93 @@ describe('AnnotationCanvas', () => {
     )
   })
 
+  it('adds region bodies in ascending z-index order', async () => {
+    mountCanvas({
+      regions: [
+        rectangleRegion({ id: 'front-region', zIndex: 20 }),
+        rectangleRegion({ id: 'back-region', zIndex: 2 }),
+        rectangleRegion({ id: 'middle-region', zIndex: 10 }),
+      ],
+    })
+    await flushImageLoad()
+
+    const addedRegionIds = getLayerInstances().at(-1).add.mock.calls
+      .map(([node]) => node.config?.id)
+      .filter(Boolean)
+
+    expect(addedRegionIds).toEqual(['back-region', 'middle-region', 'front-region'])
+  })
+
+  it('uses array order as the visual fallback for equal z-index values', async () => {
+    mountCanvas({
+      regions: [
+        rectangleRegion({ id: 'earlier-region', zIndex: 4 }),
+        rectangleRegion({ id: 'later-region', zIndex: 4 }),
+      ],
+    })
+    await flushImageLoad()
+
+    const addedRegionIds = getLayerInstances().at(-1).add.mock.calls
+      .map(([node]) => node.config?.id)
+      .filter(Boolean)
+
+    expect(addedRegionIds).toEqual(['earlier-region', 'later-region'])
+  })
+
+  it('keeps selected polygon vertex handles above every body node', async () => {
+    mountCanvas({
+      selectedRegionId: 'selected-region',
+      regions: [
+        rectangleRegion({ id: 'top-body', zIndex: 10 }),
+        fourPointPolygonRegion({ id: 'selected-region', zIndex: 1 }),
+      ],
+    })
+    await flushImageLoad()
+
+    const regionLayer = getLayerInstances().at(-1)
+    const addedNodes = regionLayer.add.mock.calls.map(([node]) => node)
+    const selectedBodyIndex = addedNodes.findIndex((node) => node.config?.id === 'selected-region')
+    const topBodyIndex = addedNodes.findIndex((node) => node.config?.id === 'top-body')
+    const firstHandleIndex = addedNodes.findIndex((node) => getCircleInstances().includes(node))
+
+    expect(selectedBodyIndex).toBeLessThan(firstHandleIndex)
+    expect(topBodyIndex).toBeLessThan(firstHandleIndex)
+  })
+
+  it('keeps the rectangle transformer above every body node', async () => {
+    mountCanvas({
+      selectedRegionId: 'selected-region',
+      regions: [
+        rectangleRegion({ id: 'top-body', zIndex: 10 }),
+        rectangleRegion({ id: 'selected-region', zIndex: 1 }),
+      ],
+    })
+    await flushImageLoad()
+
+    const regionLayer = getLayerInstances().at(-1)
+    const addedNodes = regionLayer.add.mock.calls.map(([node]) => node)
+    const transformer = getTransformerInstances().at(-1)
+    const transformerIndex = addedNodes.indexOf(transformer)
+    const bodyIndexes = addedNodes
+      .map((node, index) => (node.config?.id ? index : -1))
+      .filter((index) => index !== -1)
+
+    expect(Math.max(...bodyIndexes)).toBeLessThan(transformerIndex)
+  })
+
+  it('does not mutate the regions prop while sorting for render', async () => {
+    const regions = [
+      rectangleRegion({ id: 'front-region', zIndex: 20 }),
+      rectangleRegion({ id: 'back-region', zIndex: 2 }),
+    ]
+    const originalRegions = structuredClone(regions)
+
+    mountCanvas({ regions })
+    await flushImageLoad()
+
+    expect(regions).toEqual(originalRegions)
+  })
+
   it('updates selected rectangle transformer colors when the region color changes', async () => {
     const wrapper = mountCanvas({
       selectedRegionId: 'region-1',
