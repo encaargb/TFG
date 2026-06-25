@@ -70,7 +70,6 @@ export function useRegionSelection({
   let cycleState = null
   let pointerDownPosition = null
   let hasMovedBeyondClickThreshold = false
-  let suppressNextClickSelection = false
 
   function resetSelectionCycle() {
     cycleState = null
@@ -79,7 +78,6 @@ export function useRegionSelection({
   function resetPointerInteraction() {
     pointerDownPosition = null
     hasMovedBeyondClickThreshold = false
-    suppressNextClickSelection = false
   }
 
   function rebuildSpatialIndex() {
@@ -164,9 +162,6 @@ export function useRegionSelection({
   }
 
   function markEditInteractionFinished() {
-    // Konva can emit a click after drag/transform end; suppress only that synthetic click.
-    suppressNextClickSelection = true
-    hasMovedBeyondClickThreshold = false
     resetSelectionCycle()
   }
 
@@ -180,11 +175,6 @@ export function useRegionSelection({
     pointerPosition = getStage()?.getPointerPosition?.(),
     fallbackRegionId = null
   ) {
-    if (suppressNextClickSelection) {
-      suppressNextClickSelection = false
-      return true
-    }
-
     if (hasMovedBeyondClickThreshold) {
       hasMovedBeyondClickThreshold = false
       return true
@@ -246,7 +236,6 @@ export function useRegionSelection({
     cycleState = null
     pointerDownPosition = null
     hasMovedBeyondClickThreshold = false
-    suppressNextClickSelection = false
   }
 
   return {

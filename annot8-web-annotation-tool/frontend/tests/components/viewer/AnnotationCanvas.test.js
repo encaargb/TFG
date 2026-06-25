@@ -585,18 +585,25 @@ describe('AnnotationCanvas', () => {
     stage.trigger('click')
     rectangle.trigger('dragstart')
     rectangle.trigger('dragend')
-    stage.trigger('click')
+    stage.trigger('mousedown')
+    stage.trigger('mouseup')
     stage.trigger('click')
     polygon.trigger('dragstart')
     polygon.trigger('dragend')
+    stage.trigger('mousedown')
+    stage.trigger('mouseup')
     stage.trigger('click')
     vertexHandle.trigger('dragstart')
     vertexHandle.trigger('dragend')
+    stage.trigger('mousedown')
+    stage.trigger('mouseup')
     stage.trigger('click')
 
     expect(wrapper.emitted('select-region')).toEqual([
       ['polygon-front'],
       ['rectangle-back'],
+      ['polygon-front'],
+      ['polygon-front'],
       ['polygon-front'],
       ['polygon-front'],
     ])
@@ -619,7 +626,6 @@ describe('AnnotationCanvas', () => {
     stage.trigger('mousedown')
     rectangleBack.trigger('dragstart')
     rectangleBack.trigger('dragend')
-    rectangleBack.trigger('click')
 
     expect(wrapper.emitted('select-region')).toEqual([['rectangle-back']])
     expect(wrapper.emitted('selection-overlap-change')).toEqual([[0]])
@@ -753,14 +759,92 @@ describe('AnnotationCanvas', () => {
     stage.getPointerPosition.mockReturnValue({ x: 150, y: 75 })
     rectangleBack.trigger('dragstart')
     rectangleBack.trigger('dragend')
-    rectangleBack.trigger('click')
     await wrapper.setProps({ selectedRegionId: 'rectangle-back' })
+    stage.trigger('mousedown')
+    stage.trigger('mouseup')
     stage.trigger('click')
 
     expect(wrapper.emitted('select-region')).toEqual([
       ['rectangle-back'],
       ['rectangle-front'],
     ])
+  })
+
+  it('allows the first intentional click after polygon dragging', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'rectangle-front',
+      regions: [
+        fourPointPolygonRegion({ id: 'polygon-back', zIndex: 1 }),
+        rectangleRegion({ id: 'rectangle-front', zIndex: 2 }),
+      ],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const polygonBack = getLineInstances().find((line) => line.config.id === 'polygon-back')
+
+    stage.getPointerPosition.mockReturnValue({ x: 150, y: 75 })
+    polygonBack.trigger('dragstart')
+    polygonBack.trigger('dragend')
+    await wrapper.setProps({ selectedRegionId: 'polygon-back' })
+    stage.trigger('mousedown')
+    stage.trigger('mouseup')
+    stage.trigger('click')
+
+    expect(wrapper.emitted('select-region')).toEqual([
+      ['polygon-back'],
+      ['rectangle-front'],
+    ])
+  })
+
+  it('allows the first intentional click after polyline dragging', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'rectangle-front',
+      regions: [
+        polylineRegion({ id: 'polyline-back', zIndex: 1 }),
+        rectangleRegion({ id: 'rectangle-front', zIndex: 2 }),
+      ],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const polylineBack = getLineInstances().find((line) => line.config.id === 'polyline-back')
+
+    stage.getPointerPosition.mockReturnValue({ x: 150, y: 52 })
+    polylineBack.trigger('dragstart')
+    polylineBack.trigger('dragend')
+    await wrapper.setProps({ selectedRegionId: 'polyline-back' })
+    stage.trigger('mousedown')
+    stage.trigger('mouseup')
+    stage.trigger('click')
+
+    expect(wrapper.emitted('select-region')).toEqual([
+      ['polyline-back'],
+      ['rectangle-front'],
+    ])
+  })
+
+  it('allows the first intentional click after rectangle transformation', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'rectangle-back',
+      regions: [
+        rectangleRegion({ id: 'rectangle-back', zIndex: 1 }),
+        rectangleRegion({ id: 'rectangle-front', zIndex: 2 }),
+      ],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const rectangleBack = getRectInstances().find((rect) => rect.config.id === 'rectangle-back')
+
+    stage.getPointerPosition.mockReturnValue({ x: 150, y: 75 })
+    rectangleBack.trigger('transformstart')
+    rectangleBack.trigger('transformend')
+    stage.trigger('mousedown')
+    stage.trigger('mouseup')
+    stage.trigger('click')
+
+    expect(wrapper.emitted('select-region')).toEqual([['rectangle-front']])
   })
 
   it('selects the exact unselected polygon on dragstart and resets overlap context', async () => {
