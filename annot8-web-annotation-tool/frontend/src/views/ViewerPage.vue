@@ -32,6 +32,7 @@ const SAVE_DELAY_MS = 500
 const zoomLevel = ref(DEFAULT_ZOOM)
 const activeTool = ref('select')
 const selectedRegionId = ref(null)
+const overlappingRegionCount = ref(0)
 const sidebarCollapsed = ref(false)
 const annotationCanvas = ref(null)
 const regionSequence = ref(0)
@@ -70,6 +71,7 @@ function navigateToPage(index) {
   // Selection, pointer coordinates, and zoom describe the previous page and must not carry over.
   selectedIndex.value = index
   selectedRegionId.value = null
+  overlappingRegionCount.value = 0
   mousePos.value = null
   resetZoom()
 }
@@ -97,6 +99,7 @@ function setActiveTool(tool) {
 
   if (tool !== 'select') {
     selectedRegionId.value = null
+    overlappingRegionCount.value = 0
   }
 }
 
@@ -106,12 +109,27 @@ function deleteSelectedRegion() {
   regions.value = regions.value.filter((region) => region.id !== selectedRegionId.value)
   persistRegions()
   selectedRegionId.value = null
+  overlappingRegionCount.value = 0
 }
 
 function clearSelectedRegion() {
-  if (!selectedRegionId.value) return
-
   selectedRegionId.value = null
+  overlappingRegionCount.value = 0
+}
+
+function selectRegion(regionId) {
+  selectedRegionId.value = regionId
+  overlappingRegionCount.value = 0
+}
+
+function setOverlappingRegionCount(count) {
+  overlappingRegionCount.value = Math.max(0, Number.isFinite(count) ? count : 0)
+}
+
+function hasGeometryChange(changes) {
+  return ['left', 'top', 'right', 'bottom', 'points'].some((key) =>
+    Object.prototype.hasOwnProperty.call(changes, key)
+  )
 }
 
 function persistRegions() {
@@ -178,6 +196,7 @@ function addRegion(region) {
   persistRegions()
   activeTool.value = 'select'
   selectedRegionId.value = null
+  overlappingRegionCount.value = 0
 }
 
 function updateRegion({ id, changes }) {
@@ -185,6 +204,11 @@ function updateRegion({ id, changes }) {
   if (!region) return
 
   Object.assign(region, changes)
+
+  if (hasGeometryChange(changes)) {
+    overlappingRegionCount.value = 0
+  }
+
   persistRegions()
 }
 
@@ -216,6 +240,7 @@ onMounted(() => {
       projectDocument = createProjectDocumentModel(document)
       pages.value = projectDocument.pages
       regions.value = normalizeRegionZIndexes(projectDocument.loadRegions())
+      overlappingRegionCount.value = 0
       updateRegionSequence()
     })
     .catch((error) => {
@@ -277,7 +302,8 @@ onBeforeUnmount(() => {
         :region-creation-color="regionCreationColor"
         @add-region="addRegion"
         @update-region="updateRegion"
-        @select-region="selectedRegionId = $event"
+        @select-region="selectRegion"
+        @selection-overlap-change="setOverlappingRegionCount"
         @clear-selected-region="clearSelectedRegion"
         @delete-selected-region="deleteSelectedRegion"
         @mouse-position-change="setMousePosition"
@@ -288,6 +314,7 @@ onBeforeUnmount(() => {
         :zoom-percentage="zoomPercentage"
         :active-tool="activeTool"
         :selected-region="selectedRegion"
+        :overlapping-region-count="overlappingRegionCount"
         :current-page-region-count="currentPageRegionCount"
         :mouse-pos="mousePos"
         :save-status="saveStatus"

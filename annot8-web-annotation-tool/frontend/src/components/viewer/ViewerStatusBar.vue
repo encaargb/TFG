@@ -52,6 +52,11 @@ const props = defineProps({
     type: Object,
     default: null,
   },
+  overlappingRegionCount: {
+    type: Number,
+    default: 0,
+    validator: (value) => Number.isFinite(value) && value >= 0,
+  },
   currentPageRegionCount: {
     type: Number,
     required: true,
@@ -86,7 +91,16 @@ const saveLabels = {
 const selectedRegionLabel = computed(() => {
   if (!props.selectedRegion) return 'none'
 
-  return `${toolLabels[props.selectedRegion.type] ?? props.selectedRegion.type} ${props.selectedRegion.id}`
+  const regionLabel = `${toolLabels[props.selectedRegion.type] ?? props.selectedRegion.type} ${props.selectedRegion.id}`
+
+  if (props.overlappingRegionCount === 0) return regionLabel
+
+  const overlapLabel =
+    props.overlappingRegionCount === 1
+      ? '1 overlapping region'
+      : `${props.overlappingRegionCount} overlapping regions`
+
+  return `${regionLabel} · ${overlapLabel}`
 })
 
 const mouseLabel = computed(() => {

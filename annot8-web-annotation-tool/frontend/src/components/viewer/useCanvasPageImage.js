@@ -11,6 +11,7 @@ export function useCanvasPageImage({
   canvasWrapper,
   getZoomLevel,
   renderRegions,
+  onPageImageLoaded = () => {},
 }) {
   let pageImageNode = null
   let imageLoadSequence = 0
@@ -120,6 +121,7 @@ export function useCanvasPageImage({
 
       currentImageLayer.add(pageImageNode)
       updateZoom()
+      onPageImageLoaded()
 
       canvasWrapper.value.scrollTop = 0
       canvasWrapper.value.scrollLeft = 0

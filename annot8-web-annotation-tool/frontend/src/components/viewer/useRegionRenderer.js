@@ -30,7 +30,8 @@ export function useRegionRenderer({
   attachPointRegionDragging,
   getPointRegionDragBoundPosition,
   createRegionVertexHandles,
-  selectRegion,
+  handleRegionBodyClick,
+  selectRegionDirect,
 }) {
   let transformer = null
   let vertexHandles = []
@@ -76,10 +77,11 @@ export function useRegionRenderer({
 
     attachRegionCursorHandlers(node, region.id)
 
-    node.on('click tap', () => {
+    node.on('click tap', (event) => {
       if (getActiveTool() !== 'select') return
+      if (event?.evt?.detail > 1) return
       clearSelectedPoint()
-      selectRegion(region.id)
+      handleRegionBodyClick(event, region.id)
     })
 
     attachRectangleEditing({ node, region, transformer, scaleX, scaleY })
@@ -109,9 +111,10 @@ export function useRegionRenderer({
 
     node.on('click tap', (event) => {
       if (getActiveTool() !== 'select') return
+      if (event?.evt?.detail > 1) return
       if (handleRegionClickSuppression(region, event)) return
 
-      selectRegion(region.id)
+      handleRegionBodyClick(event, region.id)
     })
 
     node.on('dblclick dbltap', () => {
@@ -130,7 +133,7 @@ export function useRegionRenderer({
         return
       }
 
-      selectRegion(region.id)
+      selectRegionDirect(region.id)
     })
 
     attachPointRegionDragging({ node, region, visiblePoints, scaleX, scaleY })

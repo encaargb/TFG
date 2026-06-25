@@ -18,6 +18,8 @@ export function useRegionVertexHandles({
   resetStageCursor,
   hasValidPointRegionSegments,
   selectRegion,
+  markEditInteractionStarted = () => {},
+  markEditInteractionFinished = () => {},
   updateRegion,
   renderRegions,
 }) {
@@ -103,6 +105,7 @@ export function useRegionVertexHandles({
         if (getActiveTool() !== 'select') return
 
         isHandleDragging = true
+        markEditInteractionStarted()
         setIsVertexHandleDragging(true)
         setStageCursor('grabbing')
       })
@@ -148,6 +151,7 @@ export function useRegionVertexHandles({
 
         isHandleDragging = false
         setIsVertexHandleDragging(false)
+        markEditInteractionFinished()
 
         if (getActiveTool() === 'select' && isHandleHovered) {
           setStageCursor('grab')

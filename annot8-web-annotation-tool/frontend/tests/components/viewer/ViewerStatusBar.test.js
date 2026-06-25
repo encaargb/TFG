@@ -15,6 +15,7 @@ function mountStatusBar(props = {}) {
       defaultZoomLevel: 1,
       activeTool: 'polygon',
       selectedRegion: null,
+      overlappingRegionCount: 0,
       currentPageRegionCount: 4,
       mousePos: { x: 320, y: 180 },
       saveStatus: 'saved',
@@ -160,6 +161,22 @@ describe('ViewerStatusBar', () => {
     })
 
     expect(wrapper.text()).toContain(`Selected: ${label}`)
+  })
+
+  it('displays singular and plural overlap context for selected regions', async () => {
+    const wrapper = mountStatusBar({
+      selectedRegion: { id: 'region-3', type: 'polygon' },
+      overlappingRegionCount: 1,
+    })
+
+    expect(wrapper.text()).toContain('Selected: Polygon region-3 · 1 overlapping region')
+
+    await wrapper.setProps({ overlappingRegionCount: 2 })
+
+    expect(wrapper.text()).toContain('Selected: Polygon region-3 · 2 overlapping regions')
+    expect(getZoomSlider(wrapper).exists()).toBe(true)
+    expect(getButtonByLabel(wrapper, 'Zoom out').exists()).toBe(true)
+    expect(getButtonByLabel(wrapper, 'Zoom in').exists()).toBe(true)
   })
 
   it('displays missing mouse position and save status labels', async () => {

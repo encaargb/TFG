@@ -10,6 +10,7 @@ import {
   getRectangleHeight,
   getRectangleWidth,
   isDrawableRegion,
+  isPointInsidePolygon,
   normalizeRectangleEdges,
   toDocumentPoints,
   toDocumentRectangle,
@@ -408,5 +409,18 @@ describe('regionGeometry', () => {
     getRegionBounds(region)
 
     expect(region).toEqual(originalRegion)
+  })
+
+  it('detects polygon interior, exterior, and boundary points', () => {
+    const points = [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 100, y: 100 },
+      { x: 0, y: 100 },
+    ]
+
+    expect(isPointInsidePolygon({ x: 50, y: 50 }, points)).toBe(true)
+    expect(isPointInsidePolygon({ x: 150, y: 50 }, points)).toBe(false)
+    expect(isPointInsidePolygon({ x: 100, y: 50 }, points)).toBe(true)
   })
 })

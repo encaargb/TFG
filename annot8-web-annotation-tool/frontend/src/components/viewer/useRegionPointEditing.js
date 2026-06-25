@@ -25,7 +25,6 @@ export function useRegionPointEditing({
   updateRegion,
 }) {
   let selectedPointRegionPoint = null
-  let suppressPointRegionClick = false
   let suppressPointRegionDoubleClick = false
   let polylineEndpointExtensionPreviewNode = null
 
@@ -218,19 +217,13 @@ export function useRegionPointEditing({
   }
 
   function prepareRegionClick() {
-    // A completed drag can be followed by click and double-click events from the same gesture.
-    suppressPointRegionClick = true
+    // A completed drag can still be followed by a double-click event from the same gesture.
     suppressPointRegionDoubleClick = true
     clearSelectedPoint()
   }
 
   function handleRegionClickSuppression(region, event) {
     clearSelectedPoint()
-
-    if (suppressPointRegionClick) {
-      suppressPointRegionClick = false
-      return true
-    }
 
     if (getSelectedRegionId() !== region.id) {
       suppressPointRegionDoubleClick = true
@@ -242,8 +235,7 @@ export function useRegionPointEditing({
   }
 
   function handleRegionDoubleClickSuppression() {
-    if (suppressPointRegionClick || suppressPointRegionDoubleClick) {
-      suppressPointRegionClick = false
+    if (suppressPointRegionDoubleClick) {
       suppressPointRegionDoubleClick = false
       return true
     }
@@ -254,7 +246,6 @@ export function useRegionPointEditing({
   function resetPointEditing() {
     clearSelectedPoint()
     clearPolylineEndpointPreview(false)
-    suppressPointRegionClick = false
     suppressPointRegionDoubleClick = false
   }
 
@@ -264,7 +255,6 @@ export function useRegionPointEditing({
     }
 
     selectedPointRegionPoint = null
-    suppressPointRegionClick = false
     suppressPointRegionDoubleClick = false
     polylineEndpointExtensionPreviewNode = null
   }

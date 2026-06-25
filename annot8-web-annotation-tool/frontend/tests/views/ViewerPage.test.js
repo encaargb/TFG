@@ -78,6 +78,7 @@ const ViewerStatusBarStub = {
     'zoomPercentage',
     'activeTool',
     'selectedRegion',
+    'overlappingRegionCount',
     'currentPageRegionCount',
     'mousePos',
     'saveStatus',
@@ -94,6 +95,7 @@ const ViewerStatusBarStub = {
       Zoom {{ zoomPercentage }}%
       Tool {{ activeTool }}
       Selected {{ selectedRegion ? selectedRegion.id : 'none' }}
+      Overlaps {{ overlappingRegionCount }}
       Page regions {{ currentPageRegionCount }}
       Mouse {{ mousePos ? mousePos.x : '-' }} {{ mousePos ? mousePos.y : '-' }}
       Save {{ saveStatus }}
@@ -120,10 +122,17 @@ const AnnotationCanvasStub = {
     'add-region',
     'update-region',
     'select-region',
+    'selection-overlap-change',
     'clear-selected-region',
     'delete-selected-region',
     'mouse-position-change',
   ],
+  methods: {
+    emitOverlapSelection() {
+      this.$emit('select-region', 'region-1')
+      this.$emit('selection-overlap-change', 2)
+    },
+  },
   setup(_, { expose }) {
     expose({ updateZoom: updateZoomSpy })
   },
@@ -202,6 +211,7 @@ const AnnotationCanvasStub = {
         Update region
       </button>
       <button type="button" data-testid="select-region" @click="$emit('select-region', 'region-1')">Select region</button>
+      <button type="button" data-testid="select-overlap-region" @click="emitOverlapSelection">Select overlap region</button>
       <button type="button" data-testid="clear-region" @click="$emit('clear-selected-region')">Clear region</button>
       <button type="button" data-testid="delete-selected" @click="$emit('delete-selected-region')">Delete selected</button>
       <button
@@ -342,6 +352,7 @@ describe('ViewerPage', () => {
     expect(statusBar.props()).toEqual(
       expect.objectContaining({
         selectedRegion: null,
+        overlappingRegionCount: 0,
         currentPageRegionCount: 0,
         mousePos: null,
         saveStatus: 'saved',
@@ -676,6 +687,7 @@ describe('ViewerPage', () => {
     expect(getStub(wrapper, ViewerStatusBarStub).props()).toEqual(
       expect.objectContaining({
         selectedRegion: null,
+        overlappingRegionCount: 0,
         currentPageRegionCount: 1,
       })
     )
@@ -698,6 +710,51 @@ describe('ViewerPage', () => {
     expect(getStub(wrapper, ViewerToolbarStub).props('hasSelectedRegion')).toBe(false)
     expect(getStub(wrapper, AnnotationCanvasStub).props('selectedRegionId')).toBe(null)
     expect(getStub(wrapper, ViewerStatusBarStub).props('selectedRegion')).toBe(null)
+    expect(getStub(wrapper, ViewerStatusBarStub).props('overlappingRegionCount')).toBe(0)
+  })
+
+  it('stores canvas overlap context and passes it to the status bar', async () => {
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
+
+    await wrapper.find('[data-testid="add-region"]').trigger('click')
+    await wrapper.find('[data-testid="select-overlap-region"]').trigger('click')
+
+    expect(getStub(wrapper, AnnotationCanvasStub).props('selectedRegionId')).toBe('region-1')
+    expect(getStub(wrapper, ViewerStatusBarStub).props()).toEqual(
+      expect.objectContaining({
+        selectedRegion: expect.objectContaining({ id: 'region-1' }),
+        overlappingRegionCount: 2,
+      })
+    )
+  })
+
+  it('resets overlap context after viewer state changes that invalidate it', async () => {
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
+
+    await wrapper.find('[data-testid="add-region"]').trigger('click')
+    await wrapper.find('[data-testid="select-overlap-region"]').trigger('click')
+    await wrapper.find('[data-testid="next-page"]').trigger('click')
+    expect(getStub(wrapper, ViewerStatusBarStub).props('overlappingRegionCount')).toBe(0)
+
+    await wrapper.find('[data-testid="previous-page"]').trigger('click')
+    await wrapper.find('[data-testid="select-overlap-region"]').trigger('click')
+    await wrapper.find('[data-testid="tool-rectangle"]').trigger('click')
+    expect(getStub(wrapper, ViewerStatusBarStub).props('overlappingRegionCount')).toBe(0)
+
+    await wrapper.find('[data-testid="add-region"]').trigger('click')
+    await wrapper.find('[data-testid="select-overlap-region"]').trigger('click')
+    await wrapper.find('[data-testid="add-region"]').trigger('click')
+    expect(getStub(wrapper, ViewerStatusBarStub).props('overlappingRegionCount')).toBe(0)
+
+    await wrapper.find('[data-testid="select-overlap-region"]').trigger('click')
+    await wrapper.find('[data-testid="update-region"]').trigger('click')
+    expect(getStub(wrapper, ViewerStatusBarStub).props('overlappingRegionCount')).toBe(0)
+
+    await wrapper.find('[data-testid="select-overlap-region"]').trigger('click')
+    await wrapper.find('[data-testid="delete-region"]').trigger('click')
+    expect(getStub(wrapper, ViewerStatusBarStub).props('overlappingRegionCount')).toBe(0)
   })
 
   it('assigns increasing z-index values on the active page', async () => {

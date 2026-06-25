@@ -318,6 +318,288 @@ describe('AnnotationCanvas', () => {
     expect(regions).toEqual(originalRegions)
   })
 
+  it('selects and cycles precise overlapping hits from front to back', async () => {
+    const wrapper = mountCanvas({
+      regions: [
+        rectangleRegion({ id: 'rectangle-low', zIndex: 1 }),
+        polylineRegion({
+          id: 'polyline-middle',
+          zIndex: 2,
+          points: [
+            { x: 200, y: 150 },
+            { x: 500, y: 150 },
+          ],
+        }),
+        fourPointPolygonRegion({ id: 'polygon-high', zIndex: 3 }),
+      ],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    stage.getPointerPosition.mockReturnValue({ x: 150, y: 75 })
+
+    stage.trigger('click')
+    stage.trigger('click')
+    stage.trigger('click')
+    stage.trigger('click')
+
+    expect(wrapper.emitted('select-region')).toEqual([
+      ['polygon-high'],
+      ['polyline-middle'],
+      ['rectangle-low'],
+      ['polygon-high'],
+    ])
+    expect(wrapper.emitted('selection-overlap-change')).toEqual([[2], [2], [2], [2]])
+  })
+
+  it('uses z-index and equal-value fallback rather than candidate retrieval order', async () => {
+    const wrapper = mountCanvas({
+      regions: [
+        rectangleRegion({ id: 'earlier-equal', zIndex: 4 }),
+        rectangleRegion({ id: 'later-equal', zIndex: 4 }),
+        rectangleRegion({ id: 'highest', zIndex: 8 }),
+      ],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    stage.getPointerPosition.mockReturnValue({ x: 150, y: 75 })
+
+    stage.trigger('click')
+    stage.trigger('click')
+    stage.trigger('click')
+
+    expect(wrapper.emitted('select-region')).toEqual([
+      ['highest'],
+      ['later-equal'],
+      ['earlier-equal'],
+    ])
+  })
+
+  it('resets cycling when the click position or precise hit set changes', async () => {
+    const wrapper = mountCanvas({
+      regions: [
+        rectangleRegion({ id: 'back', zIndex: 1 }),
+        rectangleRegion({ id: 'front', zIndex: 2 }),
+        rectangleRegion({ id: 'separate', zIndex: 3, left: 800, top: 100, right: 900, bottom: 200 }),
+      ],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    stage.getPointerPosition.mockReturnValue({ x: 150, y: 75 })
+    stage.trigger('click')
+    stage.trigger('click')
+    stage.getPointerPosition.mockReturnValue({ x: 156, y: 75 })
+    stage.trigger('click')
+    stage.getPointerPosition.mockReturnValue({ x: 425, y: 75 })
+    stage.trigger('click')
+
+    expect(wrapper.emitted('select-region')).toEqual([
+      ['front'],
+      ['back'],
+      ['front'],
+      ['separate'],
+    ])
+  })
+
+  it('clears selection and overlap context when clicking empty canvas', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [rectangleRegion({ zIndex: 0 })],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    stage.getPointerPosition.mockReturnValue({ x: 10, y: 10 })
+    stage.trigger('click')
+
+    expect(wrapper.emitted('selection-overlap-change')).toEqual([[0]])
+    expect(wrapper.emitted('clear-selected-region')).toEqual([[]])
+  })
+
+  it('rejects polygon and polyline bounding-box false positives', async () => {
+    const wrapper = mountCanvas({
+      regions: [
+        polygonRegion({ id: 'polygon-1', zIndex: 2 }),
+        threePointPolylineRegion({
+          id: 'polyline-1',
+          zIndex: 1,
+          points: [
+            { x: 900, y: 100 },
+            { x: 1200, y: 100 },
+            { x: 1200, y: 300 },
+          ],
+        }),
+      ],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    stage.getPointerPosition.mockReturnValue({ x: 110, y: 140 })
+    stage.trigger('click')
+    stage.getPointerPosition.mockReturnValue({ x: 525, y: 100 })
+    stage.trigger('click')
+
+    expect(wrapper.emitted('select-region')).toBeUndefined()
+    expect(wrapper.emitted('clear-selected-region')).toEqual([[], []])
+  })
+
+  it('selects polygon edges and keeps polyline tolerance visually consistent across zoom', async () => {
+    const polygonWrapper = mountCanvas({
+      regions: [fourPointPolygonRegion({ id: 'polygon-1', zIndex: 1 })],
+    })
+    await flushImageLoad()
+
+    let stage = getLatestStage()
+    stage.getPointerPosition.mockReturnValue({ x: 150, y: 50 })
+    stage.trigger('click')
+
+    expect(polygonWrapper.emitted('select-region')).toEqual([['polygon-1']])
+
+    polygonWrapper.unmount()
+    resetKonvaMocks()
+    Konva.Stage.mockClear()
+    Konva.Layer.mockClear()
+    Konva.Image.mockClear()
+    Konva.Line.mockClear()
+    Konva.Transformer.mockClear()
+    Konva.Circle.mockClear()
+
+    const polylineWrapper = mountCanvas({
+      zoomLevel: 2,
+      regions: [polylineRegion({ id: 'polyline-1', zIndex: 1 })],
+    })
+    await flushImageLoad()
+
+    stage = getLatestStage()
+    stage.getPointerPosition.mockReturnValue({ x: 300, y: 107 })
+    stage.trigger('click')
+
+    expect(polylineWrapper.emitted('select-region')).toEqual([['polyline-1']])
+  })
+
+  it('returns a large cross-quadrant candidate only once in the selection set', async () => {
+    const wrapper = mountCanvas({
+      regions: [
+        rectangleRegion({
+          id: 'large-region',
+          zIndex: 1,
+          left: 100,
+          top: 100,
+          right: 1900,
+          bottom: 900,
+        }),
+      ],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    stage.getPointerPosition.mockReturnValue({ x: 500, y: 250 })
+    stage.trigger('click')
+
+    expect(wrapper.emitted('select-region')).toEqual([['large-region']])
+    expect(wrapper.emitted('selection-overlap-change')).toEqual([[0]])
+  })
+
+  it('uses updated page geometry after page and region changes', async () => {
+    const wrapper = mountCanvas({
+      regions: [
+        rectangleRegion({ id: 'page-0-region', pageIndex: 0, zIndex: 1 }),
+        rectangleRegion({ id: 'page-1-region', pageIndex: 1, zIndex: 1 }),
+      ],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    stage.getPointerPosition.mockReturnValue({ x: 150, y: 75 })
+    stage.trigger('click')
+
+    await changeCanvasPage(wrapper, 1)
+    stage.getPointerPosition.mockReturnValue({ x: 150, y: 75 })
+    stage.trigger('click')
+
+    await wrapper.setProps({
+      regions: [
+        rectangleRegion({ id: 'page-0-region', pageIndex: 0, zIndex: 1 }),
+        rectangleRegion({ id: 'page-1-region', pageIndex: 1, zIndex: 1, left: 800, right: 900 }),
+      ],
+    })
+    stage.trigger('click')
+
+    expect(wrapper.emitted('select-region')).toEqual([
+      ['page-0-region'],
+      ['page-1-region'],
+    ])
+    expect(wrapper.emitted('clear-selected-region')).toEqual([[]])
+  })
+
+  it('uses colour, z-index, and zoom changes without rebuilding spatial geometry', async () => {
+    const wrapper = mountCanvas({
+      regions: [
+        rectangleRegion({ id: 'back', zIndex: 1, color: '#0d6efd' }),
+        rectangleRegion({ id: 'front', zIndex: 2, color: '#ff00aa' }),
+      ],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    stage.getPointerPosition.mockReturnValue({ x: 150, y: 75 })
+    stage.trigger('click')
+
+    await wrapper.setProps({
+      regions: [
+        rectangleRegion({ id: 'back', zIndex: 5, color: '#00ff88' }),
+        rectangleRegion({ id: 'front', zIndex: 2, color: '#ff00aa' }),
+      ],
+    })
+    stage.trigger('click')
+
+    await wrapper.setProps({ zoomLevel: 1.25 })
+    stage.getPointerPosition.mockReturnValue({ x: 187.5, y: 93.75 })
+    stage.trigger('click')
+
+    expect(wrapper.emitted('select-region')).toEqual([
+      ['front'],
+      ['back'],
+      ['back'],
+    ])
+  })
+
+  it('does not advance cycling on drag, transform, or vertex drag interactions', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'polygon-front',
+      regions: [
+        rectangleRegion({ id: 'rectangle-back', zIndex: 1 }),
+        fourPointPolygonRegion({ id: 'polygon-front', zIndex: 2 }),
+      ],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const rectangle = getRectInstances().find((rect) => rect.config.id === 'rectangle-back')
+    const polygon = getLineInstances().find((line) => line.config.id === 'polygon-front')
+    const vertexHandle = getCircleInstances().at(0)
+
+    stage.getPointerPosition.mockReturnValue({ x: 150, y: 75 })
+    stage.trigger('click')
+    rectangle.trigger('dragstart')
+    rectangle.trigger('dragend')
+    stage.trigger('click')
+    stage.trigger('click')
+    polygon.trigger('dragstart')
+    polygon.trigger('dragend')
+    stage.trigger('click')
+    vertexHandle.trigger('dragstart')
+    vertexHandle.trigger('dragend')
+    stage.trigger('click')
+
+    expect(wrapper.emitted('select-region')).toEqual([
+      ['polygon-front'],
+      ['polygon-front'],
+    ])
+  })
+
   it('updates selected rectangle transformer colors when the region color changes', async () => {
     const wrapper = mountCanvas({
       selectedRegionId: 'region-1',
@@ -2321,7 +2603,7 @@ describe('AnnotationCanvas', () => {
     polygon.trigger('click', { evt: { detail: 2 } })
     polygon.trigger('dblclick')
 
-    expect(wrapper.emitted('select-region')).toEqual([['region-1'], ['region-1']])
+    expect(wrapper.emitted('select-region')).toEqual([['region-1']])
     expect(wrapper.emitted('update-region')).toBeUndefined()
   })
 
@@ -3143,7 +3425,7 @@ describe('AnnotationCanvas', () => {
     polyline.trigger('click', { evt: { detail: 2 } })
     polyline.trigger('dblclick')
 
-    expect(wrapper.emitted('select-region')).toEqual([['region-1'], ['region-1']])
+    expect(wrapper.emitted('select-region')).toEqual([['region-1']])
     expect(wrapper.emitted('update-region')).toBeUndefined()
   })
 

@@ -20,6 +20,8 @@ export function useRectangleEditing({
   hideActiveEditHandles,
   showActiveEditHandles,
   getSelectedRegionId,
+  markEditInteractionStarted = () => {},
+  markEditInteractionFinished = () => {},
   updateRegion,
 }) {
   function syncTransformedRectangleNode(node) {
@@ -74,6 +76,7 @@ export function useRectangleEditing({
     })
 
     node.on('dragstart', () => {
+      markEditInteractionStarted()
       beginRegionDrag(region.id)
 
       if (getSelectedRegionId() === region.id) {
@@ -82,6 +85,7 @@ export function useRectangleEditing({
     })
 
     node.on('transform', () => {
+      markEditInteractionStarted()
       syncResizedRectangleNode(node, region, transformer, scaleX, scaleY)
       getRegionLayer()?.draw()
     })
@@ -114,9 +118,13 @@ export function useRectangleEditing({
     node.on('dragend', () => {
       commitRegionChange()
       endRegionDrag(region.id)
+      markEditInteractionFinished()
     })
 
-    node.on('transformend', commitRegionChange)
+    node.on('transformend', () => {
+      commitRegionChange()
+      markEditInteractionFinished()
+    })
   }
 
   return {

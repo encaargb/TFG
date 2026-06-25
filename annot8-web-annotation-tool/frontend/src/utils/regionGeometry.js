@@ -255,3 +255,49 @@ export function getRegionBounds(region) {
     height: Math.max(0, maxY - minY),
   }
 }
+
+function isPointOnSegment(point, segmentStart, segmentEnd) {
+  const crossProduct =
+    (point.y - segmentStart.y) * (segmentEnd.x - segmentStart.x) -
+    (point.x - segmentStart.x) * (segmentEnd.y - segmentStart.y)
+
+  if (Math.abs(crossProduct) > Number.EPSILON) return false
+
+  return (
+    point.x >= Math.min(segmentStart.x, segmentEnd.x) &&
+    point.x <= Math.max(segmentStart.x, segmentEnd.x) &&
+    point.y >= Math.min(segmentStart.y, segmentEnd.y) &&
+    point.y <= Math.max(segmentStart.y, segmentEnd.y)
+  )
+}
+
+export function isPointInsidePolygon(point, points) {
+  if (!point || !Array.isArray(points) || points.length < 3) return false
+
+  let inside = false
+
+  for (
+    let index = 0, previousIndex = points.length - 1;
+    index < points.length;
+    previousIndex = index, index += 1
+  ) {
+    const current = points[index]
+    const previous = points[previousIndex]
+
+    if (!current || !previous) return false
+    if (isPointOnSegment(point, previous, current)) return true
+
+    const intersectsRay =
+      current.y > point.y !== previous.y > point.y &&
+      point.x <
+        ((previous.x - current.x) * (point.y - current.y)) /
+          (previous.y - current.y) +
+          current.x
+
+    if (intersectsRay) {
+      inside = !inside
+    }
+  }
+
+  return inside
+}

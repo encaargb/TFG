@@ -13,6 +13,8 @@ export function usePointRegionDragging({
   showActiveEditHandles,
   getSelectedRegionId,
   preparePointRegionDrag,
+  markEditInteractionStarted = () => {},
+  markEditInteractionFinished = () => {},
   updateRegion,
 }) {
   function getPointRegionDragBoundPosition(visiblePoints, position) {
@@ -38,6 +40,7 @@ export function usePointRegionDragging({
 
     node.on('dragstart', () => {
       preparePointRegionDrag()
+      markEditInteractionStarted()
       beginRegionDrag(region.id)
 
       if (getSelectedRegionId() === region.id) {
@@ -68,6 +71,7 @@ export function usePointRegionDragging({
       }
 
       endRegionDrag(region.id)
+      markEditInteractionFinished()
     })
   }
 
