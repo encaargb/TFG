@@ -17,9 +17,9 @@ export function useRectangleEditing({
   autoScrollCanvasWrapper,
   beginRegionDrag,
   endRegionDrag,
-  hideActiveEditHandles,
   showActiveEditHandles,
   getSelectedRegionId,
+  beginRegionBodyEdit = () => {},
   markEditInteractionStarted = () => {},
   markEditInteractionFinished = () => {},
   updateRegion,
@@ -76,12 +76,12 @@ export function useRectangleEditing({
     })
 
     node.on('dragstart', () => {
-      markEditInteractionStarted()
+      beginRegionBodyEdit(region.id)
       beginRegionDrag(region.id)
+    })
 
-      if (getSelectedRegionId() === region.id) {
-        hideActiveEditHandles()
-      }
+    node.on('transformstart', () => {
+      markEditInteractionStarted()
     })
 
     node.on('transform', () => {
@@ -91,7 +91,7 @@ export function useRectangleEditing({
     })
 
     // Commit only at the end of a gesture so ViewerPage persists one stable document-space shape.
-    const commitRegionChange = () => {
+    const commitRegionChange = ({ restoreEditHandles = true } = {}) => {
       const visibleRectangle = transformer?.getActiveAnchor?.()
         ? syncResizedRectangleNode(node, region, transformer, scaleX, scaleY)
         : syncTransformedRectangleNode(node)
@@ -110,13 +110,13 @@ export function useRectangleEditing({
       if (typeof node.scaleX === 'function') node.scaleX(1)
       if (typeof node.scaleY === 'function') node.scaleY(1)
 
-      if (getSelectedRegionId() === region.id) {
+      if (restoreEditHandles && getSelectedRegionId() === region.id) {
         showActiveEditHandles()
       }
     }
 
     node.on('dragend', () => {
-      commitRegionChange()
+      commitRegionChange({ restoreEditHandles: false })
       endRegionDrag(region.id)
       markEditInteractionFinished()
     })

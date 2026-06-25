@@ -138,6 +138,7 @@ export function useRegionVertexHandles({
           scaleY,
           getZoomLevel()
         )
+        let shouldFlushPendingRender = false
 
         // Restore the rendered model when moving a vertex would create a degenerate segment.
         if (hasValidPointRegionSegments(documentPoints, region.type)) {
@@ -147,11 +148,12 @@ export function useRegionVertexHandles({
           })
         } else {
           renderRegions()
+          shouldFlushPendingRender = true
         }
 
         isHandleDragging = false
         setIsVertexHandleDragging(false)
-        markEditInteractionFinished()
+        markEditInteractionFinished({ flushRender: shouldFlushPendingRender })
 
         if (getActiveTool() === 'select' && isHandleHovered) {
           setStageCursor('grab')

@@ -9,11 +9,8 @@ export function usePointRegionDragging({
   autoScrollCanvasWrapper,
   beginRegionDrag,
   endRegionDrag,
-  hideActiveEditHandles,
-  showActiveEditHandles,
-  getSelectedRegionId,
   preparePointRegionDrag,
-  markEditInteractionStarted = () => {},
+  beginRegionBodyEdit = () => {},
   markEditInteractionFinished = () => {},
   updateRegion,
 }) {
@@ -40,12 +37,8 @@ export function usePointRegionDragging({
 
     node.on('dragstart', () => {
       preparePointRegionDrag()
-      markEditInteractionStarted()
+      beginRegionBodyEdit(region.id)
       beginRegionDrag(region.id)
-
-      if (getSelectedRegionId() === region.id) {
-        hideActiveEditHandles()
-      }
     })
 
     node.on('dragend', () => {
@@ -65,10 +58,6 @@ export function usePointRegionDragging({
         id: region.id,
         changes: clampPolygonToBounds({ points: documentPoints }, getDocumentBounds()),
       })
-
-      if (getSelectedRegionId() === region.id) {
-        showActiveEditHandles()
-      }
 
       endRegionDrag(region.id)
       markEditInteractionFinished()

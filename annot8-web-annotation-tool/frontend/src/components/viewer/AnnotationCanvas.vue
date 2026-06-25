@@ -85,11 +85,14 @@ let stage = null
 let imageLayer = null
 let regionLayer = null
 let isVertexHandleDragging = false
+let isRegionEditInteractionActive = false
+let regionRenderPending = false
 // Renderer callbacks are assigned after dependent editing composables have been created.
 let renderRegionsImpl = () => {}
 let rebuildSpatialIndexImpl = () => {}
-let hideActiveEditHandlesImpl = () => {}
 let showActiveEditHandlesImpl = () => {}
+let clearSelectionControlsImpl = () => {}
+let updateRegionSelectionAppearanceImpl = () => {}
 let disposeRegionRendererImpl = () => {}
 
 function getRegionCreationColor() {
@@ -102,16 +105,45 @@ function renderRegions() {
   return renderRegionsImpl()
 }
 
+function isRegionInteractionActive() {
+  return Boolean(isRegionEditInteractionActive || isVertexHandleDragging || getDraggedRegionId())
+}
+
+function requestRegionRender() {
+  if (isRegionInteractionActive()) {
+    regionRenderPending = true
+    return
+  }
+
+  regionRenderPending = false
+  renderRegions()
+}
+
+function clearPendingRegionRender() {
+  regionRenderPending = false
+}
+
+function flushPendingRegionRender() {
+  if (!regionRenderPending || !stage || !regionLayer) return
+
+  regionRenderPending = false
+  renderRegions()
+}
+
 function rebuildSpatialIndex() {
   return rebuildSpatialIndexImpl()
 }
 
-function hideActiveEditHandles() {
-  return hideActiveEditHandlesImpl()
-}
-
 function showActiveEditHandles() {
   return showActiveEditHandlesImpl()
+}
+
+function clearSelectionControls() {
+  return clearSelectionControlsImpl()
+}
+
+function updateRegionSelectionAppearance(previousRegionId, selectedRegionId) {
+  return updateRegionSelectionAppearanceImpl(previousRegionId, selectedRegionId)
 }
 
 function disposeRegionRenderer() {
@@ -135,7 +167,11 @@ const {
 
 function hasActiveCanvasInteraction() {
   return Boolean(
-    hasDraftRectangle() || hasDraftPointRegion() || getDraggedRegionId() || isVertexHandleDragging
+    hasDraftRectangle() ||
+      hasDraftPointRegion() ||
+      getDraggedRegionId() ||
+      isVertexHandleDragging ||
+      isRegionEditInteractionActive
   )
 }
 
@@ -169,7 +205,7 @@ const {
   getImageLayer: () => imageLayer,
   canvasWrapper,
   getZoomLevel: () => props.zoomLevel,
-  renderRegions: () => renderRegions(),
+  renderRegions: () => requestRegionRender(),
   onPageImageLoaded: () => rebuildSpatialIndex(),
 })
 
@@ -262,6 +298,12 @@ const {
   updateRegion: ({ id, changes }) => emit('update-region', { id, changes }),
 })
 
+function selectRegionForEditing(regionId) {
+  resetSelectionCycle()
+  clearSelectedPoint()
+  emitSelectionContext({ regionId, overlappingRegionCount: 0 })
+}
+
 const {
   rebuildSpatialIndex: rebuildRegionSelectionIndex,
   clearSpatialIndex,
@@ -269,8 +311,8 @@ const {
   resetPointerInteraction,
   beginPointerInteraction,
   updatePointerInteraction,
-  markEditInteractionStarted,
-  markEditInteractionFinished,
+  markEditInteractionStarted: markSelectionEditInteractionStarted,
+  markEditInteractionFinished: markSelectionEditInteractionFinished,
   selectFromPointer,
   disposeRegionSelection,
 } = useRegionSelection({
@@ -288,6 +330,29 @@ const {
 
 rebuildSpatialIndexImpl = rebuildRegionSelectionIndex
 
+function markRegionEditInteractionStarted() {
+  isRegionEditInteractionActive = true
+  markSelectionEditInteractionStarted()
+}
+
+function markRegionEditInteractionFinished({ flushRender = true } = {}) {
+  markSelectionEditInteractionFinished()
+  isRegionEditInteractionActive = false
+
+  if (flushRender) {
+    flushPendingRegionRender()
+  }
+}
+
+function beginRegionBodyEdit(regionId) {
+  const previousRegionId = props.selectedRegionId
+
+  markRegionEditInteractionStarted()
+  clearSelectionControls()
+  updateRegionSelectionAppearance(previousRegionId, regionId)
+  selectRegionForEditing(regionId)
+}
+
 const { attachRectangleEditing, getRectangleDragBoundPosition } = useRectangleEditing({
   getZoomLevel: () => props.zoomLevel,
   getRegionLayer: () => regionLayer,
@@ -297,11 +362,11 @@ const { attachRectangleEditing, getRectangleDragBoundPosition } = useRectangleEd
   autoScrollCanvasWrapper,
   beginRegionDrag,
   endRegionDrag,
-  hideActiveEditHandles,
   showActiveEditHandles,
   getSelectedRegionId: () => props.selectedRegionId,
-  markEditInteractionStarted,
-  markEditInteractionFinished,
+  beginRegionBodyEdit,
+  markEditInteractionStarted: markRegionEditInteractionStarted,
+  markEditInteractionFinished: () => markRegionEditInteractionFinished({ flushRender: false }),
   updateRegion: ({ id, changes }) => emit('update-region', { id, changes }),
 })
 
@@ -313,12 +378,9 @@ const { getPointRegionDragBoundPosition, attachPointRegionDragging } = usePointR
   autoScrollCanvasWrapper,
   beginRegionDrag,
   endRegionDrag,
-  hideActiveEditHandles,
-  showActiveEditHandles,
-  getSelectedRegionId: () => props.selectedRegionId,
   preparePointRegionDrag: prepareRegionClick,
-  markEditInteractionStarted,
-  markEditInteractionFinished,
+  beginRegionBodyEdit,
+  markEditInteractionFinished: () => markRegionEditInteractionFinished({ flushRender: false }),
   updateRegion: ({ id, changes }) => emit('update-region', { id, changes }),
 })
 
@@ -340,10 +402,10 @@ const { createRegionVertexHandles } = useRegionVertexHandles({
   resetStageCursor,
   hasValidPointRegionSegments,
   selectRegion: emitDirectRegionSelection,
-  markEditInteractionStarted,
-  markEditInteractionFinished,
+  markEditInteractionStarted: markRegionEditInteractionStarted,
+  markEditInteractionFinished: markRegionEditInteractionFinished,
   updateRegion: ({ id, changes }) => emit('update-region', { id, changes }),
-  renderRegions,
+  renderRegions: requestRegionRender,
 })
 
 const regionRenderer = useRegionRenderer({
@@ -378,8 +440,9 @@ const regionRenderer = useRegionRenderer({
 })
 
 renderRegionsImpl = regionRenderer.renderRegions
-hideActiveEditHandlesImpl = regionRenderer.hideActiveEditHandles
 showActiveEditHandlesImpl = regionRenderer.showActiveEditHandles
+clearSelectionControlsImpl = regionRenderer.clearSelectionControls
+updateRegionSelectionAppearanceImpl = regionRenderer.updateRegionSelectionAppearance
 disposeRegionRendererImpl = regionRenderer.disposeRegionRenderer
 
 function getClampedDocumentPointer(pointerPosition = stage?.getPointerPosition()) {
@@ -453,6 +516,8 @@ function resetTransientInteractionState() {
   clearRegionCursorState()
   resetSelectionCycle()
   resetPointerInteraction()
+  isRegionEditInteractionActive = false
+  clearPendingRegionRender()
   emit('selection-overlap-change', 0)
   resetStageCursor()
 
@@ -530,6 +595,8 @@ onMounted(() => {
 
 watch(() => props.selectedPage, (newPage) => {
   clearSpatialIndex()
+  isRegionEditInteractionActive = false
+  clearPendingRegionRender()
   loadSelectedPage(newPage)
 })
 
@@ -555,7 +622,7 @@ watch(
   () => [props.regions, props.selectedRegionId, props.activeTool, props.pageIndex],
   () => {
     // Saved regions are reconstructed because Konva nodes carry event listeners tied to current state.
-    renderRegions()
+    requestRegionRender()
   },
   { deep: true }
 )
@@ -581,9 +648,17 @@ watch(
 
 watch(() => props.activeTool, (newTool, previousTool) => {
   if (newTool !== previousTool) {
+    const hadActiveRegionInteraction = isRegionInteractionActive() || regionRenderPending
+
     resetStageCursor()
     resetSelectionCycle()
     resetPointerInteraction()
+    isRegionEditInteractionActive = false
+    clearPendingRegionRender()
+
+    if (hadActiveRegionInteraction) {
+      requestRegionRender()
+    }
   }
 
   if (['polygon', 'polyline'].includes(previousTool) && previousTool !== newTool) {
@@ -601,6 +676,8 @@ watch(() => props.activeTool, (newTool, previousTool) => {
 
 onBeforeUnmount(() => {
   resetStageCursor()
+  clearPendingRegionRender()
+  isRegionEditInteractionActive = false
 
   // Destroy the stage first so its DOM listeners and child nodes cannot outlive the component.
   if (stage) {

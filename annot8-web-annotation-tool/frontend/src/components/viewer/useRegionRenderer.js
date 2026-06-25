@@ -7,6 +7,8 @@ import {
   RECTANGLE_TRANSFORMER_ANCHOR_CORNER_RADIUS,
   RECTANGLE_TRANSFORMER_ANCHOR_SIZE,
   REGION_COLOR,
+  REGION_STROKE_WIDTH,
+  SELECTED_REGION_STROKE_WIDTH,
 } from './annotationCanvasConstants'
 
 export function useRegionRenderer({
@@ -35,28 +37,55 @@ export function useRegionRenderer({
 }) {
   let transformer = null
   let vertexHandles = []
+  const regionNodesById = new Map()
 
   function getRegionColor(region) {
     return /^#[0-9a-fA-F]{6}$/.test(region?.color) ? region.color : REGION_COLOR
   }
 
-  function setNodeVisibility(nodes, isVisible) {
-    nodes.forEach((node) => {
+  function showActiveEditHandles() {
+    const controls = [transformer, ...vertexHandles].filter(Boolean)
+
+    controls.forEach((node) => {
       if (typeof node.visible === 'function') {
-        node.visible(isVisible)
+        node.visible(true)
       }
     })
-  }
-
-  function hideActiveEditHandles() {
-    setNodeVisibility([transformer, ...vertexHandles].filter(Boolean), false)
-    getRegionLayer()?.draw()
-  }
-
-  function showActiveEditHandles() {
-    setNodeVisibility([transformer, ...vertexHandles].filter(Boolean), true)
     transformer?.forceUpdate?.()
     getRegionLayer()?.draw()
+  }
+
+  function clearSelectionControls() {
+    const regionLayer = getRegionLayer()
+
+    // Body drags must keep their Konva nodes alive; only the temporary selection UI is removed.
+    clearPolylineEndpointPreview(false)
+    vertexHandles.forEach((handle) => handle.destroy?.())
+    vertexHandles = []
+
+    transformer?.nodes?.([])
+    transformer?.destroy?.()
+    transformer = null
+
+    regionLayer?.draw()
+  }
+
+  function updateRegionSelectionAppearance(previousRegionId, selectedRegionId) {
+    const regionLayer = getRegionLayer()
+    const previousNode = previousRegionId ? regionNodesById.get(previousRegionId) : null
+    const selectedNode = selectedRegionId ? regionNodesById.get(selectedRegionId) : null
+
+    if (previousNode && previousRegionId !== selectedRegionId) {
+      previousNode.strokeWidth?.(REGION_STROKE_WIDTH)
+    }
+
+    selectedNode?.strokeWidth?.(SELECTED_REGION_STROKE_WIDTH)
+    if (typeof regionLayer?.batchDraw === 'function') {
+      regionLayer.batchDraw()
+      return
+    }
+
+    regionLayer?.draw?.()
   }
 
   function createRectangleRegionNode(region) {
@@ -70,7 +99,9 @@ export function useRegionRenderer({
       draggable: getActiveTool() === 'select',
       fill: `${region.color}26`,
       stroke: region.color,
-      strokeWidth: getSelectedRegionId() === region.id ? 3 : 2,
+      strokeWidth: getSelectedRegionId() === region.id
+        ? SELECTED_REGION_STROKE_WIDTH
+        : REGION_STROKE_WIDTH,
       strokeScaleEnabled: false,
       dragBoundFunc: (position) => getRectangleDragBoundPosition(node, position),
     })
@@ -102,7 +133,9 @@ export function useRegionRenderer({
       draggable: getActiveTool() === 'select',
       fill: isPolygon ? `${region.color}26` : 'transparent',
       stroke: region.color,
-      strokeWidth: getSelectedRegionId() === region.id ? 3 : 2,
+      strokeWidth: getSelectedRegionId() === region.id
+        ? SELECTED_REGION_STROKE_WIDTH
+        : REGION_STROKE_WIDTH,
       strokeScaleEnabled: false,
       dragBoundFunc: (position) => getPointRegionDragBoundPosition(visiblePoints, position),
     })
@@ -155,9 +188,10 @@ export function useRegionRenderer({
     if (!regionLayer || !hasPageImage()) return
 
     // Rebuilding avoids stale Konva listeners and keeps selection handles aligned with model data.
-    clearPolylineEndpointPreview(false)
+    clearSelectionControls()
     regionLayer.destroyChildren()
     vertexHandles = []
+    regionNodesById.clear()
     const currentPageRegions = getCurrentPageRegions()
     const selectedRectangle = currentPageRegions.find(
       (region) => region.id === getSelectedRegionId() && region.type === 'rectangle'
@@ -192,6 +226,7 @@ export function useRegionRenderer({
 
     sortedPageRegions.forEach((region) => {
       const node = createRegionNode(region)
+      regionNodesById.set(region.id, node)
       regionLayer.add(node)
 
       if (region.id === getSelectedRegionId()) {
@@ -233,14 +268,17 @@ export function useRegionRenderer({
   }
 
   function disposeRegionRenderer() {
+    clearSelectionControls()
     transformer = null
     vertexHandles = []
+    regionNodesById.clear()
   }
 
   return {
     renderRegions,
-    hideActiveEditHandles,
     showActiveEditHandles,
+    clearSelectionControls,
+    updateRegionSelectionAppearance,
     disposeRegionRenderer,
   }
 }

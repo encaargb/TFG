@@ -18,6 +18,7 @@ function createBaseNodeMock(initialConfig = {}) {
     points: initialConfig.points ?? [],
     closed: initialConfig.closed ?? false,
     fill: initialConfig.fill,
+    strokeWidth: initialConfig.strokeWidth,
     scaleX: initialConfig.scaleX ?? 1,
     scaleY: initialConfig.scaleY ?? 1,
     visible: initialConfig.visible ?? true,
@@ -54,6 +55,11 @@ function createBaseNodeMock(initialConfig = {}) {
     fill: vi.fn((value) => {
       if (value === undefined) return state.fill
       state.fill = value
+      return node
+    }),
+    strokeWidth: vi.fn((value) => {
+      if (value === undefined) return state.strokeWidth
+      state.strokeWidth = value
       return node
     }),
     x: vi.fn((value) => {
@@ -115,6 +121,7 @@ function createLayerMock() {
     add: vi.fn().mockReturnThis(),
     destroyChildren: vi.fn(),
     draw: vi.fn(),
+    batchDraw: vi.fn(),
   }
 }
 

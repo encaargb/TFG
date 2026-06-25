@@ -596,8 +596,568 @@ describe('AnnotationCanvas', () => {
 
     expect(wrapper.emitted('select-region')).toEqual([
       ['polygon-front'],
+      ['rectangle-back'],
+      ['polygon-front'],
       ['polygon-front'],
     ])
+  })
+
+  it('selects the exact unselected rectangle on dragstart without advancing cycling', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'rectangle-front',
+      regions: [
+        rectangleRegion({ id: 'rectangle-back', zIndex: 1 }),
+        rectangleRegion({ id: 'rectangle-front', zIndex: 2 }),
+      ],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const rectangleBack = getRectInstances().find((rect) => rect.config.id === 'rectangle-back')
+
+    stage.getPointerPosition.mockReturnValue({ x: 150, y: 75 })
+    stage.trigger('mousedown')
+    rectangleBack.trigger('dragstart')
+    rectangleBack.trigger('dragend')
+    rectangleBack.trigger('click')
+
+    expect(wrapper.emitted('select-region')).toEqual([['rectangle-back']])
+    expect(wrapper.emitted('selection-overlap-change')).toEqual([[0]])
+  })
+
+  it('defers full rendering while an unselected dragged rectangle becomes selected', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'rectangle-front',
+      regions: [
+        rectangleRegion({ id: 'rectangle-back', zIndex: 1 }),
+        rectangleRegion({ id: 'rectangle-front', zIndex: 2 }),
+      ],
+    })
+    await flushImageLoad()
+
+    const regionLayer = getLayerInstances()[1]
+    const rectangleBack = getRectInstances().find((rect) => rect.config.id === 'rectangle-back')
+    const rectangleFront = getRectInstances().find((rect) => rect.config.id === 'rectangle-front')
+    const bodyOrderBeforeDrag = getRectInstances()
+      .map((rect) => rect.config.id)
+      .filter(Boolean)
+    const oldTransformer = getTransformerInstances().at(-1)
+    regionLayer.destroyChildren.mockClear()
+
+    rectangleBack.trigger('dragstart')
+    await wrapper.setProps({ selectedRegionId: 'rectangle-back' })
+
+    expect(wrapper.emitted('select-region')).toEqual([['rectangle-back']])
+    expect(rectangleFront.strokeWidth).toHaveBeenLastCalledWith(2)
+    expect(rectangleBack.strokeWidth).toHaveBeenLastCalledWith(3)
+    expect(oldTransformer.nodes).toHaveBeenLastCalledWith([])
+    expect(oldTransformer.destroy).toHaveBeenCalledTimes(1)
+    expect(regionLayer.destroyChildren).not.toHaveBeenCalled()
+    expect(regionLayer.batchDraw).toHaveBeenCalled()
+    expect(rectangleBack.destroy).not.toHaveBeenCalled()
+    expect(rectangleFront.destroy).not.toHaveBeenCalled()
+    expect(getRectInstances().map((rect) => rect.config.id).filter(Boolean)).toEqual(
+      bodyOrderBeforeDrag
+    )
+    expect(getTransformerInstances()).toHaveLength(1)
+
+    rectangleBack.x(130)
+    rectangleBack.y(90)
+    rectangleBack.trigger('dragmove')
+    expect(rectangleBack.x()).toBe(130)
+    expect(rectangleBack.y()).toBe(90)
+    rectangleBack.trigger('dragend')
+
+    expect(wrapper.emitted('update-region')[0][0]).toEqual({
+      id: 'rectangle-back',
+      changes: {
+        left: 260,
+        top: 180,
+        right: 560,
+        bottom: 380,
+      },
+    })
+    expect(regionLayer.destroyChildren).not.toHaveBeenCalled()
+
+    await wrapper.setProps({
+      regions: [
+        rectangleRegion({
+          id: 'rectangle-back',
+          zIndex: 1,
+          left: 260,
+          top: 180,
+          right: 560,
+          bottom: 380,
+        }),
+        rectangleRegion({ id: 'rectangle-front', zIndex: 2 }),
+      ],
+    })
+
+    expect(regionLayer.destroyChildren).toHaveBeenCalledTimes(1)
+    expect(getTransformerInstances().at(-1)).not.toBe(oldTransformer)
+    expect(
+      [...getRectInstances()].reverse().find((rect) => rect.config.id === 'rectangle-back').config
+    ).toEqual(expect.objectContaining({ strokeWidth: 3 }))
+    expect(wrapper.props('selectedRegionId')).toBe('rectangle-back')
+  })
+
+  it('coalesces repeated render requests during an active rectangle drag', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'rectangle-front',
+      regions: [
+        rectangleRegion({ id: 'rectangle-back', zIndex: 1 }),
+        rectangleRegion({ id: 'rectangle-front', zIndex: 2 }),
+      ],
+    })
+    await flushImageLoad()
+
+    const regionLayer = getLayerInstances()[1]
+    const rectangleBack = getRectInstances().find((rect) => rect.config.id === 'rectangle-back')
+    regionLayer.destroyChildren.mockClear()
+
+    rectangleBack.trigger('dragstart')
+    await wrapper.setProps({ selectedRegionId: 'rectangle-back' })
+    await wrapper.setProps({
+      regions: [
+        rectangleRegion({ id: 'rectangle-back', zIndex: 1, color: '#ff00aa' }),
+        rectangleRegion({ id: 'rectangle-front', zIndex: 2 }),
+      ],
+    })
+
+    expect(regionLayer.destroyChildren).not.toHaveBeenCalled()
+
+    rectangleBack.trigger('dragend')
+    await wrapper.setProps({
+      regions: [
+        rectangleRegion({ id: 'rectangle-back', zIndex: 1, color: '#ff00aa' }),
+        rectangleRegion({ id: 'rectangle-front', zIndex: 2 }),
+      ],
+    })
+
+    expect(regionLayer.destroyChildren).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the dragged rectangle selected and allows the first later intentional click', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'rectangle-front',
+      regions: [
+        rectangleRegion({ id: 'rectangle-back', zIndex: 1 }),
+        rectangleRegion({ id: 'rectangle-front', zIndex: 2 }),
+      ],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const rectangleBack = getRectInstances().find((rect) => rect.config.id === 'rectangle-back')
+
+    stage.getPointerPosition.mockReturnValue({ x: 150, y: 75 })
+    rectangleBack.trigger('dragstart')
+    rectangleBack.trigger('dragend')
+    rectangleBack.trigger('click')
+    await wrapper.setProps({ selectedRegionId: 'rectangle-back' })
+    stage.trigger('click')
+
+    expect(wrapper.emitted('select-region')).toEqual([
+      ['rectangle-back'],
+      ['rectangle-front'],
+    ])
+  })
+
+  it('selects the exact unselected polygon on dragstart and resets overlap context', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'polygon-front',
+      regions: [
+        fourPointPolygonRegion({ id: 'polygon-back', zIndex: 1 }),
+        rectangleRegion({ id: 'polygon-front', zIndex: 2 }),
+      ],
+    })
+    await flushImageLoad()
+
+    const polygonBack = getLineInstances().find((line) => line.config.id === 'polygon-back')
+
+    polygonBack.trigger('dragstart')
+
+    expect(wrapper.emitted('select-region')).toEqual([['polygon-back']])
+    expect(wrapper.emitted('selection-overlap-change')).toEqual([[0]])
+  })
+
+  it('defers full rendering during polygon body dragging', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'rectangle-front',
+      regions: [
+        fourPointPolygonRegion({ id: 'polygon-back', zIndex: 1 }),
+        rectangleRegion({ id: 'rectangle-front', zIndex: 2 }),
+      ],
+    })
+    await flushImageLoad()
+
+    const regionLayer = getLayerInstances()[1]
+    const polygonBack = getLineInstances().find((line) => line.config.id === 'polygon-back')
+    const transformerBeforeDrag = getTransformerInstances().at(-1)
+    regionLayer.destroyChildren.mockClear()
+
+    polygonBack.trigger('dragstart')
+    await wrapper.setProps({ selectedRegionId: 'polygon-back' })
+
+    expect(transformerBeforeDrag.destroy).toHaveBeenCalledTimes(1)
+    expect(regionLayer.destroyChildren).not.toHaveBeenCalled()
+
+    polygonBack.x(20)
+    polygonBack.y(10)
+    polygonBack.trigger('dragmove')
+    polygonBack.trigger('dragend')
+    await wrapper.setProps({
+      regions: [
+        fourPointPolygonRegion({
+          id: 'polygon-back',
+          zIndex: 1,
+          points: [
+            { x: 240, y: 120 },
+            { x: 540, y: 120 },
+            { x: 540, y: 320 },
+            { x: 240, y: 320 },
+          ],
+        }),
+        rectangleRegion({ id: 'rectangle-front', zIndex: 2 }),
+      ],
+    })
+
+    expect(regionLayer.destroyChildren).toHaveBeenCalledTimes(1)
+    expect(getCircleInstances().slice(-4)).toHaveLength(4)
+  })
+
+  it('removes old polygon handles without creating new handles during another polygon body drag', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'polygon-a',
+      regions: [
+        fourPointPolygonRegion({ id: 'polygon-a', zIndex: 2 }),
+        fourPointPolygonRegion({ id: 'polygon-b', zIndex: 1 }),
+      ],
+    })
+    await flushImageLoad()
+
+    const regionLayer = getLayerInstances()[1]
+    const polygonA = getLineInstances().find((line) => line.config.id === 'polygon-a')
+    const polygonB = getLineInstances().find((line) => line.config.id === 'polygon-b')
+    const oldHandles = getCircleInstances().slice(-4)
+    regionLayer.destroyChildren.mockClear()
+
+    polygonB.trigger('dragstart')
+    await wrapper.setProps({ selectedRegionId: 'polygon-b' })
+
+    oldHandles.forEach((handle) => {
+      expect(handle.destroy).toHaveBeenCalledTimes(1)
+    })
+    expect(polygonA.strokeWidth).toHaveBeenLastCalledWith(2)
+    expect(polygonB.strokeWidth).toHaveBeenLastCalledWith(3)
+    expect(getCircleInstances()).toHaveLength(4)
+    expect(regionLayer.destroyChildren).not.toHaveBeenCalled()
+    expect(polygonB.destroy).not.toHaveBeenCalled()
+
+    polygonB.x(20)
+    polygonB.y(10)
+    polygonB.trigger('dragmove')
+    polygonB.trigger('dragend')
+    await wrapper.setProps({
+      regions: [
+        fourPointPolygonRegion({ id: 'polygon-a', zIndex: 2 }),
+        fourPointPolygonRegion({
+          id: 'polygon-b',
+          zIndex: 1,
+          points: [
+            { x: 240, y: 120 },
+            { x: 540, y: 120 },
+            { x: 540, y: 320 },
+            { x: 240, y: 320 },
+          ],
+        }),
+      ],
+    })
+
+    expect(regionLayer.destroyChildren).toHaveBeenCalledTimes(1)
+    expect(getCircleInstances()).toHaveLength(8)
+    expect(getCircleInstances().slice(-4)).not.toEqual(oldHandles)
+  })
+
+  it('selects the exact unselected polyline on dragstart', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'rectangle-front',
+      regions: [
+        polylineRegion({ id: 'polyline-back', zIndex: 1 }),
+        rectangleRegion({ id: 'rectangle-front', zIndex: 2 }),
+      ],
+    })
+    await flushImageLoad()
+
+    const polylineBack = getLineInstances().find((line) => line.config.id === 'polyline-back')
+
+    polylineBack.trigger('dragstart')
+
+    expect(wrapper.emitted('select-region')).toEqual([['polyline-back']])
+    expect(wrapper.emitted('selection-overlap-change')).toEqual([[0]])
+  })
+
+  it('destroys selected polygon handles when a rectangle body starts dragging', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'polygon-a',
+      regions: [
+        fourPointPolygonRegion({ id: 'polygon-a', zIndex: 2 }),
+        rectangleRegion({ id: 'rectangle-b', zIndex: 1 }),
+      ],
+    })
+    await flushImageLoad()
+
+    const rectangleB = getRectInstances().find((rect) => rect.config.id === 'rectangle-b')
+    const oldHandles = getCircleInstances().slice(-4)
+
+    rectangleB.trigger('dragstart')
+
+    oldHandles.forEach((handle) => {
+      expect(handle.destroy).toHaveBeenCalledTimes(1)
+    })
+    expect(wrapper.emitted('select-region')).toEqual([['rectangle-b']])
+  })
+
+  it('defers full rendering during polyline body dragging', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'rectangle-front',
+      regions: [
+        polylineRegion({ id: 'polyline-back', zIndex: 1 }),
+        rectangleRegion({ id: 'rectangle-front', zIndex: 2 }),
+      ],
+    })
+    await flushImageLoad()
+
+    const regionLayer = getLayerInstances()[1]
+    const polylineBack = getLineInstances().find((line) => line.config.id === 'polyline-back')
+    const transformerBeforeDrag = getTransformerInstances().at(-1)
+    regionLayer.destroyChildren.mockClear()
+
+    polylineBack.trigger('dragstart')
+    await wrapper.setProps({ selectedRegionId: 'polyline-back' })
+
+    expect(transformerBeforeDrag.destroy).toHaveBeenCalledTimes(1)
+    expect(regionLayer.destroyChildren).not.toHaveBeenCalled()
+
+    polylineBack.trigger('dragend')
+    await wrapper.setProps({
+      regions: [
+        polylineRegion({
+          id: 'polyline-back',
+          zIndex: 1,
+          points: [
+            { x: 200, y: 100 },
+            { x: 500, y: 100 },
+          ],
+        }),
+        rectangleRegion({ id: 'rectangle-front', zIndex: 2 }),
+      ],
+    })
+
+    expect(regionLayer.destroyChildren).toHaveBeenCalledTimes(1)
+  })
+
+  it('clears a selected point from another region when dragging a point region', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'polyline-a',
+      regions: [
+        threePointPolylineRegion({ id: 'polyline-a', zIndex: 1 }),
+        threePointPolylineRegion({ id: 'polyline-b', zIndex: 2 }),
+      ],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const firstVertexHandle = getCircleInstances().slice(-3)[0]
+    const polylineB = getLineInstances().find((line) => line.config.id === 'polyline-b')
+
+    firstVertexHandle.trigger('click')
+    polylineB.trigger('dragstart')
+    polylineB.trigger('dragend')
+    stage.getPointerPosition.mockReturnValue({ x: 80, y: 140 })
+    stage.trigger('click')
+    stage.trigger('click')
+
+    expect(wrapper.emitted('select-region')).toEqual([
+      ['polyline-a'],
+      ['polyline-b'],
+    ])
+    expect(wrapper.emitted('update-region')).toHaveLength(1)
+    expect(wrapper.emitted('update-region')[0][0].id).toBe('polyline-b')
+  })
+
+  it('keeps an already selected dragged region selected and does not change visual order', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'rectangle-back',
+      regions: [
+        rectangleRegion({ id: 'rectangle-back', zIndex: 1 }),
+        rectangleRegion({ id: 'rectangle-front', zIndex: 2 }),
+      ],
+    })
+    await flushImageLoad()
+
+    const regionIdsBeforeDrag = getRectInstances()
+      .map((rect) => rect.config.id)
+      .filter(Boolean)
+    const rectangleBack = getRectInstances().find((rect) => rect.config.id === 'rectangle-back')
+    const transformerBeforeDrag = getTransformerInstances().at(-1)
+
+    rectangleBack.trigger('dragstart')
+
+    const regionIdsAfterDrag = getRectInstances()
+      .map((rect) => rect.config.id)
+      .filter(Boolean)
+
+    expect(wrapper.emitted('select-region')).toEqual([['rectangle-back']])
+    expect(rectangleBack.strokeWidth).toHaveBeenLastCalledWith(3)
+    expect(transformerBeforeDrag.destroy).toHaveBeenCalledTimes(1)
+    expect(regionIdsAfterDrag).toEqual(regionIdsBeforeDrag)
+    expect(wrapper.props('regions').map((region) => region.zIndex)).toEqual([1, 2])
+  })
+
+  it('defers full rendering while dragging an already selected region', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'rectangle-back',
+      regions: [
+        rectangleRegion({ id: 'rectangle-back', zIndex: 1 }),
+        rectangleRegion({ id: 'rectangle-front', zIndex: 2 }),
+      ],
+    })
+    await flushImageLoad()
+
+    const regionLayer = getLayerInstances()[1]
+    const rectangleBack = getRectInstances().find((rect) => rect.config.id === 'rectangle-back')
+    regionLayer.destroyChildren.mockClear()
+
+    rectangleBack.trigger('dragstart')
+    await wrapper.setProps({
+      regions: [
+        rectangleRegion({ id: 'rectangle-back', zIndex: 1, color: '#ff00aa' }),
+        rectangleRegion({ id: 'rectangle-front', zIndex: 2 }),
+      ],
+    })
+
+    expect(regionLayer.destroyChildren).not.toHaveBeenCalled()
+
+    rectangleBack.trigger('dragend')
+    await wrapper.setProps({
+      regions: [
+        rectangleRegion({ id: 'rectangle-back', zIndex: 1, color: '#ff00aa' }),
+        rectangleRegion({ id: 'rectangle-front', zIndex: 2 }),
+      ],
+    })
+
+    expect(regionLayer.destroyChildren).toHaveBeenCalledTimes(1)
+  })
+
+  it('normal clicks still render selection changes immediately', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: null,
+      regions: [rectangleRegion({ id: 'rectangle-1', zIndex: 0 })],
+    })
+    await flushImageLoad()
+
+    const regionLayer = getLayerInstances()[1]
+    const rectangle = getRectInstances().find((rect) => rect.config.id === 'rectangle-1')
+    regionLayer.destroyChildren.mockClear()
+
+    rectangle.trigger('click')
+    await wrapper.setProps({ selectedRegionId: 'rectangle-1' })
+
+    expect(regionLayer.destroyChildren).toHaveBeenCalledTimes(1)
+  })
+
+  it('renders geometry changes immediately outside an active interaction', async () => {
+    const wrapper = mountCanvas({
+      regions: [rectangleRegion({ id: 'rectangle-1', zIndex: 0 })],
+    })
+    await flushImageLoad()
+
+    const regionLayer = getLayerInstances()[1]
+    regionLayer.destroyChildren.mockClear()
+
+    await wrapper.setProps({
+      regions: [rectangleRegion({ id: 'rectangle-1', zIndex: 0, left: 300, right: 600 })],
+    })
+
+    expect(regionLayer.destroyChildren).toHaveBeenCalledTimes(1)
+  })
+
+  it('defers full rendering during rectangle transformation', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'rectangle-1',
+      regions: [rectangleRegion({ id: 'rectangle-1', zIndex: 0 })],
+    })
+    await flushImageLoad()
+
+    const regionLayer = getLayerInstances()[1]
+    const rectangle = getRectInstances().find((rect) => rect.config.id === 'rectangle-1')
+    const transformer = getTransformerInstances().at(-1)
+    regionLayer.destroyChildren.mockClear()
+    transformer.destroy.mockClear()
+
+    rectangle.trigger('transformstart')
+    await wrapper.setProps({
+      regions: [rectangleRegion({ id: 'rectangle-1', zIndex: 0, color: '#ff00aa' })],
+    })
+
+    expect(transformer.destroy).not.toHaveBeenCalled()
+    expect(regionLayer.destroyChildren).not.toHaveBeenCalled()
+
+    rectangle.trigger('transformend')
+    await wrapper.setProps({
+      regions: [rectangleRegion({ id: 'rectangle-1', zIndex: 0, color: '#ff00aa' })],
+    })
+
+    expect(regionLayer.destroyChildren).toHaveBeenCalledTimes(1)
+  })
+
+  it('defers full rendering during vertex dragging', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'polygon-1',
+      regions: [fourPointPolygonRegion({ id: 'polygon-1', zIndex: 0 })],
+    })
+    await flushImageLoad()
+
+    const regionLayer = getLayerInstances()[1]
+    const vertexHandle = getCircleInstances().slice(-4)[0]
+    regionLayer.destroyChildren.mockClear()
+
+    vertexHandle.trigger('dragstart')
+    await wrapper.setProps({
+      regions: [fourPointPolygonRegion({ id: 'polygon-1', zIndex: 0, color: '#ff00aa' })],
+    })
+
+    expect(vertexHandle.destroy).not.toHaveBeenCalled()
+    expect(regionLayer.destroyChildren).not.toHaveBeenCalled()
+
+    vertexHandle.trigger('dragend')
+    await wrapper.setProps({
+      regions: [fourPointPolygonRegion({ id: 'polygon-1', zIndex: 0, color: '#ff00aa' })],
+    })
+
+    expect(regionLayer.destroyChildren).toHaveBeenCalledTimes(1)
+  })
+
+  it('clears pending region renders on page change', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'rectangle-front',
+      regions: [
+        rectangleRegion({ id: 'rectangle-back', zIndex: 1 }),
+        rectangleRegion({ id: 'rectangle-front', zIndex: 2 }),
+      ],
+    })
+    await flushImageLoad()
+
+    const regionLayer = getLayerInstances()[1]
+    const rectangleBack = getRectInstances().find((rect) => rect.config.id === 'rectangle-back')
+    regionLayer.destroyChildren.mockClear()
+
+    rectangleBack.trigger('dragstart')
+    await wrapper.setProps({ selectedRegionId: 'rectangle-back' })
+    await changeCanvasPage(wrapper, 1)
+
+    expect(regionLayer.destroyChildren).toHaveBeenCalled()
   })
 
   it('updates selected rectangle transformer colors when the region color changes', async () => {
@@ -1350,24 +1910,38 @@ describe('AnnotationCanvas', () => {
     })
   })
 
-  it('hides and restores the transformer while dragging a selected rectangle', async () => {
-    mountCanvas({
+  it('destroys and recreates the transformer while dragging a selected rectangle body', async () => {
+    const wrapper = mountCanvas({
       selectedRegionId: 'region-1',
       regions: [rectangleRegion()],
     })
     await flushImageLoad()
 
+    const regionLayer = getLayerInstances()[1]
     const rectangle = getRectInstances().find((rect) => rect.config.id === 'region-1')
     const transformer = getTransformerInstances().at(-1)
+    regionLayer.destroyChildren.mockClear()
 
     rectangle.trigger('dragstart')
 
-    expect(transformer.visible).toHaveBeenLastCalledWith(false)
+    expect(transformer.nodes).toHaveBeenLastCalledWith([])
+    expect(transformer.destroy).toHaveBeenCalledTimes(1)
+    expect(regionLayer.destroyChildren).not.toHaveBeenCalled()
 
     rectangle.trigger('dragend')
+    await wrapper.setProps({
+      regions: [
+        rectangleRegion({
+          left: 200,
+          top: 100,
+          right: 500,
+          bottom: 300,
+        }),
+      ],
+    })
 
-    expect(transformer.visible).toHaveBeenLastCalledWith(true)
-    expect(transformer.forceUpdate).toHaveBeenCalledTimes(1)
+    expect(regionLayer.destroyChildren).toHaveBeenCalledTimes(1)
+    expect(getTransformerInstances().at(-1)).not.toBe(transformer)
   })
 
   it('visually clamps dragged rectangles inside the visible document bounds', async () => {
@@ -2409,27 +2983,32 @@ describe('AnnotationCanvas', () => {
     expect(wrapper.emitted('update-region')).toBeUndefined()
   })
 
-  it('hides and restores selected polygon vertex handles while dragging the whole region', async () => {
-    mountCanvas({
+  it('destroys and recreates selected polygon handles while dragging the whole region', async () => {
+    const wrapper = mountCanvas({
       selectedRegionId: 'region-1',
       regions: [polygonRegion()],
     })
     await flushImageLoad()
 
+    const regionLayer = getLayerInstances()[1]
     const polygon = getLineInstances().find((line) => line.config.id === 'region-1')
     const vertexHandles = getCircleInstances().slice(-3)
+    regionLayer.destroyChildren.mockClear()
 
     polygon.trigger('dragstart')
 
     vertexHandles.forEach((handle) => {
-      expect(handle.visible).toHaveBeenLastCalledWith(false)
+      expect(handle.destroy).toHaveBeenCalledTimes(1)
     })
+    expect(regionLayer.destroyChildren).not.toHaveBeenCalled()
 
     polygon.trigger('dragend')
-
-    vertexHandles.forEach((handle) => {
-      expect(handle.visible).toHaveBeenLastCalledWith(true)
+    await wrapper.setProps({
+      regions: [polygonRegion()],
     })
+
+    expect(regionLayer.destroyChildren).toHaveBeenCalledTimes(1)
+    expect(getCircleInstances().slice(-3)).not.toEqual(vertexHandles)
   })
 
   it('does not add a point on single click of a selected polygon edge', async () => {
@@ -2980,27 +3559,32 @@ describe('AnnotationCanvas', () => {
     expect(wrapper.emitted('update-region')).toBeUndefined()
   })
 
-  it('hides and restores selected polyline vertex handles while dragging the whole region', async () => {
-    mountCanvas({
+  it('destroys and recreates selected polyline handles while dragging the whole region', async () => {
+    const wrapper = mountCanvas({
       selectedRegionId: 'region-1',
       regions: [polylineRegion()],
     })
     await flushImageLoad()
 
+    const regionLayer = getLayerInstances()[1]
     const polyline = getLineInstances().find((line) => line.config.id === 'region-1')
     const vertexHandles = getCircleInstances().slice(-2)
+    regionLayer.destroyChildren.mockClear()
 
     polyline.trigger('dragstart')
 
     vertexHandles.forEach((handle) => {
-      expect(handle.visible).toHaveBeenLastCalledWith(false)
+      expect(handle.destroy).toHaveBeenCalledTimes(1)
     })
+    expect(regionLayer.destroyChildren).not.toHaveBeenCalled()
 
     polyline.trigger('dragend')
-
-    vertexHandles.forEach((handle) => {
-      expect(handle.visible).toHaveBeenLastCalledWith(true)
+    await wrapper.setProps({
+      regions: [polylineRegion()],
     })
+
+    expect(regionLayer.destroyChildren).toHaveBeenCalledTimes(1)
+    expect(getCircleInstances().slice(-2)).not.toEqual(vertexHandles)
   })
 
   it('emits updated polyline points after vertex editing', async () => {
