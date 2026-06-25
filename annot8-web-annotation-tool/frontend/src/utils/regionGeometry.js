@@ -216,3 +216,42 @@ export function unflattenPoints(points) {
 
   return normalizedPoints
 }
+
+export function getRegionBounds(region) {
+  if (!region) return null
+
+  if (region.type === 'rectangle') {
+    const rectangle = normalizeRectangleEdges(region)
+
+    return {
+      x: rectangle.left,
+      y: rectangle.top,
+      width: Math.max(0, rectangle.right - rectangle.left),
+      height: Math.max(0, rectangle.bottom - rectangle.top),
+    }
+  }
+
+  if (!['polygon', 'polyline'].includes(region.type) || !Array.isArray(region.points)) {
+    return null
+  }
+
+  const validPoints = region.points.filter(
+    (point) => point && Number.isFinite(point.x) && Number.isFinite(point.y)
+  )
+
+  if (validPoints.length === 0) return null
+
+  const xs = validPoints.map((point) => point.x)
+  const ys = validPoints.map((point) => point.y)
+  const minX = Math.min(...xs)
+  const minY = Math.min(...ys)
+  const maxX = Math.max(...xs)
+  const maxY = Math.max(...ys)
+
+  return {
+    x: minX,
+    y: minY,
+    width: Math.max(0, maxX - minX),
+    height: Math.max(0, maxY - minY),
+  }
+}

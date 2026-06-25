@@ -6,6 +6,7 @@ import {
   createPolylineRegion,
   createRectangleRegion,
   flattenPoints,
+  getRegionBounds,
   getRectangleHeight,
   getRectangleWidth,
   isDrawableRegion,
@@ -292,5 +293,120 @@ describe('regionGeometry', () => {
 
     expect(flattenPoints(points)).toEqual([10, 20, 30, 40])
     expect(unflattenPoints([10, 20, 30, 40])).toEqual(points)
+  })
+
+  it('returns rectangle bounds from normalized edge coordinates', () => {
+    expect(getRegionBounds({
+      type: 'rectangle',
+      left: 10,
+      top: 20,
+      right: 50,
+      bottom: 70,
+    })).toEqual({
+      x: 10,
+      y: 20,
+      width: 40,
+      height: 50,
+    })
+  })
+
+  it('returns rectangle bounds from reversed edge coordinates', () => {
+    expect(getRegionBounds({
+      type: 'rectangle',
+      left: 50,
+      top: 70,
+      right: 10,
+      bottom: 20,
+    })).toEqual({
+      x: 10,
+      y: 20,
+      width: 40,
+      height: 50,
+    })
+  })
+
+  it('returns polygon and polyline bounds from finite points', () => {
+    const points = [
+      { x: 30, y: 20 },
+      { x: 10, y: 70 },
+      { x: 50, y: 40 },
+    ]
+
+    expect(getRegionBounds({ type: 'polygon', points })).toEqual({
+      x: 10,
+      y: 20,
+      width: 40,
+      height: 50,
+    })
+    expect(getRegionBounds({ type: 'polyline', points })).toEqual({
+      x: 10,
+      y: 20,
+      width: 40,
+      height: 50,
+    })
+  })
+
+  it('supports vertical and horizontal polyline bounds', () => {
+    expect(getRegionBounds({
+      type: 'polyline',
+      points: [
+        { x: 30, y: 20 },
+        { x: 30, y: 70 },
+      ],
+    })).toEqual({
+      x: 30,
+      y: 20,
+      width: 0,
+      height: 50,
+    })
+
+    expect(getRegionBounds({
+      type: 'polyline',
+      points: [
+        { x: 10, y: 40 },
+        { x: 60, y: 40 },
+      ],
+    })).toEqual({
+      x: 10,
+      y: 40,
+      width: 50,
+      height: 0,
+    })
+  })
+
+  it('ignores malformed point coordinates and returns null when none are usable', () => {
+    expect(getRegionBounds({
+      type: 'polygon',
+      points: [
+        { x: 10, y: Number.NaN },
+        { x: 'bad', y: 20 },
+        { x: 30, y: 40 },
+      ],
+    })).toEqual({
+      x: 30,
+      y: 40,
+      width: 0,
+      height: 0,
+    })
+
+    expect(getRegionBounds({
+      type: 'polyline',
+      points: [{ x: 'bad', y: 20 }],
+    })).toBe(null)
+  })
+
+  it('does not mutate the original region when calculating bounds', () => {
+    const region = {
+      type: 'polygon',
+      points: [
+        { x: 30, y: 20 },
+        { x: 10, y: 70 },
+      ],
+    }
+    const originalRegion = structuredClone(region)
+
+    getRegionBounds(region)
+
+    expect(region).toEqual(originalRegion)
   })
 })
