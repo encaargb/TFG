@@ -78,10 +78,12 @@ const currentPageRegions = computed(() =>
   props.regions.filter((region) => region.pageIndex === props.pageIndex)
 )
 
+// The canvas coordinates several composables around one shared Konva stage and layers.
 let stage = null
 let imageLayer = null
 let regionLayer = null
 let isVertexHandleDragging = false
+// Renderer callbacks are assigned after dependent editing composables have been created.
 let renderRegionsImpl = () => {}
 let hideActiveEditHandlesImpl = () => {}
 let showActiveEditHandlesImpl = () => {}
@@ -130,6 +132,7 @@ function hasActiveCanvasInteraction() {
   )
 }
 
+// Composables receive getters so they always read current props instead of captured values.
 const {
   loadSelectedPage,
   updateZoom,
@@ -376,6 +379,7 @@ function handleStageClick(event) {
 
   if (props.activeTool !== 'select') return
 
+  // Region nodes handle their own selection; only the page image and empty stage clear it.
   const clickTarget = event?.target
 
   if (clickTarget && clickTarget !== stage && !isPageImageNode(clickTarget)) return
@@ -387,6 +391,7 @@ function handleStageClick(event) {
 }
 
 function resetTransientInteractionState() {
+  // Drafts, handles, and cursor state belong to a page/tool interaction, not the next page.
   cancelDraftRectangleRegion()
   cancelDraftPointRegion(false)
   resetPointEditing()
@@ -439,6 +444,7 @@ useCanvasKeyboardShortcuts({
 })
 
 onMounted(() => {
+  // Konva needs the mounted container before the stage and its image/region layers can exist.
   stage = new Konva.Stage({
     container: canvasContainer.value,
     width: 1000,
@@ -483,6 +489,7 @@ watch(() => props.selectedRegionId, (newSelectedRegionId) => {
 watch(
   () => [props.regions, props.selectedRegionId, props.activeTool, props.pageIndex],
   () => {
+    // Saved regions are reconstructed because Konva nodes carry event listeners tied to current state.
     renderRegions()
   },
   { deep: true }
@@ -508,6 +515,7 @@ watch(() => props.activeTool, (newTool, previousTool) => {
 onBeforeUnmount(() => {
   resetStageCursor()
 
+  // Destroy the stage first so its DOM listeners and child nodes cannot outlive the component.
   if (stage) {
     stage.destroy()
     stage = null
@@ -525,6 +533,7 @@ onBeforeUnmount(() => {
 })
 
 defineExpose({
+  // Sidebar layout changes need the parent to recompute the fitted canvas dimensions.
   updateZoom,
 })
 </script>

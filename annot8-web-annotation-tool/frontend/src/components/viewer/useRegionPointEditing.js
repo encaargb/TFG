@@ -136,6 +136,7 @@ export function useRegionPointEditing({
 
     if (segmentIndex === -1 || !documentPoint) return false
 
+    // Inserting after the hit segment preserves the existing polygon or polyline order.
     const insertIndex = segmentIndex + 1
     const points = [
       ...region.points.slice(0, insertIndex),
@@ -201,6 +202,7 @@ export function useRegionPointEditing({
     const minimumPointCount = getPointRegionMinimumPointCount(region.type)
 
     if (region.points.length <= minimumPointCount) {
+      // Removing a required vertex removes the whole shape rather than leaving invalid geometry.
       deleteSelectedRegion()
       return true
     }
@@ -216,6 +218,7 @@ export function useRegionPointEditing({
   }
 
   function prepareRegionClick() {
+    // A completed drag can be followed by click and double-click events from the same gesture.
     suppressPointRegionClick = true
     suppressPointRegionDoubleClick = true
     clearSelectedPoint()

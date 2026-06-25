@@ -20,6 +20,7 @@ export function useCanvasPageImage({
   let originalImageHeight = 0
 
   function getRegionScale() {
+    // This is the original-page to fitted-canvas ratio, before the user zoom is applied.
     return {
       scaleX: baseImageWidth / originalImageWidth,
       scaleY: baseImageHeight / originalImageHeight,
@@ -72,6 +73,7 @@ export function useCanvasPageImage({
     pageImageNode.width(visibleWidth)
     pageImageNode.height(visibleHeight)
 
+    // Region nodes use the same visible coordinate system and must be rebuilt after zoom changes.
     imageLayer.draw()
     renderRegions()
   }
@@ -88,6 +90,7 @@ export function useCanvasPageImage({
     const img = new window.Image()
 
     img.onload = () => {
+      // Ignore a completed image request after navigation has selected a newer page.
       if (loadId !== imageLoadSequence || !getStage() || !getImageLayer()) return
 
       if (pageImageNode) {
@@ -126,6 +129,7 @@ export function useCanvasPageImage({
   }
 
   function disposePageImage() {
+    // Invalidate outstanding image callbacks before releasing the current Konva node.
     imageLoadSequence += 1
 
     if (pageImageNode) {

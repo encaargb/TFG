@@ -6,17 +6,12 @@ const API_BASE_URL = process.env.VITE_API_BASE_URL ?? `http://localhost:${BACKEN
 
 const children = []
 
-/**
- * Stops both child processes when one service fails or the user presses Ctrl+C.
- */
 function stop(exitCode = 0) {
+  // Both development services share this parent process and must stop together.
   children.forEach((child) => child.kill())
   process.exit(exitCode)
 }
 
-/**
- * Starts one npm-based service and forwards its output to the current terminal.
- */
 function run(name, args, env = {}) {
   const child = spawn('npm', args, {
     env: {

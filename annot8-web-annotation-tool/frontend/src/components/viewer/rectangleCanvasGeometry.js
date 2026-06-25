@@ -5,6 +5,7 @@ function clampValue(value, minimum, maximum) {
 }
 
 export function normalizeVisibleRectangle(rectangle) {
+  // Dragging or transforming from the opposite corner can produce negative dimensions.
   const x = rectangle.width < 0 ? rectangle.x + rectangle.width : rectangle.x
   const y = rectangle.height < 0 ? rectangle.y + rectangle.height : rectangle.y
 
@@ -58,6 +59,7 @@ export function applyVisibleRectangleToNode(node, rectangle) {
   node.width(rectangle.width)
   node.height(rectangle.height)
 
+  // Konva transforms through scale; fold it into dimensions before the next edit.
   if (typeof node.scaleX === 'function') node.scaleX(1)
   if (typeof node.scaleY === 'function') node.scaleY(1)
 }
@@ -87,6 +89,7 @@ export function getAnchorAwareVisibleRectangle(
   const original = normalizeVisibleRectangle(originalRectangle)
   const transformed = normalizeVisibleRectangle(transformedRectangle)
 
+  // Only the edge controlled by the active anchor may move; the opposite edge stays fixed.
   let left = original.x
   let top = original.y
   let right = original.x + original.width

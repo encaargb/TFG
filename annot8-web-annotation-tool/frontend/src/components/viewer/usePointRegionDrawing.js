@@ -52,6 +52,7 @@ export function usePointRegionDrawing({
       getActiveTool() === 'polygon' && isPointerNearFirstPolygonPoint(pointerPosition)
     const documentHoverPoint = getClampedDocumentPointer()
 
+    // Draft data stays in document coordinates; only the transient Konva line is visible-space.
     const visiblePoints = toVisiblePoints(
       documentHoverPoint && !shouldClosePolygon
         ? [...draftPointRegionPoints, documentHoverPoint]
@@ -90,6 +91,7 @@ export function usePointRegionDrawing({
   function isDraftPointRegionSegmentTooShort(documentPoint) {
     if (draftPointRegionPoints.length === 0) return false
 
+    // Segment usability is judged on screen so it remains clickable at the current zoom.
     const { scaleX, scaleY } = getRegionScale()
     const [previousVisiblePoint, nextVisiblePoint] = toVisiblePoints(
       [draftPointRegionPoints.at(-1), documentPoint],
@@ -193,6 +195,7 @@ export function usePointRegionDrawing({
   }
 
   function handlePointRegionClick() {
+    // Konva emits a click after mousedown; suppress the duplicate point from a drag gesture.
     if (skipNextPointRegionClick) {
       const pointerPosition = getStage()?.getPointerPosition()
       const shouldSkipClick =
@@ -252,6 +255,7 @@ export function usePointRegionDrawing({
     skipNextPointRegionClickPosition = null
     pointRegionDragStart = null
 
+    // Reject degenerate drafts instead of adding geometry that cannot be edited reliably.
     if (
       isDrawableRegion(draftRegion) &&
       hasValidDraftPointRegionSegments(draftRegion.points, draftRegion.type)

@@ -45,6 +45,7 @@ export function useCanvasKeyboardShortcuts({
   }
 
   onMounted(() => {
+    // Canvas shortcuts are global because the Konva stage itself does not receive keyboard focus.
     window.addEventListener('keydown', handleKeydown)
   })
 

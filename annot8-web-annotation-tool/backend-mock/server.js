@@ -48,6 +48,7 @@ function sendStaticFile(response, pathname, rootDir = PUBLIC_DIR) {
   const relativePath = decodeURIComponent(pathname.replace(/^\//, ''))
   const filePath = path.resolve(rootDir, relativePath)
 
+  // Resolving before the prefix check prevents paths such as ../ from escaping the served root.
   if (!filePath.startsWith(rootDir)) {
     sendJson(response, 403, { error: 'Forbidden' })
     return
@@ -68,6 +69,7 @@ function sendStaticFile(response, pathname, rootDir = PUBLIC_DIR) {
 }
 
 function sendFrontendFile(response, pathname) {
+  // The production mock serves the SPA entry point for client-side routes.
   const requestedPath = pathname === '/' ? '/index.html' : pathname
   const filePath = path.join(FRONTEND_DIST_DIR, requestedPath)
 

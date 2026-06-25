@@ -19,6 +19,7 @@ export function getPreviousZoom(currentZoom, step, minZoom) {
 }
 
 export function getFittedDimensions(imageWidth, imageHeight, maxWidth, maxHeight) {
+  // The unzoomed canvas fits the page first, then zoom expands that fitted size.
   const scale = Math.min(maxWidth / imageWidth, maxHeight / imageHeight)
 
   return {
@@ -35,6 +36,9 @@ export function getVisibleDimensions(baseWidth, baseHeight, zoomLevel) {
   }
 }
 
+/**
+ * Maps a visible Konva pointer position to clamped original document coordinates.
+ */
 export function getDocumentCoordinates(
   pointerPosition,
   zoomLevel,
@@ -47,6 +51,7 @@ export function getDocumentCoordinates(
     return null
   }
 
+  // Konva reports visible coordinates, so remove zoom before restoring original image pixels.
   const rawX = pointerPosition.x / zoomLevel
   const rawY = pointerPosition.y / zoomLevel
 

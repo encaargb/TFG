@@ -150,6 +150,7 @@ export function useRegionRenderer({
 
     if (!regionLayer || !hasPageImage()) return
 
+    // Rebuilding avoids stale Konva listeners and keeps selection handles aligned with model data.
     clearPolylineEndpointPreview(false)
     regionLayer.destroyChildren()
     vertexHandles = []

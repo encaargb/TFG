@@ -25,6 +25,7 @@ export function useCanvasAutoScroll({ canvasWrapper, isInteractionActive }) {
       return
     }
 
+    // Client coordinates are compared with the scroll container, not Konva's stage coordinates.
     const bounds = wrapper.getBoundingClientRect()
     let scrollX = 0
     let scrollY = 0

@@ -45,6 +45,7 @@ export function useRectangleDrawing({
 
     if (!documentStart) return
 
+    // A new draft replaces selection before its temporary node is added to the region layer.
     clearSelectedRegion()
     draftRectangleStart = documentStart
 
@@ -129,6 +130,7 @@ export function useRectangleDrawing({
     draftRectangleNode = null
     draftRectangleStart = null
 
+    // Keep the minimum size in visible pixels so accidental clicks do not create regions.
     if (draftRegion && hasValidDraftRectangleSize(draftRegion)) {
       addRegion(draftRegion)
     } else {

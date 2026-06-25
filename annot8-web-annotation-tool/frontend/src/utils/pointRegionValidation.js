@@ -2,6 +2,10 @@ export function getPointRegionMinimumPointCount(type) {
   return type === 'polygon' ? 3 : 2
 }
 
+/**
+ * Checks visible-canvas segments so the interaction remains usable at the current zoom.
+ * Polygons include the closing edge; polylines only validate adjacent points.
+ */
 export function hasValidVisiblePointRegionSegments(
   visiblePoints,
   type,

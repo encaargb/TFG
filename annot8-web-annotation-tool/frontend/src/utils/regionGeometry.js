@@ -5,6 +5,7 @@ export function createRectangleRegion({
   end,
   color = '#0d6efd',
 }) {
+  // Rectangles are stored as document-space edges, independent of drag direction and zoom.
   const rectangle = normalizeRectangleEdges({
     left: start.x,
     top: start.y,
@@ -18,6 +19,7 @@ export function createRectangleRegion({
     type: 'rectangle',
     ...rectangle,
     color,
+    // Annotation records are persisted with regions although the current UI does not edit them.
     annotations: [],
   }
 }
@@ -64,6 +66,7 @@ export function createPolygonRegion({
   points,
   color = '#0d6efd',
 }) {
+  // Ordered document points are shared by polygons and polylines; only closing differs.
   return {
     id,
     pageIndex,
@@ -108,6 +111,9 @@ export function isDrawableRegion(region, minimumSize = 4) {
   return getRectangleWidth(region) >= minimumSize && getRectangleHeight(region) >= minimumSize
 }
 
+/**
+ * Keeps a rectangle's dimensions while moving it back inside original document bounds.
+ */
 export function clampRectangleToBounds(rectangle, bounds) {
   const edgeRectangle = normalizeRectangleEdges(rectangle)
   const width = Math.min(Math.max(0, getRectangleWidth(edgeRectangle)), bounds.width)
@@ -127,6 +133,9 @@ export function clampRectangleToBounds(rectangle, bounds) {
   }
 }
 
+/**
+ * Converts document-space rectangle edges to the fitted, zoomed coordinates used by Konva.
+ */
 export function toVisibleRectangle(region, scaleX, scaleY, zoomLevel) {
   const rectangle = normalizeRectangleEdges(region)
   const visibleScaleX = scaleX * zoomLevel
@@ -140,6 +149,9 @@ export function toVisibleRectangle(region, scaleX, scaleY, zoomLevel) {
   }
 }
 
+/**
+ * Converts a visible Konva rectangle back to integer document-space edges for storage.
+ */
 export function toDocumentRectangle(rectangle, scaleX, scaleY, zoomLevel) {
   const visibleScaleX = scaleX * zoomLevel
   const visibleScaleY = scaleY * zoomLevel
@@ -175,6 +187,9 @@ export function toVisiblePoints(points, scaleX, scaleY, zoomLevel) {
   }))
 }
 
+/**
+ * Converts visible canvas points back to integer document coordinates for persistence.
+ */
 export function toDocumentPoints(points, scaleX, scaleY, zoomLevel) {
   const visibleScaleX = scaleX * zoomLevel
   const visibleScaleY = scaleY * zoomLevel

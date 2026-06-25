@@ -24,6 +24,7 @@ export function useRegionVertexHandles({
   function createRegionVertexHandles(region, pointRegionNode) {
     const { scaleX, scaleY } = getRegionScale()
     const visiblePoints = toVisiblePoints(region.points, scaleX, scaleY, getZoomLevel())
+    // Handles edit a visible copy; the model changes only after a valid drag completes.
     const editedVisiblePoints = visiblePoints.map((point) => ({ ...point }))
     let handles = []
 
@@ -135,6 +136,7 @@ export function useRegionVertexHandles({
           getZoomLevel()
         )
 
+        // Restore the rendered model when moving a vertex would create a degenerate segment.
         if (hasValidPointRegionSegments(documentPoints, region.type)) {
           updateRegion({
             id: region.id,

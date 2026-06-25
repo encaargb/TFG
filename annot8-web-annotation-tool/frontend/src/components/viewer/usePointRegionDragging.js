@@ -55,6 +55,7 @@ export function usePointRegionDragging({
         x: point.x + delta.x,
         y: point.y + delta.y,
       }))
+      // The node offset is visible-space; persist translated vertices in document coordinates.
       const documentPoints = toDocumentPoints(movedVisiblePoints, scaleX, scaleY, getZoomLevel())
 
       updateRegion({

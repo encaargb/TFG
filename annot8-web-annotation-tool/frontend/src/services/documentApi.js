@@ -2,6 +2,7 @@ const apiBaseUrl = (
   import.meta.env.VITE_API_BASE_URL ||
   (import.meta.env.DEV && import.meta.env.MODE !== 'test' ? 'http://localhost:3001' : '')
 ).replace(/\/$/, '')
+// Tests use local metadata so the viewer can mount without a running mock server.
 const useApi = Boolean(apiBaseUrl) || import.meta.env.PROD
 const fallbackDocument = {
   id: 'doc1',
@@ -20,6 +21,7 @@ export async function fetchProjectDocument(documentId = fallbackDocument.id) {
 
   const document = await response.json()
 
+  // The backend returns document-relative page paths; the canvas always receives usable URLs.
   return {
     ...document,
     pages: document.pages.map((page) => (page.startsWith('/') ? `${apiBaseUrl}${page}` : page)),

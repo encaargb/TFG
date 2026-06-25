@@ -14,6 +14,7 @@ import {
 } from '../utils/viewerMath'
 
 const pages = ref([])
+// This is the runtime source of truth; the document model only serializes this array.
 const regions = ref([])
 const selectedIndex = ref(0)
 let projectDocument = null
@@ -62,6 +63,7 @@ function navigateToPage(index) {
   if (!Number.isInteger(index) || index < 0 || index >= pages.value.length) return
   if (index === selectedIndex.value) return
 
+  // Selection, pointer coordinates, and zoom describe the previous page and must not carry over.
   selectedIndex.value = index
   selectedRegionId.value = null
   mousePos.value = null
@@ -113,6 +115,7 @@ function persistRegions() {
 
   saveStatus.value = 'saving'
 
+  // Keep a single pending write while a burst of canvas updates is still in progress.
   if (saveTimeout !== null) {
     clearTimeout(saveTimeout)
   }
@@ -133,6 +136,7 @@ function persistRegions() {
 }
 
 function updateRegionSequence() {
+  // Continue restored numeric IDs so new regions do not collide with localStorage data.
   regionSequence.value = regions.value.reduce((highestId, region) => {
     const match = String(region.id).match(/^region-(\d+)$/)
     return match ? Math.max(highestId, Number(match[1])) : highestId
@@ -211,6 +215,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  // Vue cleanup normally flushes the debounce; abrupt browser shutdown can still bypass it.
   if (saveTimeout === null || !projectDocument) return
 
   clearTimeout(saveTimeout)

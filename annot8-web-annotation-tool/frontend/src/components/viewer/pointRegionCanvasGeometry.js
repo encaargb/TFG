@@ -7,6 +7,7 @@ export function getPointToSegmentDistance(point, segmentStart, segmentEnd) {
   const segmentY = segmentEnd.y - segmentStart.y
   const segmentLengthSquared = segmentX ** 2 + segmentY ** 2
 
+  // Degenerate segments still need a predictable hit distance while editing malformed data.
   if (segmentLengthSquared === 0) {
     return Math.hypot(point.x - segmentStart.x, point.y - segmentStart.y)
   }
@@ -24,6 +25,9 @@ export function getPointToSegmentDistance(point, segmentStart, segmentEnd) {
   return Math.hypot(point.x - closestPoint.x, point.y - closestPoint.y)
 }
 
+/**
+ * Returns the nearest visible-canvas segment within the hit tolerance, including a polygon's closing edge.
+ */
 export function getClosestPointRegionSegmentIndex(
   pointerPosition,
   visiblePoints,
@@ -34,6 +38,7 @@ export function getClosestPointRegionSegmentIndex(
 
   let closestSegmentIndex = -1
   let closestDistance = Number.POSITIVE_INFINITY
+  // A polygon includes the final-to-first edge; a polyline intentionally does not.
   const segmentCount = closed ? visiblePoints.length : visiblePoints.length - 1
 
   for (let index = 0; index < segmentCount; index += 1) {

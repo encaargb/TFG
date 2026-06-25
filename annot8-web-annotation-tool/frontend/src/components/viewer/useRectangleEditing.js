@@ -86,6 +86,7 @@ export function useRectangleEditing({
       getRegionLayer()?.draw()
     })
 
+    // Commit only at the end of a gesture so ViewerPage persists one stable document-space shape.
     const commitRegionChange = () => {
       const visibleRectangle = transformer?.getActiveAnchor?.()
         ? syncResizedRectangleNode(node, region, transformer, scaleX, scaleY)
