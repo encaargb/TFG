@@ -75,6 +75,20 @@ const emit = defineEmits([
 
 const canvasContainer = ref(null)
 const canvasWrapper = ref(null)
+const emptyContextMenu = {
+  visible: false,
+  x: 0,
+  y: 0,
+  region: null,
+  visiblePoints: null,
+  isPolygon: false,
+  pointerPosition: null,
+  segmentIndex: -1,
+  pointIndex: null,
+  canAddPoint: false,
+  canDeletePoint: false,
+}
+const contextMenu = ref({ ...emptyContextMenu })
 
 const currentPageRegions = computed(() =>
   props.regions.filter((region) => region.pageIndex === props.pageIndex)
@@ -268,7 +282,9 @@ const { autoScrollCanvasWrapper } = useCanvasAutoScroll({
 
 const {
   clearSelectedPoint,
+  canDeleteSelectedPoint,
   deleteSelectedPoint,
+  getInsertPointSegmentIndex,
   insertPointIntoSegment,
   insertPolylineEndpoint,
   updatePolylineEndpointPreview,
@@ -276,8 +292,6 @@ const {
   getSelectedPoint,
   setSelectedPoint,
   prepareRegionClick,
-  handleRegionClickSuppression,
-  handleRegionDoubleClickSuppression,
   resetPointEditing,
   disposePointEditing,
 } = useRegionPointEditing({
@@ -302,6 +316,127 @@ function selectRegionForEditing(regionId) {
   resetSelectionCycle()
   clearSelectedPoint()
   emitSelectionContext({ regionId, overlappingRegionCount: 0 })
+}
+
+function closeContextMenu() {
+  if (!contextMenu.value.visible) return
+
+  contextMenu.value = { ...emptyContextMenu }
+}
+
+function getContextMenuPosition(event, itemCount) {
+  const nativeEvent = event?.evt ?? event
+  const menuWidth = 160
+  const menuHeight = itemCount * 34 + 8
+  const viewportWidth = window.innerWidth || document.documentElement.clientWidth || menuWidth
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight || menuHeight
+  const clientX = nativeEvent?.clientX ?? 0
+  const clientY = nativeEvent?.clientY ?? 0
+
+  return {
+    x: Math.max(0, Math.min(clientX, viewportWidth - menuWidth)),
+    y: Math.max(0, Math.min(clientY, viewportHeight - menuHeight)),
+  }
+}
+
+function preventNativeContextMenu(event) {
+  if (event) {
+    event.cancelBubble = true
+  }
+
+  event?.evt?.preventDefault?.()
+}
+
+function openContextMenu(event, menuState) {
+  preventNativeContextMenu(event)
+  const itemCount = Number(menuState.canAddPoint) + Number(menuState.pointIndex !== null) + 1
+  const position = getContextMenuPosition(event, itemCount)
+
+  contextMenu.value = {
+    ...emptyContextMenu,
+    ...menuState,
+    visible: true,
+    x: position.x,
+    y: position.y,
+  }
+}
+
+function handleRegionContextMenu({ event, region, visiblePoints, isPolygon }) {
+  if (props.activeTool !== 'select') return
+
+  const pointerPosition = stage?.getPointerPosition?.()
+  if (!pointerPosition) return
+
+  const isPointRegion = ['polygon', 'polyline'].includes(region.type)
+  const segmentIndex = isPointRegion
+    ? getInsertPointSegmentIndex({ visiblePoints, isPolygon, pointerPosition })
+    : -1
+
+  clearSelectedPoint()
+  selectRegionForEditing(region.id)
+  openContextMenu(event, {
+    region,
+    visiblePoints,
+    isPolygon,
+    pointerPosition: { ...pointerPosition },
+    segmentIndex,
+    canAddPoint: segmentIndex !== -1,
+  })
+}
+
+function handleVertexContextMenu({ event, region, pointIndex }) {
+  if (props.activeTool !== 'select') return
+
+  selectRegionForEditing(region.id)
+  setSelectedPoint({ regionId: region.id, pointIndex })
+  openContextMenu(event, {
+    region,
+    pointIndex,
+    pointerPosition: stage?.getPointerPosition?.() ?? null,
+    canDeletePoint: canDeleteSelectedPoint(),
+  })
+}
+
+function addContextMenuPoint() {
+  const menu = contextMenu.value
+
+  if (!menu.visible || !menu.canAddPoint) return
+
+  insertPointIntoSegment({
+    region: menu.region,
+    visiblePoints: menu.visiblePoints,
+    isPolygon: menu.isPolygon,
+    pointerPosition: menu.pointerPosition,
+    segmentIndex: menu.segmentIndex,
+  })
+  closeContextMenu()
+}
+
+function deleteContextMenuPoint() {
+  if (!contextMenu.value.visible || !contextMenu.value.canDeletePoint) return
+
+  if (canDeleteSelectedPoint()) {
+    deleteSelectedPoint()
+  }
+
+  closeContextMenu()
+}
+
+function deleteContextMenuRegion() {
+  if (!contextMenu.value.visible) return
+
+  emit('delete-selected-region')
+  closeContextMenu()
+}
+
+function handleContextMenuOutsideClick() {
+  closeContextMenu()
+}
+
+function handleContextMenuKeydown(event) {
+  if (event.key === 'Escape') {
+    closeContextMenu()
+  }
 }
 
 const {
@@ -406,10 +541,10 @@ const { createRegionVertexHandles } = useRegionVertexHandles({
   markEditInteractionFinished: markRegionEditInteractionFinished,
   updateRegion: ({ id, changes }) => emit('update-region', { id, changes }),
   renderRegions: requestRegionRender,
+  handleVertexContextMenu,
 })
 
 const regionRenderer = useRegionRenderer({
-  getStage: () => stage,
   getRegionLayer: () => regionLayer,
   hasPageImage,
   getCurrentPageRegions: () => currentPageRegions.value,
@@ -421,9 +556,7 @@ const regionRenderer = useRegionRenderer({
   clearPolylineEndpointPreview,
   clearSelectedPoint,
   attachRegionCursorHandlers,
-  handleRegionClickSuppression,
-  handleRegionDoubleClickSuppression,
-  insertPointIntoSegment,
+  handleRegionContextMenu,
   attachRectangleEditing,
   getRectangleDragBoundPosition,
   attachPointRegionDragging,
@@ -436,7 +569,6 @@ const regionRenderer = useRegionRenderer({
 
     selectFromPointer(stage?.getPointerPosition?.(), fallbackRegionId)
   },
-  selectRegionDirect: emitDirectRegionSelection,
 })
 
 renderRegionsImpl = regionRenderer.renderRegions
@@ -589,11 +721,15 @@ onMounted(() => {
   stage.on('click', handleStageClick)
   stage.on('mouseup', handleStageMouseUp)
   stage.on('dblclick', commitDraftPointRegion)
+  stage.on('contextmenu', closeContextMenu)
+  window.addEventListener('click', handleContextMenuOutsideClick)
+  window.addEventListener('keydown', handleContextMenuKeydown)
 
   loadSelectedPage(props.selectedPage)
 })
 
 watch(() => props.selectedPage, (newPage) => {
+  closeContextMenu()
   clearSpatialIndex()
   isRegionEditInteractionActive = false
   clearPendingRegionRender()
@@ -607,6 +743,7 @@ watch(() => props.zoomLevel, () => {
 })
 
 watch(() => props.pageIndex, () => {
+  closeContextMenu()
   resetTransientInteractionState()
 })
 
@@ -648,6 +785,7 @@ watch(
 
 watch(() => props.activeTool, (newTool, previousTool) => {
   if (newTool !== previousTool) {
+    closeContextMenu()
     const hadActiveRegionInteraction = isRegionInteractionActive() || regionRenderPending
 
     resetStageCursor()
@@ -674,8 +812,19 @@ watch(() => props.activeTool, (newTool, previousTool) => {
   }
 })
 
+watch(
+  () => props.regions.map((region) => region.id),
+  (regionIds) => {
+    if (contextMenu.value.visible && !regionIds.includes(contextMenu.value.region?.id)) {
+      closeContextMenu()
+    }
+  }
+)
+
 onBeforeUnmount(() => {
   resetStageCursor()
+  window.removeEventListener('click', handleContextMenuOutsideClick)
+  window.removeEventListener('keydown', handleContextMenuKeydown)
   clearPendingRegionRender()
   isRegionEditInteractionActive = false
 
@@ -710,6 +859,42 @@ defineExpose({
     :class="`canvas-wrapper--${activeTool}`"
   >
     <div ref="canvasContainer" class="konva-container shadow-sm"></div>
+    <div
+      v-if="contextMenu.visible"
+      class="annotation-context-menu"
+      :style="{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }"
+      role="menu"
+      @click.stop
+      @contextmenu.prevent
+    >
+      <button
+        v-if="contextMenu.canAddPoint"
+        type="button"
+        class="annotation-context-menu__item"
+        role="menuitem"
+        @click="addContextMenuPoint"
+      >
+        Add point
+      </button>
+      <button
+        v-if="contextMenu.pointIndex !== null"
+        type="button"
+        class="annotation-context-menu__item"
+        role="menuitem"
+        :disabled="!contextMenu.canDeletePoint"
+        @click="deleteContextMenuPoint"
+      >
+        Delete point
+      </button>
+      <button
+        type="button"
+        class="annotation-context-menu__item"
+        role="menuitem"
+        @click="deleteContextMenuRegion"
+      >
+        Delete region
+      </button>
+    </div>
   </div>
 </template>
 
@@ -728,5 +913,35 @@ defineExpose({
   display: inline-block;
   background: white;
   border: 1px solid #adb5bd;
+}
+
+.annotation-context-menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 160px;
+  padding: 4px;
+  background: #ffffff;
+  border: 1px solid #adb5bd;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 18%);
+}
+
+.annotation-context-menu__item {
+  display: block;
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 0;
+  background: transparent;
+  color: #212529;
+  text-align: left;
+}
+
+.annotation-context-menu__item:hover:not(:disabled),
+.annotation-context-menu__item:focus-visible:not(:disabled) {
+  background: #e9ecef;
+}
+
+.annotation-context-menu__item:disabled {
+  color: #6c757d;
 }
 </style>

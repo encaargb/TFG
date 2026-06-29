@@ -164,6 +164,17 @@ function mockCanvasWrapperBounds(wrapper, bounds = {}) {
   return element
 }
 
+function createContextMenuEvent(overrides = {}) {
+  return {
+    evt: {
+      clientX: 150,
+      clientY: 52,
+      preventDefault: vi.fn(),
+      ...overrides,
+    },
+  }
+}
+
 describe('AnnotationCanvas', () => {
   beforeEach(() => {
     resetKonvaMocks()
@@ -3112,7 +3123,28 @@ describe('AnnotationCanvas', () => {
     expect(wrapper.emitted('update-region')).toBeUndefined()
   })
 
-  it('adds a point to a selected polygon edge on double-click', async () => {
+  it('shows Add point when right-clicking a selected polygon segment', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [polygonRegion()],
+    })
+    await flushImageLoad()
+
+    const stage = getLatestStage()
+    const polygon = getLineInstances().find((line) => line.config.id === 'region-1')
+    const event = createContextMenuEvent()
+
+    stage.getPointerPosition.mockReturnValue({ x: 150, y: 52 })
+    polygon.trigger('contextmenu', event)
+    await wrapper.vm.$nextTick()
+
+    expect(event.evt.preventDefault).toHaveBeenCalledTimes(1)
+    expect(wrapper.find('.annotation-context-menu').text()).toContain('Add point')
+    expect(wrapper.find('.annotation-context-menu').text()).toContain('Delete region')
+    expect(wrapper.emitted('select-region')).toEqual([['region-1']])
+  })
+
+  it('inserts Add point at the saved segment and pointer position', async () => {
     const wrapper = mountCanvas({
       selectedRegionId: 'region-1',
       regions: [polygonRegion()],
@@ -3123,7 +3155,11 @@ describe('AnnotationCanvas', () => {
     const polygon = getLineInstances().find((line) => line.config.id === 'region-1')
 
     stage.getPointerPosition.mockReturnValue({ x: 150, y: 52 })
-    polygon.trigger('dblclick')
+    polygon.trigger('contextmenu', createContextMenuEvent())
+    await wrapper.vm.$nextTick()
+
+    stage.getPointerPosition.mockReturnValue({ x: 900, y: 400 })
+    await wrapper.find('.annotation-context-menu__item').trigger('click')
 
     expect(wrapper.emitted('update-region')[0][0]).toEqual({
       id: 'region-1',
@@ -3136,52 +3172,7 @@ describe('AnnotationCanvas', () => {
         ],
       },
     })
-  })
-
-  it('does not insert a polygon segment point that would create a segment below 4 visible px', async () => {
-    const wrapper = mountCanvas({
-      selectedRegionId: 'region-1',
-      regions: [polygonRegion()],
-    })
-    await flushImageLoad()
-
-    const stage = getLatestStage()
-    const polygon = getLineInstances().find((line) => line.config.id === 'region-1')
-
-    stage.getPointerPosition.mockReturnValue({ x: 101, y: 50 })
-    polygon.trigger('dblclick')
-
-    expect(wrapper.emitted('update-region')).toBeUndefined()
-  })
-
-  it('adds a point on the first double-click after selecting a polygon', async () => {
-    const wrapper = mountCanvas({
-      selectedRegionId: null,
-      regions: [polygonRegion()],
-    })
-    await flushImageLoad()
-
-    const stage = getLatestStage()
-    const polygon = getLineInstances().find((line) => line.config.id === 'region-1')
-
-    polygon.trigger('click', { evt: { detail: 1 } })
-    await wrapper.setProps({ selectedRegionId: 'region-1' })
-
-    stage.getPointerPosition.mockReturnValue({ x: 150, y: 52 })
-    polygon.trigger('click', { evt: { detail: 1 } })
-    polygon.trigger('dblclick')
-
-    expect(wrapper.emitted('update-region')[0][0]).toEqual({
-      id: 'region-1',
-      changes: {
-        points: [
-          { x: 200, y: 100 },
-          { x: 300, y: 104 },
-          { x: 500, y: 100 },
-          { x: 400, y: 300 },
-        ],
-      },
-    })
+    expect(wrapper.find('.annotation-context-menu').exists()).toBe(false)
   })
 
   it('inserts a selected polygon edge point at the correct normal segment position', async () => {
@@ -3195,7 +3186,9 @@ describe('AnnotationCanvas', () => {
     const polygon = getLineInstances().find((line) => line.config.id === 'region-1')
 
     stage.getPointerPosition.mockReturnValue({ x: 225, y: 100 })
-    polygon.trigger('dblclick')
+    polygon.trigger('contextmenu', createContextMenuEvent())
+    await wrapper.vm.$nextTick()
+    await wrapper.find('.annotation-context-menu__item').trigger('click')
 
     expect(wrapper.emitted('update-region')[0][0].changes.points).toEqual([
       { x: 200, y: 100 },
@@ -3216,7 +3209,9 @@ describe('AnnotationCanvas', () => {
     const polygon = getLineInstances().find((line) => line.config.id === 'region-1')
 
     stage.getPointerPosition.mockReturnValue({ x: 150, y: 100 })
-    polygon.trigger('dblclick')
+    polygon.trigger('contextmenu', createContextMenuEvent())
+    await wrapper.vm.$nextTick()
+    await wrapper.find('.annotation-context-menu__item').trigger('click')
 
     const points = wrapper.emitted('update-region')[0][0].changes.points
 
@@ -3240,7 +3235,9 @@ describe('AnnotationCanvas', () => {
     const polygon = getLineInstances().find((line) => line.config.id === 'region-1')
 
     stage.getPointerPosition.mockReturnValue({ x: 104, y: 50 })
-    polygon.trigger('dblclick')
+    polygon.trigger('contextmenu', createContextMenuEvent())
+    await wrapper.vm.$nextTick()
+    await wrapper.find('.annotation-context-menu__item').trigger('click')
 
     expect(wrapper.emitted('update-region')[0][0].changes.points).toEqual([
       { x: 200, y: 100 },
@@ -3250,9 +3247,9 @@ describe('AnnotationCanvas', () => {
     ])
   })
 
-  it('does not add a point when double-clicking an unselected polygon', async () => {
+  it('does not add a point when double-clicking a selected polygon segment', async () => {
     const wrapper = mountCanvas({
-      selectedRegionId: null,
+      selectedRegionId: 'region-1',
       regions: [polygonRegion()],
     })
     await flushImageLoad()
@@ -3261,16 +3258,12 @@ describe('AnnotationCanvas', () => {
     const polygon = getLineInstances().find((line) => line.config.id === 'region-1')
 
     stage.getPointerPosition.mockReturnValue({ x: 150, y: 52 })
-    polygon.trigger('click', { evt: { detail: 1 } })
-    await wrapper.setProps({ selectedRegionId: 'region-1' })
-    polygon.trigger('click', { evt: { detail: 2 } })
     polygon.trigger('dblclick')
 
-    expect(wrapper.emitted('select-region')).toEqual([['region-1']])
     expect(wrapper.emitted('update-region')).toBeUndefined()
   })
 
-  it('does not add a point when double-clicking inside a selected polygon far from an edge', async () => {
+  it('shows only Delete region when right-clicking inside a selected polygon far from an edge', async () => {
     const wrapper = mountCanvas({
       selectedRegionId: 'region-1',
       regions: [polygonRegion()],
@@ -3281,28 +3274,144 @@ describe('AnnotationCanvas', () => {
     const polygon = getLineInstances().find((line) => line.config.id === 'region-1')
 
     stage.getPointerPosition.mockReturnValue({ x: 183, y: 83 })
-    polygon.trigger('dblclick')
+    polygon.trigger('contextmenu', createContextMenuEvent())
+    await wrapper.vm.$nextTick()
 
-    expect(wrapper.emitted('select-region')).toEqual([['region-1']])
+    const menu = wrapper.find('.annotation-context-menu')
+    expect(menu.text()).not.toContain('Add point')
+    expect(menu.text()).toContain('Delete region')
     expect(wrapper.emitted('update-region')).toBeUndefined()
   })
 
-  it('does not add a point when clicking or double-clicking an existing polygon vertex handle', async () => {
+  it('shows Delete point when right-clicking a polygon vertex handle', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [fourPointPolygonRegion()],
+    })
+    await flushImageLoad()
+
+    const firstVertexHandle = getCircleInstances().slice(-4)[0]
+    const event = createContextMenuEvent()
+
+    firstVertexHandle.trigger('contextmenu', event)
+    await wrapper.vm.$nextTick()
+
+    expect(event.cancelBubble).toBe(true)
+    expect(event.evt.preventDefault).toHaveBeenCalledTimes(1)
+    expect(wrapper.emitted('select-region')).toEqual([['region-1']])
+    expect(wrapper.find('.annotation-context-menu').text()).toContain('Delete point')
+    expect(wrapper.find('.annotation-context-menu').text()).toContain('Delete region')
+    expect(wrapper.emitted('update-region')).toBeUndefined()
+  })
+
+  it('deletes a point from the context menu when the point region stays valid', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [fourPointPolygonRegion()],
+    })
+    await flushImageLoad()
+
+    const firstVertexHandle = getCircleInstances().slice(-4)[0]
+
+    firstVertexHandle.trigger('contextmenu', createContextMenuEvent())
+    await wrapper.vm.$nextTick()
+    await wrapper
+      .findAll('.annotation-context-menu__item')
+      .find((button) => button.text() === 'Delete point')
+      .trigger('click')
+
+    expect(wrapper.emitted('update-region')[0][0]).toEqual({
+      id: 'region-1',
+      changes: {
+        points: [
+          { x: 500, y: 100 },
+          { x: 500, y: 300 },
+          { x: 200, y: 300 },
+        ],
+      },
+    })
+  })
+
+  it('disables Delete point when a point region has the minimum number of points', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [polylineRegion()],
+    })
+    await flushImageLoad()
+
+    const firstVertexHandle = getCircleInstances().slice(-2)[0]
+
+    firstVertexHandle.trigger('contextmenu', createContextMenuEvent())
+    await wrapper.vm.$nextTick()
+
+    const deletePointButton = wrapper
+      .findAll('.annotation-context-menu__item')
+      .find((button) => button.text() === 'Delete point')
+
+    expect(deletePointButton.attributes('disabled')).toBeDefined()
+  })
+
+  it('closes the context menu on outside click and Escape', async () => {
     const wrapper = mountCanvas({
       selectedRegionId: 'region-1',
       regions: [polygonRegion()],
     })
     await flushImageLoad()
 
-    const firstVertexHandle = getCircleInstances().slice(-3)[0]
-    const event = {}
+    const stage = getLatestStage()
+    const polygon = getLineInstances().find((line) => line.config.id === 'region-1')
 
-    firstVertexHandle.trigger('click', event)
-    firstVertexHandle.trigger('dblclick')
+    stage.getPointerPosition.mockReturnValue({ x: 150, y: 52 })
+    polygon.trigger('contextmenu', createContextMenuEvent())
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.annotation-context-menu').exists()).toBe(true)
 
-    expect(event.cancelBubble).toBe(true)
-    expect(wrapper.emitted('select-region')).toEqual([['region-1']])
-    expect(wrapper.emitted('update-region')).toBeUndefined()
+    window.dispatchEvent(new MouseEvent('click'))
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.annotation-context-menu').exists()).toBe(false)
+
+    polygon.trigger('contextmenu', createContextMenuEvent())
+    await wrapper.vm.$nextTick()
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('.annotation-context-menu').exists()).toBe(false)
+  })
+
+  it('deletes a region from the context menu', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [rectangleRegion()],
+    })
+    await flushImageLoad()
+
+    const rectangle = getRectInstances().find((rect) => rect.config.id === 'region-1')
+
+    rectangle.trigger('contextmenu', createContextMenuEvent())
+    await wrapper.vm.$nextTick()
+    await wrapper
+      .findAll('.annotation-context-menu__item')
+      .find((button) => button.text() === 'Delete region')
+      .trigger('click')
+
+    expect(wrapper.emitted('delete-selected-region')).toEqual([[]])
+    expect(wrapper.find('.annotation-context-menu').exists()).toBe(false)
+  })
+
+  it('does not block the native context menu outside a region', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [polygonRegion()],
+    })
+    await flushImageLoad()
+
+    const event = createContextMenuEvent()
+
+    getLatestStage().trigger('contextmenu', event)
+    await wrapper.vm.$nextTick()
+
+    expect(event.evt.preventDefault).not.toHaveBeenCalled()
+    expect(wrapper.find('.annotation-context-menu').exists()).toBe(false)
   })
 
   it('emits a polyline region after multiple clicks and Enter', async () => {
@@ -3717,7 +3826,7 @@ describe('AnnotationCanvas', () => {
     expect(wrapper.emitted('update-region')).toBeUndefined()
   })
 
-  it('adds a point to the double-clicked segment of an already selected polyline', async () => {
+  it('adds a point to a selected polyline segment from the context menu', async () => {
     const wrapper = mountCanvas({
       selectedRegionId: 'region-1',
       regions: [threePointPolylineRegion()],
@@ -3728,7 +3837,9 @@ describe('AnnotationCanvas', () => {
     const polyline = getLineInstances().find((line) => line.config.id === 'region-1')
 
     stage.getPointerPosition.mockReturnValue({ x: 150, y: 52 })
-    polyline.trigger('dblclick')
+    polyline.trigger('contextmenu', createContextMenuEvent())
+    await wrapper.vm.$nextTick()
+    await wrapper.find('.annotation-context-menu__item').trigger('click')
 
     expect(wrapper.emitted('update-region')[0][0]).toEqual({
       id: 'region-1',
@@ -3741,7 +3852,7 @@ describe('AnnotationCanvas', () => {
         ],
       },
     })
-    expect(wrapper.emitted('select-region')).toBeUndefined()
+    expect(wrapper.emitted('select-region')).toEqual([['region-1']])
   })
 
   it('does not insert a polyline segment point that would create a segment below 4 visible px', async () => {
@@ -3755,12 +3866,14 @@ describe('AnnotationCanvas', () => {
     const polyline = getLineInstances().find((line) => line.config.id === 'region-1')
 
     stage.getPointerPosition.mockReturnValue({ x: 101, y: 50 })
-    polyline.trigger('dblclick')
+    polyline.trigger('contextmenu', createContextMenuEvent())
+    await wrapper.vm.$nextTick()
+    await wrapper.find('.annotation-context-menu__item').trigger('click')
 
     expect(wrapper.emitted('update-region')).toBeUndefined()
   })
 
-  it('adds a point on the first double-click after selecting a polyline', async () => {
+  it('shows Add point after right-clicking to select a polyline', async () => {
     const wrapper = mountCanvas({
       selectedRegionId: null,
       regions: [threePointPolylineRegion()],
@@ -3774,20 +3887,12 @@ describe('AnnotationCanvas', () => {
     await wrapper.setProps({ selectedRegionId: 'region-1' })
 
     stage.getPointerPosition.mockReturnValue({ x: 150, y: 52 })
-    polyline.trigger('click', { evt: { detail: 1 } })
-    polyline.trigger('dblclick')
+    polyline.trigger('contextmenu', createContextMenuEvent())
+    await wrapper.vm.$nextTick()
 
-    expect(wrapper.emitted('update-region')[0][0]).toEqual({
-      id: 'region-1',
-      changes: {
-        points: [
-          { x: 200, y: 100 },
-          { x: 300, y: 104 },
-          { x: 500, y: 100 },
-          { x: 400, y: 300 },
-        ],
-      },
-    })
+    expect(wrapper.emitted('select-region')).toEqual([['region-1'], ['region-1']])
+    expect(wrapper.find('.annotation-context-menu').text()).toContain('Add point')
+    expect(wrapper.emitted('update-region')).toBeUndefined()
   })
 
   it('adds a point before the first point when the first polyline endpoint is selected', async () => {
@@ -4067,7 +4172,9 @@ describe('AnnotationCanvas', () => {
     const polyline = getLineInstances().find((line) => line.config.id === 'region-1')
 
     stage.getPointerPosition.mockReturnValue({ x: 225, y: 100 })
-    polyline.trigger('dblclick')
+    polyline.trigger('contextmenu', createContextMenuEvent())
+    await wrapper.vm.$nextTick()
+    await wrapper.find('.annotation-context-menu__item').trigger('click')
 
     expect(wrapper.emitted('update-region')[0][0].changes.points).toEqual([
       { x: 200, y: 100 },
@@ -4077,9 +4184,9 @@ describe('AnnotationCanvas', () => {
     ])
   })
 
-  it('does not add a point when double-clicking a non-selected polyline', async () => {
+  it('does not add a point when double-clicking a selected polyline segment', async () => {
     const wrapper = mountCanvas({
-      selectedRegionId: null,
+      selectedRegionId: 'region-1',
       regions: [threePointPolylineRegion()],
     })
     await flushImageLoad()
@@ -4088,16 +4195,12 @@ describe('AnnotationCanvas', () => {
     const polyline = getLineInstances().find((line) => line.config.id === 'region-1')
 
     stage.getPointerPosition.mockReturnValue({ x: 150, y: 52 })
-    polyline.trigger('click', { evt: { detail: 1 } })
-    await wrapper.setProps({ selectedRegionId: 'region-1' })
-    polyline.trigger('click', { evt: { detail: 2 } })
     polyline.trigger('dblclick')
 
-    expect(wrapper.emitted('select-region')).toEqual([['region-1']])
     expect(wrapper.emitted('update-region')).toBeUndefined()
   })
 
-  it('does not add a point when double-clicking far from all selected polyline segments', async () => {
+  it('shows only Delete region when right-clicking far from all selected polyline segments', async () => {
     const wrapper = mountCanvas({
       selectedRegionId: 'region-1',
       regions: [threePointPolylineRegion()],
@@ -4108,9 +4211,12 @@ describe('AnnotationCanvas', () => {
     const polyline = getLineInstances().find((line) => line.config.id === 'region-1')
 
     stage.getPointerPosition.mockReturnValue({ x: 10, y: 200 })
-    polyline.trigger('dblclick')
+    polyline.trigger('contextmenu', createContextMenuEvent())
+    await wrapper.vm.$nextTick()
 
-    expect(wrapper.emitted('select-region')).toEqual([['region-1']])
+    const menu = wrapper.find('.annotation-context-menu')
+    expect(menu.text()).not.toContain('Add point')
+    expect(menu.text()).toContain('Delete region')
     expect(wrapper.emitted('update-region')).toBeUndefined()
   })
 
@@ -4157,7 +4263,7 @@ describe('AnnotationCanvas', () => {
     ])
   })
 
-  it('does not add a point when clicking or double-clicking an existing polyline vertex handle', async () => {
+  it('does not add a point when clicking an existing polyline vertex handle', async () => {
     const wrapper = mountCanvas({
       selectedRegionId: 'region-1',
       regions: [threePointPolylineRegion()],
@@ -4167,56 +4273,9 @@ describe('AnnotationCanvas', () => {
     const middleVertexHandle = getCircleInstances().slice(-3)[1]
 
     middleVertexHandle.trigger('click')
-    middleVertexHandle.trigger('dblclick')
 
     expect(wrapper.emitted('select-region')).toEqual([['region-1']])
     expect(wrapper.emitted('update-region')).toBeUndefined()
-  })
-
-  it('does not add a point after dragging the selected polyline', async () => {
-    const wrapper = mountCanvas({
-      selectedRegionId: 'region-1',
-      regions: [threePointPolylineRegion()],
-    })
-    await flushImageLoad()
-
-    const stage = getLatestStage()
-    const polyline = getLineInstances().find((line) => line.config.id === 'region-1')
-
-    stage.getPointerPosition.mockReturnValue({ x: 150, y: 52 })
-    polyline.trigger('dragstart')
-    polyline.trigger('dragend')
-    polyline.trigger('dblclick')
-
-    expect(wrapper.emitted('update-region')).toHaveLength(1)
-    expect(wrapper.emitted('update-region')[0][0].changes.points).toEqual([
-      { x: 200, y: 100 },
-      { x: 500, y: 100 },
-      { x: 400, y: 300 },
-    ])
-  })
-
-  it('does not add a point after dragging the selected polygon', async () => {
-    const wrapper = mountCanvas({
-      selectedRegionId: 'region-1',
-      regions: [polygonRegion()],
-    })
-    await flushImageLoad()
-
-    const stage = getLatestStage()
-    const polygon = getLineInstances().find((line) => line.config.id === 'region-1')
-
-    stage.getPointerPosition.mockReturnValue({ x: 150, y: 52 })
-    polygon.trigger('dragstart')
-    polygon.trigger('dragend')
-    polygon.trigger('dblclick')
-
-    expect(wrapper.emitted('update-region')).toHaveLength(1)
-    expect(wrapper.emitted('update-region')[0][0].changes.points).toEqual([
-      { x: 200, y: 100 },
-      { x: 500, y: 100 },
-      { x: 400, y: 300 },
-    ])
   })
 
   it('selects a polyline vertex handle without bubbling to the canvas', async () => {

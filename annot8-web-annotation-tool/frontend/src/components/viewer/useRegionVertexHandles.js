@@ -22,6 +22,7 @@ export function useRegionVertexHandles({
   markEditInteractionFinished = () => {},
   updateRegion,
   renderRegions,
+  handleVertexContextMenu = () => {},
 }) {
   function createRegionVertexHandles(region, pointRegionNode) {
     const { scaleX, scaleY } = getRegionScale()
@@ -101,6 +102,10 @@ export function useRegionVertexHandles({
         selectRegion(region.id)
       })
 
+      handle.on('contextmenu', (event) => {
+        handleVertexContextMenu({ event, region, pointIndex: index })
+      })
+
       handle.on('dragstart', () => {
         if (getActiveTool() !== 'select') return
 
@@ -108,12 +113,6 @@ export function useRegionVertexHandles({
         markEditInteractionStarted()
         setIsVertexHandleDragging(true)
         setStageCursor('grabbing')
-      })
-
-      handle.on('dblclick dbltap', (event) => {
-        if (event) {
-          event.cancelBubble = true
-        }
       })
 
       handle.on('dragmove', (event) => {

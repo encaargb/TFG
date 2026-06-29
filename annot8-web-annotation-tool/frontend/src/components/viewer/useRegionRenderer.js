@@ -12,7 +12,6 @@ import {
 } from './annotationCanvasConstants'
 
 export function useRegionRenderer({
-  getStage,
   getRegionLayer,
   hasPageImage,
   getCurrentPageRegions,
@@ -24,16 +23,13 @@ export function useRegionRenderer({
   clearPolylineEndpointPreview,
   clearSelectedPoint,
   attachRegionCursorHandlers,
-  handleRegionClickSuppression,
-  handleRegionDoubleClickSuppression,
-  insertPointIntoSegment,
+  handleRegionContextMenu,
   attachRectangleEditing,
   getRectangleDragBoundPosition,
   attachPointRegionDragging,
   getPointRegionDragBoundPosition,
   createRegionVertexHandles,
   handleRegionBodyClick,
-  selectRegionDirect,
 }) {
   let transformer = null
   let vertexHandles = []
@@ -115,6 +111,10 @@ export function useRegionRenderer({
       handleRegionBodyClick(event, region.id)
     })
 
+    node.on('contextmenu', (event) => {
+      handleRegionContextMenu({ event, region, visiblePoints: null, isPolygon: false })
+    })
+
     attachRectangleEditing({ node, region, transformer, scaleX, scaleY })
 
     return node
@@ -145,28 +145,13 @@ export function useRegionRenderer({
     node.on('click tap', (event) => {
       if (getActiveTool() !== 'select') return
       if (event?.evt?.detail > 1) return
-      if (handleRegionClickSuppression(region, event)) return
+      clearSelectedPoint()
 
       handleRegionBodyClick(event, region.id)
     })
 
-    node.on('dblclick dbltap', () => {
-      if (getActiveTool() !== 'select') return
-
-      if (handleRegionDoubleClickSuppression()) return
-
-      if (
-        insertPointIntoSegment({
-          region,
-          visiblePoints,
-          isPolygon,
-          pointerPosition: getStage().getPointerPosition(),
-        })
-      ) {
-        return
-      }
-
-      selectRegionDirect(region.id)
+    node.on('contextmenu', (event) => {
+      handleRegionContextMenu({ event, region, visiblePoints, isPolygon })
     })
 
     attachPointRegionDragging({ node, region, visiblePoints, scaleX, scaleY })

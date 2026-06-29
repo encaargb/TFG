@@ -25,7 +25,6 @@ export function useRegionPointEditing({
   updateRegion,
 }) {
   let selectedPointRegionPoint = null
-  let suppressPointRegionDoubleClick = false
   let polylineEndpointExtensionPreviewNode = null
 
   function getSelectedPoint() {
@@ -116,7 +115,7 @@ export function useRegionPointEditing({
     regionLayer.draw()
   }
 
-  function insertPointIntoSegment({ region, visiblePoints, isPolygon, pointerPosition }) {
+  function insertPointIntoSegment({ region, visiblePoints, isPolygon, pointerPosition, segmentIndex }) {
     if (
       !['polygon', 'polyline'].includes(region.type) ||
       getActiveTool() !== 'select' ||
@@ -125,16 +124,26 @@ export function useRegionPointEditing({
       return false
     }
 
-    const segmentIndex = getClosestPointRegionSegmentIndex(
+    const targetSegmentIndex = Number.isInteger(segmentIndex)
+      ? segmentIndex
+      : getInsertPointSegmentIndex({ visiblePoints, isPolygon, pointerPosition })
+    const documentPoint = getDocumentCoordinatesFromPointer(pointerPosition)
+
+    if (targetSegmentIndex === -1 || !documentPoint) return false
+
+    return insertPointAtSegmentIndex({ region, segmentIndex: targetSegmentIndex, documentPoint })
+  }
+
+  function getInsertPointSegmentIndex({ visiblePoints, isPolygon, pointerPosition }) {
+    return getClosestPointRegionSegmentIndex(
       pointerPosition,
       visiblePoints,
       isPolygon,
       POINT_REGION_SEGMENT_HIT_TOLERANCE
     )
-    const documentPoint = getDocumentCoordinatesFromPointer(pointerPosition)
+  }
 
-    if (segmentIndex === -1 || !documentPoint) return false
-
+  function insertPointAtSegmentIndex({ region, segmentIndex, documentPoint }) {
     // Inserting after the hit segment preserves the existing polygon or polyline order.
     const insertIndex = segmentIndex + 1
     const points = [
@@ -216,37 +225,24 @@ export function useRegionPointEditing({
     return true
   }
 
+  function canDeleteSelectedPoint() {
+    if (!selectedPointRegionPoint) return false
+
+    const { regionId } = selectedPointRegionPoint
+    const region = getRegions().find((candidate) => candidate.id === regionId)
+
+    if (!region || !['polygon', 'polyline'].includes(region.type)) return false
+
+    return region.points.length > getPointRegionMinimumPointCount(region.type)
+  }
+
   function prepareRegionClick() {
-    // A completed drag can still be followed by a double-click event from the same gesture.
-    suppressPointRegionDoubleClick = true
     clearSelectedPoint()
-  }
-
-  function handleRegionClickSuppression(region, event) {
-    clearSelectedPoint()
-
-    if (getSelectedRegionId() !== region.id) {
-      suppressPointRegionDoubleClick = true
-    } else if ((event?.evt?.detail ?? 1) <= 1) {
-      suppressPointRegionDoubleClick = false
-    }
-
-    return false
-  }
-
-  function handleRegionDoubleClickSuppression() {
-    if (suppressPointRegionDoubleClick) {
-      suppressPointRegionDoubleClick = false
-      return true
-    }
-
-    return false
   }
 
   function resetPointEditing() {
     clearSelectedPoint()
     clearPolylineEndpointPreview(false)
-    suppressPointRegionDoubleClick = false
   }
 
   function disposePointEditing() {
@@ -255,13 +251,14 @@ export function useRegionPointEditing({
     }
 
     selectedPointRegionPoint = null
-    suppressPointRegionDoubleClick = false
     polylineEndpointExtensionPreviewNode = null
   }
 
   return {
     clearSelectedPoint,
+    canDeleteSelectedPoint,
     deleteSelectedPoint,
+    getInsertPointSegmentIndex,
     insertPointIntoSegment,
     insertPolylineEndpoint,
     updatePolylineEndpointPreview,
@@ -269,8 +266,6 @@ export function useRegionPointEditing({
     getSelectedPoint,
     setSelectedPoint,
     prepareRegionClick,
-    handleRegionClickSuppression,
-    handleRegionDoubleClickSuppression,
     resetPointEditing,
     disposePointEditing,
   }
