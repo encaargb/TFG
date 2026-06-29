@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import Konva from 'konva'
-import AnnotationCanvas from '../../../src/components/viewer/AnnotationCanvas.vue'
 import {
   getImageInstances,
   getLayerInstances,
@@ -13,7 +14,20 @@ import {
   resetKonvaMocks,
 } from '../../setup'
 
+const contextMenuMock = vi.hoisted(() => ({
+  showContextMenu: vi.fn(),
+  closeContextMenu: vi.fn(),
+}))
+
+vi.mock('@imengyu/vue3-context-menu', () => ({
+  default: contextMenuMock,
+}))
+
+import AnnotationCanvas from '../../../src/components/viewer/AnnotationCanvas.vue'
+
 const flushImageLoad = () => new Promise((resolve) => setTimeout(resolve, 0))
+const annotationCanvasSourcePath = resolve('src/components/viewer/AnnotationCanvas.vue')
+const viewerPageSourcePath = resolve('src/views/ViewerPage.vue')
 
 function mountCanvas(props = {}) {
   return mount(AnnotationCanvas, {
@@ -48,6 +62,20 @@ const sampleSchemaPublications = [
               type: 'ANNOTATION',
               'taxonomy-path': '58/annotation-class-1/annotation-1',
               children: [],
+            },
+            {
+              id: 'annotation-class-2',
+              name: 'Nested Class',
+              type: 'ANNOTATION-CLASS',
+              children: [
+                {
+                  id: 'annotation-2',
+                  name: 'Nested Leaf',
+                  type: 'ANNOTATION',
+                  'taxonomy-path': '58/annotation-class-1/annotation-class-2/annotation-2',
+                  children: [],
+                },
+              ],
             },
           ],
         },
@@ -204,6 +232,25 @@ function createContextMenuEvent(overrides = {}) {
   }
 }
 
+function latestContextMenuOptions() {
+  return contextMenuMock.showContextMenu.mock.calls.at(-1)?.[0]
+}
+
+function latestContextMenuItems() {
+  return latestContextMenuOptions()?.items ?? []
+}
+
+function findContextMenuItem(items, label) {
+  for (const item of items) {
+    if (item.label === label) return item
+
+    const child = item.children ? findContextMenuItem(item.children, label) : null
+    if (child) return child
+  }
+
+  return null
+}
+
 describe('AnnotationCanvas', () => {
   beforeEach(() => {
     resetKonvaMocks()
@@ -213,6 +260,8 @@ describe('AnnotationCanvas', () => {
     Konva.Rect.mockClear()
     Konva.Line.mockClear()
     Konva.Transformer.mockClear()
+    contextMenuMock.showContextMenu.mockClear()
+    contextMenuMock.closeContextMenu.mockClear()
   })
 
   it('creates the Konva stage, layers, and selected page image', async () => {
@@ -235,6 +284,17 @@ describe('AnnotationCanvas', () => {
         height: 500,
       })
     )
+  })
+
+  it('does not import raw schema JSON or keep the previous popover tree renderer', () => {
+    const annotationCanvasSource = readFileSync(annotationCanvasSourcePath, 'utf8')
+    const viewerPageSource = readFileSync(viewerPageSourcePath, 'utf8')
+
+    expect(annotationCanvasSource).not.toContain('ProjectDocumentSchemas')
+    expect(viewerPageSource).not.toContain('ProjectDocumentSchemas')
+    expect(annotationCanvasSource).not.toContain('BPopover')
+    expect(annotationCanvasSource).not.toContain('annotation-taxonomy')
+    expect(annotationCanvasSource).not.toContain('expandedAnnotationNodeIds')
   })
 
   it('renders rectangle regions and attaches the transformer to the selected rectangle', async () => {
@@ -3169,8 +3229,18 @@ describe('AnnotationCanvas', () => {
     await wrapper.vm.$nextTick()
 
     expect(event.evt.preventDefault).toHaveBeenCalledTimes(1)
-    expect(wrapper.find('.annotation-context-menu').text()).toContain('Add point')
-    expect(wrapper.find('.annotation-context-menu').text()).toContain('Delete region')
+    expect(latestContextMenuOptions()).toEqual(
+      expect.objectContaining({
+        x: 150,
+        y: 52,
+        adjustPosition: true,
+        theme: 'annot8',
+      })
+    )
+    expect(latestContextMenuItems().map((item) => item.label)).toEqual([
+      'Add point',
+      'Delete region',
+    ])
     expect(wrapper.emitted('select-region')).toEqual([['region-1']])
   })
 
@@ -3189,7 +3259,7 @@ describe('AnnotationCanvas', () => {
     await wrapper.vm.$nextTick()
 
     stage.getPointerPosition.mockReturnValue({ x: 900, y: 400 })
-    await wrapper.find('.annotation-context-menu__item').trigger('click')
+    findContextMenuItem(latestContextMenuItems(), 'Add point').onClick()
 
     expect(wrapper.emitted('update-region')[0][0]).toEqual({
       id: 'region-1',
@@ -3202,7 +3272,7 @@ describe('AnnotationCanvas', () => {
         ],
       },
     })
-    expect(wrapper.find('.annotation-context-menu').exists()).toBe(false)
+    expect(contextMenuMock.closeContextMenu).toHaveBeenCalledTimes(1)
   })
 
   it('inserts a selected polygon edge point at the correct normal segment position', async () => {
@@ -3218,7 +3288,7 @@ describe('AnnotationCanvas', () => {
     stage.getPointerPosition.mockReturnValue({ x: 225, y: 100 })
     polygon.trigger('contextmenu', createContextMenuEvent())
     await wrapper.vm.$nextTick()
-    await wrapper.find('.annotation-context-menu__item').trigger('click')
+    findContextMenuItem(latestContextMenuItems(), 'Add point').onClick()
 
     expect(wrapper.emitted('update-region')[0][0].changes.points).toEqual([
       { x: 200, y: 100 },
@@ -3241,7 +3311,7 @@ describe('AnnotationCanvas', () => {
     stage.getPointerPosition.mockReturnValue({ x: 150, y: 100 })
     polygon.trigger('contextmenu', createContextMenuEvent())
     await wrapper.vm.$nextTick()
-    await wrapper.find('.annotation-context-menu__item').trigger('click')
+    findContextMenuItem(latestContextMenuItems(), 'Add point').onClick()
 
     const points = wrapper.emitted('update-region')[0][0].changes.points
 
@@ -3267,7 +3337,7 @@ describe('AnnotationCanvas', () => {
     stage.getPointerPosition.mockReturnValue({ x: 104, y: 50 })
     polygon.trigger('contextmenu', createContextMenuEvent())
     await wrapper.vm.$nextTick()
-    await wrapper.find('.annotation-context-menu__item').trigger('click')
+    findContextMenuItem(latestContextMenuItems(), 'Add point').onClick()
 
     expect(wrapper.emitted('update-region')[0][0].changes.points).toEqual([
       { x: 200, y: 100 },
@@ -3307,9 +3377,7 @@ describe('AnnotationCanvas', () => {
     polygon.trigger('contextmenu', createContextMenuEvent())
     await wrapper.vm.$nextTick()
 
-    const menu = wrapper.find('.annotation-context-menu')
-    expect(menu.text()).not.toContain('Add point')
-    expect(menu.text()).toContain('Delete region')
+    expect(latestContextMenuItems().map((item) => item.label)).toEqual(['Delete region'])
     expect(wrapper.emitted('update-region')).toBeUndefined()
   })
 
@@ -3329,8 +3397,10 @@ describe('AnnotationCanvas', () => {
     expect(event.cancelBubble).toBe(true)
     expect(event.evt.preventDefault).toHaveBeenCalledTimes(1)
     expect(wrapper.emitted('select-region')).toEqual([['region-1']])
-    expect(wrapper.find('.annotation-context-menu').text()).toContain('Delete point')
-    expect(wrapper.find('.annotation-context-menu').text()).toContain('Delete region')
+    expect(latestContextMenuItems().map((item) => item.label)).toEqual([
+      'Delete point',
+      'Delete region',
+    ])
     expect(wrapper.emitted('update-region')).toBeUndefined()
   })
 
@@ -3345,10 +3415,7 @@ describe('AnnotationCanvas', () => {
 
     firstVertexHandle.trigger('contextmenu', createContextMenuEvent())
     await wrapper.vm.$nextTick()
-    await wrapper
-      .findAll('.annotation-context-menu__item')
-      .find((button) => button.text() === 'Delete point')
-      .trigger('click')
+    findContextMenuItem(latestContextMenuItems(), 'Delete point').onClick()
 
     expect(wrapper.emitted('update-region')[0][0]).toEqual({
       id: 'region-1',
@@ -3374,11 +3441,7 @@ describe('AnnotationCanvas', () => {
     firstVertexHandle.trigger('contextmenu', createContextMenuEvent())
     await wrapper.vm.$nextTick()
 
-    const deletePointButton = wrapper
-      .findAll('.annotation-context-menu__item')
-      .find((button) => button.text() === 'Delete point')
-
-    expect(deletePointButton.attributes('disabled')).toBeDefined()
+    expect(findContextMenuItem(latestContextMenuItems(), 'Delete point').disabled).toBe(true)
   })
 
   it('closes the context menu on outside click and Escape', async () => {
@@ -3394,18 +3457,24 @@ describe('AnnotationCanvas', () => {
     stage.getPointerPosition.mockReturnValue({ x: 150, y: 52 })
     polygon.trigger('contextmenu', createContextMenuEvent())
     await wrapper.vm.$nextTick()
-    expect(wrapper.find('.annotation-context-menu').exists()).toBe(true)
+    expect(contextMenuMock.showContextMenu).toHaveBeenCalledTimes(1)
 
+    const closeCountBeforeClick = contextMenuMock.closeContextMenu.mock.calls.length
     window.dispatchEvent(new MouseEvent('click'))
     await wrapper.vm.$nextTick()
-    expect(wrapper.find('.annotation-context-menu').exists()).toBe(false)
+    expect(contextMenuMock.closeContextMenu.mock.calls.length).toBeGreaterThan(
+      closeCountBeforeClick
+    )
 
     polygon.trigger('contextmenu', createContextMenuEvent())
     await wrapper.vm.$nextTick()
+    const closeCountBeforeEscape = contextMenuMock.closeContextMenu.mock.calls.length
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     await wrapper.vm.$nextTick()
 
-    expect(wrapper.find('.annotation-context-menu').exists()).toBe(false)
+    expect(contextMenuMock.closeContextMenu.mock.calls.length).toBeGreaterThan(
+      closeCountBeforeEscape
+    )
   })
 
   it('deletes a region from the context menu', async () => {
@@ -3419,13 +3488,10 @@ describe('AnnotationCanvas', () => {
 
     rectangle.trigger('contextmenu', createContextMenuEvent())
     await wrapper.vm.$nextTick()
-    await wrapper
-      .findAll('.annotation-context-menu__item')
-      .find((button) => button.text() === 'Delete region')
-      .trigger('click')
+    findContextMenuItem(latestContextMenuItems(), 'Delete region').onClick()
 
     expect(wrapper.emitted('delete-selected-region')).toEqual([[]])
-    expect(wrapper.find('.annotation-context-menu').exists()).toBe(false)
+    expect(contextMenuMock.closeContextMenu).toHaveBeenCalledTimes(1)
   })
 
   it('shows loaded schema publications in the region context menu', async () => {
@@ -3441,16 +3507,15 @@ describe('AnnotationCanvas', () => {
     rectangle.trigger('contextmenu', createContextMenuEvent())
     await wrapper.vm.$nextTick()
 
-    const menu = wrapper.find('.annotation-context-menu')
-    expect(menu.text()).toContain('Add annotation')
+    const addAnnotation = findContextMenuItem(latestContextMenuItems(), 'Add annotation')
 
-    await wrapper.findAll('.annotation-context-menu__item').find((button) => {
-      return button.text() === 'Add annotation'
-    }).trigger('click')
-
-    expect(wrapper.find('.annotation-taxonomy-panel').text()).toContain(
-      'VLT: Morphology: Framing Structure (v.2)'
-    )
+    expect(latestContextMenuItems().map((item) => item.label)).toEqual([
+      'Add annotation',
+      'Delete region',
+    ])
+    expect(addAnnotation.children.map((item) => item.label)).toEqual([
+      'VLT: Morphology: Framing Structure (v.2)',
+    ])
   })
 
   it('keeps annotation class nodes as navigation items without assigning them', async () => {
@@ -3465,16 +3530,12 @@ describe('AnnotationCanvas', () => {
 
     rectangle.trigger('contextmenu', createContextMenuEvent())
     await wrapper.vm.$nextTick()
-    await wrapper.findAll('.annotation-context-menu__item').find((button) => {
-      return button.text() === 'Add annotation'
-    }).trigger('click')
-    await wrapper.findAll('.annotation-taxonomy__item').find((button) => {
-      return button.text().includes('Attentional Types')
-    }).trigger('click')
+    const annotationClass = findContextMenuItem(latestContextMenuItems(), 'Attentional Types')
+    const nestedClass = findContextMenuItem(latestContextMenuItems(), 'Nested Class')
 
+    expect(annotationClass.children.map((item) => item.label)).toEqual(['Macro', 'Nested Class'])
+    expect(nestedClass.children.map((item) => item.label)).toEqual(['Nested Leaf'])
     expect(wrapper.emitted('update-region')).toBeUndefined()
-    expect(wrapper.find('.annotation-context-menu').exists()).toBe(true)
-    expect(wrapper.find('.annotation-taxonomy-panel').text()).toContain('Macro')
   })
 
   it('assigns an annotation to the context-menu region and closes the menu', async () => {
@@ -3489,15 +3550,7 @@ describe('AnnotationCanvas', () => {
 
     rectangle.trigger('contextmenu', createContextMenuEvent())
     await wrapper.vm.$nextTick()
-    await wrapper.findAll('.annotation-context-menu__item').find((button) => {
-      return button.text() === 'Add annotation'
-    }).trigger('click')
-    await wrapper.findAll('.annotation-taxonomy__item').find((button) => {
-      return button.text().includes('Attentional Types')
-    }).trigger('click')
-    await wrapper.findAll('.annotation-taxonomy__item').find((button) => {
-      return button.text() === 'Macro'
-    }).trigger('click')
+    findContextMenuItem(latestContextMenuItems(), 'Macro').onClick()
 
     expect(wrapper.emitted('update-region')[0][0]).toEqual({
       id: 'region-1',
@@ -3511,7 +3564,7 @@ describe('AnnotationCanvas', () => {
         ],
       },
     })
-    expect(wrapper.find('.annotation-context-menu').exists()).toBe(false)
+    expect(contextMenuMock.closeContextMenu).toHaveBeenCalledTimes(1)
   })
 
   it('does not block the native context menu outside a region', async () => {
@@ -3527,7 +3580,7 @@ describe('AnnotationCanvas', () => {
     await wrapper.vm.$nextTick()
 
     expect(event.evt.preventDefault).not.toHaveBeenCalled()
-    expect(wrapper.find('.annotation-context-menu').exists()).toBe(false)
+    expect(contextMenuMock.showContextMenu).not.toHaveBeenCalled()
   })
 
   it('emits a polyline region after multiple clicks and Enter', async () => {
@@ -3955,7 +4008,7 @@ describe('AnnotationCanvas', () => {
     stage.getPointerPosition.mockReturnValue({ x: 150, y: 52 })
     polyline.trigger('contextmenu', createContextMenuEvent())
     await wrapper.vm.$nextTick()
-    await wrapper.find('.annotation-context-menu__item').trigger('click')
+    findContextMenuItem(latestContextMenuItems(), 'Add point').onClick()
 
     expect(wrapper.emitted('update-region')[0][0]).toEqual({
       id: 'region-1',
@@ -3984,7 +4037,7 @@ describe('AnnotationCanvas', () => {
     stage.getPointerPosition.mockReturnValue({ x: 101, y: 50 })
     polyline.trigger('contextmenu', createContextMenuEvent())
     await wrapper.vm.$nextTick()
-    await wrapper.find('.annotation-context-menu__item').trigger('click')
+    findContextMenuItem(latestContextMenuItems(), 'Add point').onClick()
 
     expect(wrapper.emitted('update-region')).toBeUndefined()
   })
@@ -4007,7 +4060,7 @@ describe('AnnotationCanvas', () => {
     await wrapper.vm.$nextTick()
 
     expect(wrapper.emitted('select-region')).toEqual([['region-1'], ['region-1']])
-    expect(wrapper.find('.annotation-context-menu').text()).toContain('Add point')
+    expect(findContextMenuItem(latestContextMenuItems(), 'Add point')).toBeTruthy()
     expect(wrapper.emitted('update-region')).toBeUndefined()
   })
 
@@ -4290,7 +4343,7 @@ describe('AnnotationCanvas', () => {
     stage.getPointerPosition.mockReturnValue({ x: 225, y: 100 })
     polyline.trigger('contextmenu', createContextMenuEvent())
     await wrapper.vm.$nextTick()
-    await wrapper.find('.annotation-context-menu__item').trigger('click')
+    findContextMenuItem(latestContextMenuItems(), 'Add point').onClick()
 
     expect(wrapper.emitted('update-region')[0][0].changes.points).toEqual([
       { x: 200, y: 100 },
@@ -4330,9 +4383,7 @@ describe('AnnotationCanvas', () => {
     polyline.trigger('contextmenu', createContextMenuEvent())
     await wrapper.vm.$nextTick()
 
-    const menu = wrapper.find('.annotation-context-menu')
-    expect(menu.text()).not.toContain('Add point')
-    expect(menu.text()).toContain('Delete region')
+    expect(latestContextMenuItems().map((item) => item.label)).toEqual(['Delete region'])
     expect(wrapper.emitted('update-region')).toBeUndefined()
   })
 

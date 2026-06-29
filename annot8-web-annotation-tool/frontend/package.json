@@ -12,6 +12,7 @@
     "test:html:open": "vitest --run --reporter=html --outputFile=./html/index.html && vitest --ui"
   },
   "dependencies": {
+    "@imengyu/vue3-context-menu": "^1.5.4",
     "@lucide/vue": "^1.20.0",
     "@timohausmann/quadtree-ts": "2.3.0",
     "bootstrap": "^5.3.8",
