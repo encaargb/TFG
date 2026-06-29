@@ -3444,7 +3444,7 @@ describe('AnnotationCanvas', () => {
     expect(findContextMenuItem(latestContextMenuItems(), 'Delete point').disabled).toBe(true)
   })
 
-  it('closes the context menu on outside click and Escape', async () => {
+  it('closes the context menu when the canvas unmounts', async () => {
     const wrapper = mountCanvas({
       selectedRegionId: 'region-1',
       regions: [polygonRegion()],
@@ -3459,21 +3459,11 @@ describe('AnnotationCanvas', () => {
     await wrapper.vm.$nextTick()
     expect(contextMenuMock.showContextMenu).toHaveBeenCalledTimes(1)
 
-    const closeCountBeforeClick = contextMenuMock.closeContextMenu.mock.calls.length
-    window.dispatchEvent(new MouseEvent('click'))
-    await wrapper.vm.$nextTick()
-    expect(contextMenuMock.closeContextMenu.mock.calls.length).toBeGreaterThan(
-      closeCountBeforeClick
-    )
-
-    polygon.trigger('contextmenu', createContextMenuEvent())
-    await wrapper.vm.$nextTick()
-    const closeCountBeforeEscape = contextMenuMock.closeContextMenu.mock.calls.length
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
-    await wrapper.vm.$nextTick()
+    const closeCountBeforeUnmount = contextMenuMock.closeContextMenu.mock.calls.length
+    wrapper.unmount()
 
     expect(contextMenuMock.closeContextMenu.mock.calls.length).toBeGreaterThan(
-      closeCountBeforeEscape
+      closeCountBeforeUnmount
     )
   })
 

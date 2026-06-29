@@ -324,8 +324,6 @@ function selectRegionForEditing(regionId) {
 }
 
 function closeContextMenu() {
-  if (!contextMenu.value.visible) return
-
   contextMenu.value = { ...emptyContextMenu }
   ContextMenu.closeContextMenu()
 }
@@ -461,16 +459,6 @@ function addContextMenuAnnotation({ schemaPublication, annotation }) {
     },
   })
   closeContextMenu()
-}
-
-function handleContextMenuOutsideClick() {
-  closeContextMenu()
-}
-
-function handleContextMenuKeydown(event) {
-  if (event.key === 'Escape') {
-    closeContextMenu()
-  }
 }
 
 const {
@@ -756,8 +744,6 @@ onMounted(() => {
   stage.on('mouseup', handleStageMouseUp)
   stage.on('dblclick', commitDraftPointRegion)
   stage.on('contextmenu', closeContextMenu)
-  window.addEventListener('click', handleContextMenuOutsideClick)
-  window.addEventListener('keydown', handleContextMenuKeydown)
 
   loadSelectedPage(props.selectedPage)
 })
@@ -857,8 +843,7 @@ watch(
 
 onBeforeUnmount(() => {
   resetStageCursor()
-  window.removeEventListener('click', handleContextMenuOutsideClick)
-  window.removeEventListener('keydown', handleContextMenuKeydown)
+  closeContextMenu()
   clearPendingRegionRender()
   isRegionEditInteractionActive = false
 
