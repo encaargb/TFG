@@ -66,6 +66,7 @@ function mountSidebar(props = {}) {
     props: {
       selectedRegion: null,
       schemaPublications: sampleSchemaPublications,
+      selectedAnnotation: null,
       ...props,
     },
   })
@@ -153,6 +154,105 @@ describe('AnnotationSidebar', () => {
     expect(detailsNodes.every((node) => node.attributes('open') !== undefined)).toBe(true)
     expect(wrapper.findAll('.annotation-tree-leaf').map((node) => node.text())).toContain('Active entity')
     expect(summaryNodes.map((node) => node.text())).not.toContain('Active entity')
+  })
+
+  it('emits selected annotation data when clicking a leaf and highlights only the selected leaf', async () => {
+    const region = {
+      id: 'region-1',
+      annotations: [
+        {
+          schemaPublicationId: '58',
+          annotationId: '434',
+          taxonomyPath: '58/422/424/434',
+        },
+        {
+          schemaPublicationId: '58',
+          annotationId: '435',
+          taxonomyPath: '58/422/424/435',
+        },
+      ],
+    }
+    const wrapper = mountSidebar({ selectedRegion: region })
+
+    const leafButtons = wrapper.findAll('button.annotation-tree-leaf')
+
+    await leafButtons[0].trigger('click')
+
+    expect(wrapper.emitted('select-annotation')[0][0]).toEqual({
+      regionId: 'region-1',
+      schemaPublicationId: '58',
+      annotationId: '434',
+      annotationName: 'Active entity',
+    })
+
+    await wrapper.setProps({
+      selectedAnnotation: {
+        regionId: 'region-1',
+        schemaPublicationId: '58',
+        annotationId: '434',
+        annotationName: 'Active entity',
+      },
+    })
+
+    expect(wrapper.findAll('.annotation-tree-leaf-selected')).toHaveLength(1)
+    expect(leafButtons[0].classes()).toContain('annotation-tree-leaf-selected')
+
+    await leafButtons[1].trigger('click')
+
+    expect(wrapper.emitted('select-annotation')[1][0]).toEqual({
+      regionId: 'region-1',
+      schemaPublicationId: '58',
+      annotationId: '435',
+      annotationName: 'Passive entity',
+    })
+
+    await wrapper.setProps({
+      selectedAnnotation: {
+        regionId: 'region-1',
+        schemaPublicationId: '58',
+        annotationId: '435',
+        annotationName: 'Passive entity',
+      },
+    })
+
+    expect(wrapper.findAll('.annotation-tree-leaf-selected')).toHaveLength(1)
+    expect(wrapper.findAll('button.annotation-tree-leaf')[0].classes()).not.toContain(
+      'annotation-tree-leaf-selected'
+    )
+    expect(wrapper.findAll('button.annotation-tree-leaf')[1].classes()).toContain(
+      'annotation-tree-leaf-selected'
+    )
+    expect(region.annotations).toEqual([
+      {
+        schemaPublicationId: '58',
+        annotationId: '434',
+        taxonomyPath: '58/422/424/434',
+      },
+      {
+        schemaPublicationId: '58',
+        annotationId: '435',
+        taxonomyPath: '58/422/424/435',
+      },
+    ])
+  })
+
+  it('does not emit annotation selection when clicking branch summaries', async () => {
+    const wrapper = mountSidebar({
+      selectedRegion: {
+        id: 'region-1',
+        annotations: [
+          {
+            schemaPublicationId: '58',
+            annotationId: '434',
+            taxonomyPath: '58/422/424/434',
+          },
+        ],
+      },
+    })
+
+    await wrapper.find('summary').trigger('click')
+
+    expect(wrapper.emitted('select-annotation')).toBeUndefined()
   })
 
   it('removes old card classes and card structure', () => {

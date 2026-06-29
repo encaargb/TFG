@@ -1,4 +1,6 @@
 <script setup>
+import { computed } from 'vue'
+
 defineOptions({
   name: 'AnnotationTreeNode',
 })
@@ -8,9 +10,16 @@ const props = defineProps({
     type: Object,
     required: true,
   },
+  selectedAnnotationIdentity: {
+    type: String,
+    default: '',
+  },
 })
 
+defineEmits(['select-annotation'])
+
 const hasChildren = Array.isArray(props.node.children) && props.node.children.length > 0
+const isSelected = computed(() => props.node.selectionIdentity === props.selectedAnnotationIdentity)
 </script>
 
 <template>
@@ -22,10 +31,20 @@ const hasChildren = Array.isArray(props.node.children) && props.node.children.le
         v-for="child in node.children"
         :key="child.id"
         :node="child"
+        :selected-annotation-identity="selectedAnnotationIdentity"
+        @select-annotation="$emit('select-annotation', $event)"
       />
     </div>
   </details>
-  <p v-else class="annotation-tree-leaf mb-0">{{ node.name }}</p>
+  <button
+    v-else
+    type="button"
+    class="annotation-tree-leaf mb-0"
+    :class="{ 'annotation-tree-leaf-selected': isSelected }"
+    @click="$emit('select-annotation', node.selection)"
+  >
+    {{ node.name }}
+  </button>
 </template>
 
 <style scoped>
@@ -43,8 +62,24 @@ const hasChildren = Array.isArray(props.node.children) && props.node.children.le
 }
 
 .annotation-tree-leaf {
+  display: block;
+  width: calc(100% - 1.2rem);
   margin-left: 1.2rem;
+  padding: 0.1rem 0.35rem;
+  border: 0;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: inherit;
+  text-align: left;
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+.annotation-tree-leaf-selected {
+  background: rgba(13, 110, 253, 0.12);
+}
+
+.annotation-tree-leaf:hover {
+  background: rgba(13, 110, 253, 0.08);
 }
 </style>

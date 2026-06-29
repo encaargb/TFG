@@ -11,7 +11,17 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  selectedAnnotation: {
+    type: Object,
+    default: null,
+  },
 })
+
+const emit = defineEmits(['select-annotation'])
+
+function getSelectedAnnotationIdentity(regionId, schemaPublicationId, annotationId) {
+  return `${String(regionId)}:${String(schemaPublicationId)}:${String(annotationId)}`
+}
 
 function findAnnotation(node, targetId, classPathNodes = []) {
   if (!node) return null
@@ -75,6 +85,7 @@ const resolvedAnnotations = computed(() => {
 
 const annotationTree = computed(() => {
   const schemaNodes = new Map()
+  const regionId = props.selectedRegion?.id
 
   for (const item of resolvedAnnotations.value) {
     const schemaNodeId = `schema:${item.schemaId}`
@@ -114,11 +125,28 @@ const annotationTree = computed(() => {
         id: annotationNodeId,
         name: item.annotationName,
         children: [],
+        selectionIdentity: getSelectedAnnotationIdentity(regionId, item.schemaId, item.annotationId),
+        selection: {
+          regionId,
+          schemaPublicationId: item.schemaId,
+          annotationId: item.annotationId,
+          annotationName: item.annotationName,
+        },
       })
     }
   }
 
   return Array.from(schemaNodes.values())
+})
+
+const selectedAnnotationIdentity = computed(() => {
+  if (!props.selectedAnnotation) return ''
+
+  return getSelectedAnnotationIdentity(
+    props.selectedAnnotation.regionId,
+    props.selectedAnnotation.schemaPublicationId,
+    props.selectedAnnotation.annotationId
+  )
 })
 </script>
 
@@ -140,6 +168,8 @@ const annotationTree = computed(() => {
           v-for="node in annotationTree"
           :key="node.id"
           :node="node"
+          :selected-annotation-identity="selectedAnnotationIdentity"
+          @select-annotation="emit('select-annotation', $event)"
         />
       </div>
     </div>

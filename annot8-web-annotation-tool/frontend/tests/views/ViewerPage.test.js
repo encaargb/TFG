@@ -20,7 +20,29 @@ const sampleSchemaPublications = [
     id: '58',
     name: 'VLT: Morphology: Framing Structure (v.2)',
     annotations: {
-      children: [],
+      children: [
+        {
+          id: 'annotation-class-1',
+          name: 'Activity',
+          type: 'ANNOTATION-CLASS',
+          children: [
+            {
+              id: 'annotation-1',
+              name: 'Active entity',
+              type: 'ANNOTATION',
+              'taxonomy-path': '58/annotation-class-1/annotation-1',
+              children: [],
+            },
+            {
+              id: 'annotation-2',
+              name: 'Passive entity',
+              type: 'ANNOTATION',
+              'taxonomy-path': '58/annotation-class-1/annotation-2',
+              children: [],
+            },
+          ],
+        },
+      ],
     },
   },
 ]
@@ -291,6 +313,24 @@ function storedRegion(overrides = {}) {
   }
 }
 
+function annotatedStoredRegion(overrides = {}) {
+  return storedRegion({
+    annotations: [
+      {
+        schemaPublicationId: '58',
+        annotationId: 'annotation-1',
+        taxonomyPath: '58/annotation-class-1/annotation-1',
+      },
+      {
+        schemaPublicationId: '58',
+        annotationId: 'annotation-2',
+        taxonomyPath: '58/annotation-class-1/annotation-2',
+      },
+    ],
+    ...overrides,
+  })
+}
+
 describe('ViewerPage', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -372,6 +412,7 @@ describe('ViewerPage', () => {
     expect(wrapper.findComponent(AnnotationSidebar).props('schemaPublications')).toEqual(
       sampleSchemaPublications
     )
+    expect(wrapper.findComponent(AnnotationSidebar).props('selectedAnnotation')).toBe(null)
     expect(statusBar.props()).toEqual(
       expect.objectContaining({
         selectedRegion: null,
@@ -737,6 +778,80 @@ describe('ViewerPage', () => {
     expect(getStub(wrapper, AnnotationCanvasStub).props('selectedRegionId')).toBe(null)
     expect(getStub(wrapper, ViewerStatusBarStub).props('selectedRegion')).toBe(null)
     expect(getStub(wrapper, ViewerStatusBarStub).props('overlappingRegionCount')).toBe(0)
+  })
+
+  it('stores selected annotation as temporary sidebar state and replaces it when another leaf is clicked', async () => {
+    loadRegionsSpy.mockReturnValue([annotatedStoredRegion({ id: 'region-1' })])
+
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
+    await wrapper.find('[data-testid="select-region"]').trigger('click')
+
+    const sidebar = wrapper.findComponent(AnnotationSidebar)
+    const annotationLeaves = sidebar.findAll('button.annotation-tree-leaf')
+
+    await annotationLeaves[0].trigger('click')
+
+    expect(sidebar.props('selectedAnnotation')).toEqual({
+      regionId: 'region-1',
+      schemaPublicationId: '58',
+      annotationId: 'annotation-1',
+      annotationName: 'Active entity',
+    })
+    expect(sidebar.findAll('.annotation-tree-leaf-selected')).toHaveLength(1)
+
+    await annotationLeaves[1].trigger('click')
+
+    expect(sidebar.props('selectedAnnotation')).toEqual({
+      regionId: 'region-1',
+      schemaPublicationId: '58',
+      annotationId: 'annotation-2',
+      annotationName: 'Passive entity',
+    })
+    expect(sidebar.findAll('.annotation-tree-leaf-selected')).toHaveLength(1)
+    expect(currentRegions(wrapper)).toEqual([annotatedStoredRegion({ id: 'region-1', zIndex: 0 })])
+    expect(saveRegionsSpy).not.toHaveBeenCalled()
+  })
+
+  it('clears selected annotation when the selected region changes or is cleared', async () => {
+    loadRegionsSpy.mockReturnValue([
+      annotatedStoredRegion({ id: 'region-1' }),
+      annotatedStoredRegion({ id: 'region-2' }),
+    ])
+
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
+    await wrapper.find('[data-testid="select-region"]').trigger('click')
+
+    let sidebar = wrapper.findComponent(AnnotationSidebar)
+    await sidebar.findAll('button.annotation-tree-leaf')[0].trigger('click')
+
+    expect(sidebar.props('selectedAnnotation')).toEqual({
+      regionId: 'region-1',
+      schemaPublicationId: '58',
+      annotationId: 'annotation-1',
+      annotationName: 'Active entity',
+    })
+
+    getStub(wrapper, AnnotationCanvasStub).vm.$emit('select-region', 'region-2')
+    await wrapper.vm.$nextTick()
+
+    sidebar = wrapper.findComponent(AnnotationSidebar)
+    expect(sidebar.props('selectedAnnotation')).toBe(null)
+    expect(sidebar.findAll('.annotation-tree-leaf-selected')).toHaveLength(0)
+
+    await sidebar.findAll('button.annotation-tree-leaf')[0].trigger('click')
+    expect(sidebar.props('selectedAnnotation')).toEqual({
+      regionId: 'region-2',
+      schemaPublicationId: '58',
+      annotationId: 'annotation-1',
+      annotationName: 'Active entity',
+    })
+
+    await wrapper.find('[data-testid="clear-region"]').trigger('click')
+
+    sidebar = wrapper.findComponent(AnnotationSidebar)
+    expect(sidebar.props('selectedAnnotation')).toBe(null)
   })
 
   it('stores canvas overlap context and passes it to the status bar', async () => {

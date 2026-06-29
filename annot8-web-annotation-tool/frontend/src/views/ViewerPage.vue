@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, ref, onBeforeUnmount, onMounted } from 'vue'
+import { computed, nextTick, ref, onBeforeUnmount, onMounted, watch } from 'vue'
 import AnnotationCanvas from '../components/viewer/AnnotationCanvas.vue'
 import AnnotationSidebar from '../components/viewer/AnnotationSidebar.vue'
 import PageSidebar from '../components/viewer/PageSidebar.vue'
@@ -39,6 +39,7 @@ const annotationCanvas = ref(null)
 const regionSequence = ref(0)
 const regionCreationColor = ref(REGION_COLOR)
 const schemaPublications = ref([])
+const selectedAnnotation = ref(null)
 
 const selectedPage = computed(() => pages.value[selectedIndex.value])
 const zoomPercentage = computed(() => getZoomPercentage(zoomLevel.value))
@@ -235,6 +236,14 @@ function setMousePosition(position) {
   mousePos.value = position
 }
 
+function selectAnnotation(annotation) {
+  selectedAnnotation.value = annotation
+}
+
+watch(selectedRegionId, () => {
+  selectedAnnotation.value = null
+})
+
 onMounted(() => {
   fetchProjectDocument()
     .then((document) => {
@@ -335,6 +344,8 @@ onBeforeUnmount(() => {
     <AnnotationSidebar
       :selected-region="selectedRegion"
       :schema-publications="schemaPublications"
+      :selected-annotation="selectedAnnotation"
+      @select-annotation="selectAnnotation"
     />
   </div>
 </template>
