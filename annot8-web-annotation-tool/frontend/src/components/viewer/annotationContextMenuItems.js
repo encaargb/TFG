@@ -1,26 +1,43 @@
-export function mapAnnotationNode({ node, schemaPublication, onAddAnnotation }) {
+import { hasAnnotationAssignment } from './annotationAssignmentIdentity'
+
+export function mapAnnotationNode({
+  node,
+  schemaPublication,
+  regionAnnotations,
+  onAddAnnotation,
+}) {
   if (node.type === 'ANNOTATION') {
+    const isAssigned = hasAnnotationAssignment(regionAnnotations, {
+      schemaPublicationId: schemaPublication.id,
+      annotationId: node.id,
+    })
+
     return {
       label: node.name,
-      onClick: () => {
-        onAddAnnotation({ schemaPublication, annotation: node })
-      },
+      disabled: isAssigned,
+      ...(isAssigned
+        ? {}
+        : {
+            onClick: () => {
+              onAddAnnotation({ schemaPublication, annotation: node })
+            },
+          }),
     }
   }
 
   return {
     label: node.name,
     children: node.children.map((child) =>
-      mapAnnotationNode({ node: child, schemaPublication, onAddAnnotation })
+      mapAnnotationNode({ node: child, schemaPublication, regionAnnotations, onAddAnnotation })
     ),
   }
 }
 
-export function mapSchemaPublication({ schemaPublication, onAddAnnotation }) {
+export function mapSchemaPublication({ schemaPublication, regionAnnotations, onAddAnnotation }) {
   return {
     label: schemaPublication.name,
     children: schemaPublication.annotations.children.map((node) =>
-      mapAnnotationNode({ node, schemaPublication, onAddAnnotation })
+      mapAnnotationNode({ node, schemaPublication, regionAnnotations, onAddAnnotation })
     ),
   }
 }
@@ -54,7 +71,11 @@ export function buildRegionContextMenuItems({
     items.push({
       label: 'Add annotation',
       children: schemaPublications.map((schemaPublication) =>
-        mapSchemaPublication({ schemaPublication, onAddAnnotation })
+        mapSchemaPublication({
+          schemaPublication,
+          regionAnnotations: menu.region.annotations,
+          onAddAnnotation,
+        })
       ),
     })
   }

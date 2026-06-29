@@ -24,6 +24,7 @@ import {
   MIN_VISIBLE_SEGMENT_LENGTH,
   REGION_COLOR,
 } from './annotationCanvasConstants'
+import { hasAnnotationAssignment } from './annotationAssignmentIdentity'
 import { buildRegionContextMenuItems } from './annotationContextMenuItems'
 
 const props = defineProps({
@@ -444,6 +445,14 @@ function addContextMenuAnnotation({ schemaPublication, annotation }) {
   const menu = contextMenu.value
 
   if (!menu.visible || !menu.region || annotation.type !== 'ANNOTATION') return
+  if (
+    hasAnnotationAssignment(menu.region.annotations, {
+      schemaPublicationId: schemaPublication.id,
+      annotationId: annotation.id,
+    })
+  ) {
+    return
+  }
 
   emit('update-region', {
     id: menu.region.id,

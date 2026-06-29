@@ -3528,6 +3528,39 @@ describe('AnnotationCanvas', () => {
     expect(wrapper.emitted('update-region')).toBeUndefined()
   })
 
+  it('disables already assigned annotations in the add-annotation menu and leaves unassigned annotations enabled', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [
+        rectangleRegion({
+          annotations: [
+            {
+              schemaPublicationId: 58,
+              annotationId: 'annotation-1',
+              taxonomyPath: '58/annotation-class-1/annotation-1',
+            },
+          ],
+        }),
+      ],
+      schemaPublications: sampleSchemaPublications,
+    })
+    await flushImageLoad()
+
+    const rectangle = getRectInstances().find((rect) => rect.config.id === 'region-1')
+
+    rectangle.trigger('contextmenu', createContextMenuEvent())
+    await wrapper.vm.$nextTick()
+
+    const assignedAnnotation = findContextMenuItem(latestContextMenuItems(), 'Macro')
+    const unassignedAnnotation = findContextMenuItem(latestContextMenuItems(), 'Nested Leaf')
+
+    expect(assignedAnnotation.disabled).toBe(true)
+    expect(assignedAnnotation.onClick).toBeUndefined()
+    expect(unassignedAnnotation.disabled).not.toBe(true)
+    expect(unassignedAnnotation.onClick).toEqual(expect.any(Function))
+    expect(wrapper.emitted('update-region')).toBeUndefined()
+  })
+
   it('assigns an annotation to the context-menu region and closes the menu', async () => {
     const wrapper = mountCanvas({
       selectedRegionId: 'region-1',
@@ -3555,6 +3588,57 @@ describe('AnnotationCanvas', () => {
       },
     })
     expect(contextMenuMock.closeContextMenu).toHaveBeenCalledTimes(1)
+  })
+
+  it('refuses duplicate annotation assignments without emitting a region update', async () => {
+    const region = rectangleRegion()
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [region],
+      schemaPublications: sampleSchemaPublications,
+    })
+    await flushImageLoad()
+
+    const rectangle = getRectInstances().find((rect) => rect.config.id === 'region-1')
+
+    rectangle.trigger('contextmenu', createContextMenuEvent())
+    await wrapper.vm.$nextTick()
+
+    const duplicateAnnotation = findContextMenuItem(latestContextMenuItems(), 'Macro')
+
+    region.annotations.push(
+      {
+        schemaPublicationId: 58,
+        annotationId: 'annotation-1',
+        taxonomyPath: '58/annotation-class-1/annotation-1',
+      },
+      {
+        schemaPublicationId: '58',
+        annotationId: 'annotation-1',
+        taxonomyPath: '58/annotation-class-1/annotation-1',
+      }
+    )
+
+    expect(duplicateAnnotation.disabled).not.toBe(true)
+    expect(duplicateAnnotation.onClick).toEqual(expect.any(Function))
+    expect(wrapper.emitted('update-region')).toBeUndefined()
+
+    duplicateAnnotation.onClick()
+
+    expect(wrapper.emitted('update-region')).toBeUndefined()
+    expect(contextMenuMock.closeContextMenu).not.toHaveBeenCalled()
+    expect(region.annotations).toEqual([
+      {
+        schemaPublicationId: 58,
+        annotationId: 'annotation-1',
+        taxonomyPath: '58/annotation-class-1/annotation-1',
+      },
+      {
+        schemaPublicationId: '58',
+        annotationId: 'annotation-1',
+        taxonomyPath: '58/annotation-class-1/annotation-1',
+      },
+    ])
   })
 
   it('does not block the native context menu outside a region', async () => {
