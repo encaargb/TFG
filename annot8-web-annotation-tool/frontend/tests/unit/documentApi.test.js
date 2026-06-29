@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import projectDocumentSchemas from '../../../backend-mock/data/ProjectDocumentSchemas.json'
 
 async function loadDocumentApi(apiBaseUrl) {
   vi.resetModules()
@@ -14,6 +15,20 @@ function mockFetch(payload, ok = true) {
     ok,
     json: vi.fn().mockResolvedValue(payload),
   })
+  vi.stubGlobal('fetch', fetchMock)
+  return fetchMock
+}
+
+function mockFetchSequence(responses) {
+  const fetchMock = vi.fn()
+
+  responses.forEach(({ payload, ok = true }) => {
+    fetchMock.mockResolvedValueOnce({
+      ok,
+      json: vi.fn().mockResolvedValue(payload),
+    })
+  })
+
   vi.stubGlobal('fetch', fetchMock)
   return fetchMock
 }
@@ -43,20 +58,51 @@ describe('documentApi', () => {
   })
 
   it('loads document metadata and expands relative page URLs from the API base URL', async () => {
-    const fetchMock = mockFetch({
-      id: 'doc1',
-      pages: ['/documents/doc1/pages/pg1.jpeg', 'https://cdn.example.test/page.jpeg'],
-      regions: [],
-    })
+    const fetchMock = mockFetchSequence([
+      {
+        payload: {
+          id: 'doc1',
+          pages: ['/documents/doc1/pages/pg1.jpeg', 'https://cdn.example.test/page.jpeg'],
+          regions: [],
+        },
+      },
+      { payload: projectDocumentSchemas },
+    ])
 
     const { fetchProjectDocument } = await loadDocumentApi('http://localhost:3001/')
     const document = await fetchProjectDocument('doc1')
 
     expect(fetchMock).toHaveBeenCalledWith('http://localhost:3001/api/documents/doc1')
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:3001/api/project-documents/doc1/schemas'
+    )
     expect(document.pages).toEqual([
       'http://localhost:3001/documents/doc1/pages/pg1.jpeg',
       'https://cdn.example.test/page.jpeg',
     ])
+    expect(document.schemaPublications[0]).toEqual(
+      expect.objectContaining({
+        id: '58',
+        name: 'VLT: Morphology: Framing Structure (v.2)',
+      })
+    )
+  })
+
+  it('maps project document schemas to SchemaPublication instances', async () => {
+    const fetchMock = mockFetch(projectDocumentSchemas)
+
+    const { fetchProjectDocumentSchemas } = await loadDocumentApi('http://localhost:3001/')
+    const { SchemaPublication } = await import('../../src/models/SchemaPublication')
+    const schemaPublications = await fetchProjectDocumentSchemas('doc1')
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:3001/api/project-documents/doc1/schemas'
+    )
+    expect(schemaPublications).toHaveLength(1)
+    expect(schemaPublications[0]).toBeInstanceOf(SchemaPublication)
+    expect(schemaPublications[0].id).toBe('58')
+    expect(schemaPublications[0].name).toBe('VLT: Morphology: Framing Structure (v.2)')
+    expect(schemaPublications[0].annotations).toEqual(projectDocumentSchemas.data.schemas[0].annotations)
   })
 
   it('throws when the API cannot load a document', async () => {

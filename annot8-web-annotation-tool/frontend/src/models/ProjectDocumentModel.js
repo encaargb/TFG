@@ -1,8 +1,9 @@
 class ProjectDocument {
-  constructor({ id, title, pages }) {
+  constructor({ id, title, pages, schemaPublications = [] }) {
     this.id = id
     this.title = title
     this.pages = pages
+    this.schemaPublications = schemaPublications
   }
 
   get regionsStorageKey() {

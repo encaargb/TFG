@@ -1,0 +1,264 @@
+{
+  "success": true,
+  "data": {
+    "project_document_id": "749",
+    "filter": [
+      "101/1269"
+    ],
+    "document_name": "Star Wars Annual",
+    "document_directory": "0366220f7a08e857e1f9b05fc2ee8a5b",
+    "number_pages": "34",
+    "schemas": [
+      {
+        "id": "58",
+        "name": "VLT: Morphology: Framing Structure (v.2)",
+        "annotations": {
+          "id": "422",
+          "type": "ANNOTATION-ROOT-CLASS",
+          "name": "VLT: Morphology: Framing structure (v.2)",
+          "taxonomy-path": "58/422",
+          "documentation": null,
+          "children": [
+            {
+              "id": "423",
+              "type": "ANNOTATION-CLASS",
+              "name": "Attentional Types",
+              "taxonomy-path": "58/422/423",
+              "documentation": null,
+              "children": [
+                {
+                  "id": "428",
+                  "type": "ANNOTATION",
+                  "name": "Macro",
+                  "taxonomy-path": "58/422/423/428",
+                  "documentation": null,
+                  "children": []
+                },
+                {
+                  "id": "429",
+                  "type": "ANNOTATION",
+                  "name": "Mono",
+                  "taxonomy-path": "58/422/423/429",
+                  "documentation": null,
+                  "children": []
+                },
+                {
+                  "id": "430",
+                  "type": "ANNOTATION",
+                  "name": "Micro",
+                  "taxonomy-path": "58/422/423/430",
+                  "documentation": null,
+                  "children": []
+                },
+                {
+                  "id": "431",
+                  "type": "ANNOTATION",
+                  "name": "Amorphic",
+                  "taxonomy-path": "58/422/423/431",
+                  "documentation": null,
+                  "children": []
+                },
+                {
+                  "id": "432",
+                  "type": "ANNOTATION",
+                  "name": "Null",
+                  "taxonomy-path": "58/422/423/432",
+                  "documentation": null,
+                  "children": []
+                },
+                {
+                  "id": "433",
+                  "type": "ANNOTATION",
+                  "name": "Affixing",
+                  "taxonomy-path": "58/422/423/433",
+                  "documentation": null,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "id": "424",
+              "type": "ANNOTATION-CLASS",
+              "name": "Framing Types",
+              "taxonomy-path": "58/422/424",
+              "documentation": null,
+              "children": [
+                {
+                  "id": "434",
+                  "type": "ANNOTATION",
+                  "name": "Base",
+                  "taxonomy-path": "58/422/424/434",
+                  "documentation": null,
+                  "children": []
+                },
+                {
+                  "id": "435",
+                  "type": "ANNOTATION",
+                  "name": "Divisional",
+                  "taxonomy-path": "58/422/424/435",
+                  "documentation": null,
+                  "children": []
+                },
+                {
+                  "id": "436",
+                  "type": "ANNOTATION",
+                  "name": "Dominant",
+                  "taxonomy-path": "58/422/424/436",
+                  "documentation": null,
+                  "children": []
+                },
+                {
+                  "id": "437",
+                  "type": "ANNOTATION",
+                  "name": "Inset",
+                  "taxonomy-path": "58/422/424/437",
+                  "documentation": null,
+                  "children": []
+                },
+                {
+                  "id": "438",
+                  "type": "ANNOTATION",
+                  "name": "Collage",
+                  "taxonomy-path": "58/422/424/438",
+                  "documentation": null,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "id": "425",
+              "type": "ANNOTATION-CLASS",
+              "name": "Activity",
+              "taxonomy-path": "58/422/425",
+              "documentation": null,
+              "children": [
+                {
+                  "id": "439",
+                  "type": "ANNOTATION",
+                  "name": "Active entity",
+                  "taxonomy-path": "58/422/425/439",
+                  "documentation": null,
+                  "children": []
+                },
+                {
+                  "id": "440",
+                  "type": "ANNOTATION",
+                  "name": "Inactive entity",
+                  "taxonomy-path": "58/422/425/440",
+                  "documentation": null,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "id": "426",
+              "type": "ANNOTATION-CLASS",
+              "name": "Morphemes",
+              "taxonomy-path": "58/422/426",
+              "documentation": null,
+              "children": [
+                {
+                  "id": "441",
+                  "type": "ANNOTATION",
+                  "name": "Monomorph",
+                  "taxonomy-path": "58/422/426/441",
+                  "documentation": null,
+                  "children": []
+                },
+                {
+                  "id": "442",
+                  "type": "ANNOTATION",
+                  "name": "Affix",
+                  "taxonomy-path": "58/422/426/442",
+                  "documentation": null,
+                  "children": []
+                },
+                {
+                  "id": "443",
+                  "type": "ANNOTATION",
+                  "name": "Micromorph",
+                  "taxonomy-path": "58/422/426/443",
+                  "documentation": null,
+                  "children": []
+                },
+                {
+                  "id": "444",
+                  "type": "ANNOTATION",
+                  "name": "Amorphemes",
+                  "taxonomy-path": "58/422/426/444",
+                  "documentation": null,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "id": "427",
+              "type": "ANNOTATION-CLASS",
+              "name": "Morphological strategies",
+              "taxonomy-path": "58/422/427",
+              "documentation": null,
+              "children": [
+                {
+                  "id": "445",
+                  "type": "ANNOTATION",
+                  "name": "Affixation",
+                  "taxonomy-path": "58/422/427/445",
+                  "documentation": null,
+                  "children": []
+                },
+                {
+                  "id": "446",
+                  "type": "ANNOTATION",
+                  "name": "Circumfix",
+                  "taxonomy-path": "58/422/427/446",
+                  "documentation": null,
+                  "children": []
+                },
+                {
+                  "id": "447",
+                  "type": "ANNOTATION",
+                  "name": "Infix",
+                  "taxonomy-path": "58/422/427/447",
+                  "documentation": null,
+                  "children": []
+                },
+                {
+                  "id": "448",
+                  "type": "ANNOTATION",
+                  "name": "Reduplication",
+                  "taxonomy-path": "58/422/427/448",
+                  "documentation": null,
+                  "children": []
+                },
+                {
+                  "id": "449",
+                  "type": "ANNOTATION",
+                  "name": "Substitution/Suppletion",
+                  "taxonomy-path": "58/422/427/449",
+                  "documentation": null,
+                  "children": []
+                },
+                {
+                  "id": "450",
+                  "type": "ANNOTATION",
+                  "name": "Resizing",
+                  "taxonomy-path": "58/422/427/450",
+                  "documentation": null,
+                  "children": []
+                },
+                {
+                  "id": "451",
+                  "type": "ANNOTATION",
+                  "name": "Backfix",
+                  "taxonomy-path": "58/422/427/451",
+                  "documentation": null,
+                  "children": []
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { SchemaPublication } from '../../src/models/SchemaPublication'
 import { createProjectDocumentModel } from '../../src/models/ProjectDocumentModel'
 
 function createDocument(overrides = {}) {
@@ -80,6 +81,25 @@ describe('ProjectDocumentModel', () => {
     expect(document.pages).toBe(pages)
   })
 
+  it('exposes supplied schema publications', () => {
+    const schemaPublications = [
+      new SchemaPublication({
+        id: '58',
+        name: 'VLT: Morphology: Framing Structure (v.2)',
+        annotations: { id: '422', children: [] },
+      }),
+    ]
+    const document = createDocument({ schemaPublications })
+
+    expect(document.schemaPublications).toBe(schemaPublications)
+    expect(document.schemaPublications[0]).toEqual(
+      expect.objectContaining({
+        id: '58',
+        name: 'VLT: Morphology: Framing Structure (v.2)',
+      })
+    )
+  })
+
   it('save() uses annot8:documents:doc1:regions for doc1', () => {
     const document = createDocument({ id: 'doc1' })
     const regions = [rectangleRegion()]
@@ -106,6 +126,16 @@ describe('ProjectDocumentModel', () => {
     document.save(regions)
 
     expect(localStorage.getItem('annot8:documents:doc1:regions')).toBe(JSON.stringify(regions))
+  })
+
+  it('save() only persists regions', () => {
+    const document = createDocument()
+    const regions = [rectangleRegion()]
+
+    document.save(regions)
+
+    expect(JSON.parse(localStorage.getItem('annot8:documents:doc1:regions'))).toEqual(regions)
+    expect(localStorage.getItem('annot8:documents:doc1:schema-publications')).toBeNull()
   })
 
   it('loadRegions() restores saved rectangles', () => {

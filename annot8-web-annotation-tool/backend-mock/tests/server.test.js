@@ -1,9 +1,16 @@
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import path from 'node:path'
 import { spawn } from 'node:child_process'
 import { after, before, describe, it } from 'node:test'
+import { fileURLToPath } from 'node:url'
 
 const PORT = '3101'
 const BASE_URL = `http://127.0.0.1:${PORT}`
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const projectDocumentSchemasResponse = JSON.parse(
+  fs.readFileSync(path.join(__dirname, '..', 'data', 'ProjectDocumentSchemas.json'), 'utf8')
+)
 
 let backend
 
@@ -71,6 +78,14 @@ describe('mock backend', () => {
     assert.equal(body.pages.length, 15)
     assert.equal(body.pages[0], '/documents/doc1/pages/pg1.jpeg')
     assert.equal(Object.prototype.hasOwnProperty.call(body, 'regions'), false)
+  })
+
+  it('returns the exact project document schema response', async () => {
+    const response = await fetch(`${BASE_URL}/api/project-documents/doc1/schemas`)
+    const body = await response.json()
+
+    assert.equal(response.status, 200)
+    assert.deepEqual(body, projectDocumentSchemasResponse)
   })
 
   it('serves document image files', async () => {

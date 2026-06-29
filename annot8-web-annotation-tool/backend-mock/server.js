@@ -8,6 +8,9 @@ const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN ?? '*'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PUBLIC_DIR = path.join(__dirname, 'public')
 const FRONTEND_DIST_DIR = path.join(__dirname, '..', 'frontend', 'dist')
+const projectDocumentSchemasResponse = JSON.parse(
+  fs.readFileSync(path.join(__dirname, 'data', 'ProjectDocumentSchemas.json'), 'utf8')
+)
 
 const documents = new Map([
   [
@@ -83,6 +86,11 @@ function getDocumentId(pathname) {
   return match?.[1]
 }
 
+function getProjectDocumentSchemasId(pathname) {
+  const match = pathname.match(/^\/api\/project-documents\/([^/]+)\/schemas$/)
+  return match?.[1]
+}
+
 const server = http.createServer(async (request, response) => {
   const url = new URL(request.url, `http://${request.headers.host}`)
 
@@ -98,6 +106,24 @@ const server = http.createServer(async (request, response) => {
 
   if (request.method === 'GET' && url.pathname.startsWith('/documents/')) {
     sendStaticFile(response, url.pathname)
+    return
+  }
+
+  if (url.pathname.startsWith('/api/project-documents/')) {
+    const projectDocumentId = getProjectDocumentSchemasId(url.pathname)
+    const document = projectDocumentId ? documents.get(projectDocumentId) : null
+
+    if (!projectDocumentId || !document) {
+      sendJson(response, 404, { error: 'Document not found' })
+      return
+    }
+
+    if (request.method === 'GET') {
+      sendJson(response, 200, projectDocumentSchemasResponse)
+      return
+    }
+
+    sendJson(response, 405, { error: 'Method not allowed' })
     return
   }
 
