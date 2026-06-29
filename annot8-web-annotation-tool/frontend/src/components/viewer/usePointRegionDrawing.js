@@ -246,6 +246,7 @@ export function usePointRegionDrawing({
     const draftRegion = {
       ...region,
       ...clampPolygonToBounds(region, getDocumentBounds()),
+      annotations: [],
     }
 
     draftPointRegionNode.destroy()

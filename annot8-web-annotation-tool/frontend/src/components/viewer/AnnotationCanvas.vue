@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, defineComponent, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import Konva from 'konva'
 import { hasValidVisiblePointRegionSegments } from '../../utils/pointRegionValidation'
 import { useCanvasAutoScroll } from './useCanvasAutoScroll'
@@ -61,6 +61,10 @@ const props = defineProps({
     default: REGION_COLOR,
     validator: (value) => /^#[0-9a-fA-F]{6}$/.test(value),
   },
+  schemaPublications: {
+    type: Array,
+    default: () => [],
+  },
 })
 
 const emit = defineEmits([
@@ -89,6 +93,120 @@ const emptyContextMenu = {
   canDeletePoint: false,
 }
 const contextMenu = ref({ ...emptyContextMenu })
+const isAnnotationPanelOpen = ref(false)
+const expandedAnnotationNodeIds = ref(new Set())
+const AnnotationTaxonomyNode = defineComponent({
+  name: 'AnnotationTaxonomyNode',
+  props: {
+    node: {
+      type: Object,
+      required: true,
+    },
+    schemaPublication: {
+      type: Object,
+      required: true,
+    },
+    expandedNodeIds: {
+      type: Object,
+      required: true,
+    },
+    depth: {
+      type: Number,
+      default: 0,
+    },
+  },
+  emits: ['select-annotation', 'toggle-node'],
+  setup(props, { emit }) {
+    function emitAnnotation(payload) {
+      emit('select-annotation', payload)
+    }
+
+    return () => {
+      const paddingLeft = `${8 + props.depth * 18}px`
+
+      if (props.node.type === 'ANNOTATION') {
+        return h(
+          'button',
+          {
+            type: 'button',
+            class: 'annotation-taxonomy__item annotation-taxonomy__item--annotation',
+            role: 'menuitem',
+            style: { paddingLeft },
+            onClick: () => {
+              emitAnnotation({
+                schemaPublication: props.schemaPublication,
+                annotation: props.node,
+              })
+            },
+          },
+          props.node.name
+        )
+      }
+
+      const isExpanded = props.expandedNodeIds.has(props.node.id)
+
+      return h('div', { class: 'annotation-taxonomy__group' }, [
+        h(
+          'button',
+          {
+            type: 'button',
+            class: 'annotation-taxonomy__item annotation-taxonomy__item--class',
+            'aria-expanded': String(isExpanded),
+            style: { paddingLeft },
+            onClick: () => emit('toggle-node', props.node.id),
+          },
+          [h('span', { class: 'annotation-taxonomy__disclosure' }, isExpanded ? 'v' : '>'), props.node.name]
+        ),
+        isExpanded
+          ? h(
+              'div',
+              { class: 'annotation-taxonomy__children' },
+              props.node.children.map((child) =>
+                h(AnnotationTaxonomyNode, {
+                  key: child.id,
+                  node: child,
+                  schemaPublication: props.schemaPublication,
+                  expandedNodeIds: props.expandedNodeIds,
+                  depth: props.depth + 1,
+                  onSelectAnnotation: emitAnnotation,
+                  onToggleNode: (nodeId) => emit('toggle-node', nodeId),
+                })
+              )
+            )
+          : null,
+      ])
+    }
+  },
+})
+const annotationPanelStyle = computed(() => {
+  const menuWidth = 160
+  const panelWidth = 320
+  const panelHeight = 360
+  const gap = 4
+  const viewportWidth = window.innerWidth || document.documentElement.clientWidth || panelWidth
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight || panelHeight
+  let left = contextMenu.value.x + menuWidth + gap
+  let top = contextMenu.value.y
+
+  if (left + panelWidth > viewportWidth) {
+    left = contextMenu.value.x - panelWidth - gap
+  }
+
+  if (left < 0) {
+    left = Math.max(0, viewportWidth - panelWidth)
+  }
+
+  if (top + panelHeight > viewportHeight) {
+    top = viewportHeight - panelHeight - gap
+  }
+
+  top = Math.max(0, top)
+
+  return {
+    left: `${left}px`,
+    top: `${top}px`,
+  }
+})
 
 const currentPageRegions = computed(() =>
   props.regions.filter((region) => region.pageIndex === props.pageIndex)
@@ -322,6 +440,8 @@ function closeContextMenu() {
   if (!contextMenu.value.visible) return
 
   contextMenu.value = { ...emptyContextMenu }
+  isAnnotationPanelOpen.value = false
+  expandedAnnotationNodeIds.value = new Set()
 }
 
 function getContextMenuPosition(event, itemCount) {
@@ -359,6 +479,8 @@ function openContextMenu(event, menuState) {
     x: position.x,
     y: position.y,
   }
+  isAnnotationPanelOpen.value = false
+  expandedAnnotationNodeIds.value = new Set()
 }
 
 function handleRegionContextMenu({ event, region, visiblePoints, isPolygon }) {
@@ -427,6 +549,43 @@ function deleteContextMenuRegion() {
 
   emit('delete-selected-region')
   closeContextMenu()
+}
+
+function addContextMenuAnnotation({ schemaPublication, annotation }) {
+  const menu = contextMenu.value
+
+  if (!menu.visible || !menu.region || annotation.type !== 'ANNOTATION') return
+
+  emit('update-region', {
+    id: menu.region.id,
+    changes: {
+      annotations: [
+        ...menu.region.annotations,
+        {
+          schemaPublicationId: schemaPublication.id,
+          annotationId: annotation.id,
+          taxonomyPath: annotation['taxonomy-path'],
+        },
+      ],
+    },
+  })
+  closeContextMenu()
+}
+
+function toggleAnnotationPanel() {
+  isAnnotationPanelOpen.value = !isAnnotationPanelOpen.value
+}
+
+function toggleAnnotationNode(nodeId) {
+  const nextExpandedNodeIds = new Set(expandedAnnotationNodeIds.value)
+
+  if (nextExpandedNodeIds.has(nodeId)) {
+    nextExpandedNodeIds.delete(nodeId)
+  } else {
+    nextExpandedNodeIds.add(nodeId)
+  }
+
+  expandedAnnotationNodeIds.value = nextExpandedNodeIds
 }
 
 function handleContextMenuOutsideClick() {
@@ -886,6 +1045,47 @@ defineExpose({
       >
         Delete point
       </button>
+      <div
+        v-if="contextMenu.region && schemaPublications.length"
+        class="annotation-context-menu__annotation"
+      >
+        <button
+          type="button"
+          class="annotation-context-menu__item annotation-context-menu__item--panel"
+          role="menuitem"
+          :aria-expanded="isAnnotationPanelOpen"
+          aria-controls="annotation-taxonomy-panel"
+          @click="toggleAnnotationPanel"
+        >
+          Add annotation
+        </button>
+        <div
+          v-if="isAnnotationPanelOpen"
+          id="annotation-taxonomy-panel"
+          class="annotation-taxonomy-panel"
+          :style="annotationPanelStyle"
+          role="menu"
+        >
+          <section
+            v-for="schemaPublication in schemaPublications"
+            :key="schemaPublication.id"
+            class="annotation-taxonomy"
+          >
+            <h3 class="annotation-taxonomy__title">
+              {{ schemaPublication.name }}
+            </h3>
+            <AnnotationTaxonomyNode
+              v-for="node in schemaPublication.annotations.children"
+              :key="node.id"
+              :node="node"
+              :schema-publication="schemaPublication"
+              :expanded-node-ids="expandedAnnotationNodeIds"
+              @toggle-node="toggleAnnotationNode"
+              @select-annotation="addContextMenuAnnotation"
+            />
+          </section>
+        </div>
+      </div>
       <button
         type="button"
         class="annotation-context-menu__item"
@@ -898,7 +1098,7 @@ defineExpose({
   </div>
 </template>
 
-<style scoped>
+<style>
 .canvas-wrapper {
   background: #dee2e6;
   min-width: 0;
@@ -943,5 +1143,73 @@ defineExpose({
 
 .annotation-context-menu__item:disabled {
   color: #6c757d;
+}
+
+.annotation-context-menu__annotation {
+  position: relative;
+}
+
+.annotation-taxonomy-panel {
+  position: fixed;
+  min-width: 280px;
+  max-width: 320px;
+  max-height: 360px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px;
+  background: #ffffff;
+  border: 1px solid #adb5bd;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 18%);
+}
+
+.annotation-taxonomy + .annotation-taxonomy {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #dee2e6;
+}
+
+.annotation-taxonomy__title {
+  margin: 0 0 4px;
+  padding: 6px 8px;
+  color: #212529;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.annotation-taxonomy__item {
+  display: block;
+  width: 100%;
+  min-height: 30px;
+  padding: 5px 8px;
+  border: 0;
+  background: transparent;
+  color: #212529;
+  line-height: 1.25;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.annotation-taxonomy__item--annotation:hover,
+.annotation-taxonomy__item--annotation:focus-visible {
+  background: #e9ecef;
+}
+
+.annotation-taxonomy__item--class {
+  font-weight: 500;
+}
+
+.annotation-taxonomy__disclosure {
+  display: inline-block;
+  width: 1rem;
+  color: #6c757d;
+}
+
+.annotation-context-menu__item--panel::after {
+  float: right;
+  margin-left: 12px;
+  content: '>';
 }
 </style>

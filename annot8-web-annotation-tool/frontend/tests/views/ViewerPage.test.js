@@ -14,6 +14,15 @@ const samplePages = Array.from(
   { length: 15 },
   (_, index) => `/documents/doc1/pages/pg${index + 1}.jpeg`
 )
+const sampleSchemaPublications = [
+  {
+    id: '58',
+    name: 'VLT: Morphology: Framing Structure (v.2)',
+    annotations: {
+      children: [],
+    },
+  },
+]
 
 const PageSidebarStub = {
   name: 'PageSidebar',
@@ -119,6 +128,7 @@ const AnnotationCanvasStub = {
     'zoomLevel',
     'nextRegionId',
     'regionCreationColor',
+    'schemaPublications',
   ],
   emits: [
     'add-region',
@@ -143,7 +153,7 @@ const AnnotationCanvasStub = {
       <span data-testid="canvas-state">
         {{ selectedPage }} {{ pageIndex }} {{ regions.length }}
         {{ selectedRegionId }} {{ activeTool }} {{ zoomLevel }} {{ nextRegionId }}
-        {{ regionCreationColor }}
+        {{ regionCreationColor }} {{ schemaPublications.length }}
       </span>
       <button
         type="button"
@@ -299,6 +309,7 @@ describe('ViewerPage', () => {
         id: document.id,
         title: document.title,
         pages: document.pages,
+        schemaPublications: document.schemaPublications ?? sampleSchemaPublications,
         loadRegions: loadRegionsSpy,
         save: saveRegionsSpy,
       }))
@@ -346,6 +357,7 @@ describe('ViewerPage', () => {
         zoomLevel: 1,
         nextRegionId: 'region-1',
         regionCreationColor: '#0d6efd',
+        schemaPublications: sampleSchemaPublications,
       })
     )
     expect(statusBar.text()).toContain('Page 1 / 15')

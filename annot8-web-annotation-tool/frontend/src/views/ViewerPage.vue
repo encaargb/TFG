@@ -38,6 +38,7 @@ const sidebarCollapsed = ref(false)
 const annotationCanvas = ref(null)
 const regionSequence = ref(0)
 const regionCreationColor = ref(REGION_COLOR)
+const schemaPublications = ref([])
 
 const selectedPage = computed(() => pages.value[selectedIndex.value])
 const zoomPercentage = computed(() => getZoomPercentage(zoomLevel.value))
@@ -239,6 +240,7 @@ onMounted(() => {
     .then((document) => {
       projectDocument = createProjectDocumentModel(document)
       pages.value = projectDocument.pages
+      schemaPublications.value = projectDocument.schemaPublications
       regions.value = normalizeRegionZIndexes(projectDocument.loadRegions())
       overlappingRegionCount.value = 0
       updateRegionSequence()
@@ -300,6 +302,7 @@ onBeforeUnmount(() => {
         :zoom-level="zoomLevel"
         :next-region-id="nextRegionId"
         :region-creation-color="regionCreationColor"
+        :schema-publications="schemaPublications"
         @add-region="addRegion"
         @update-region="updateRegion"
         @select-region="selectRegion"

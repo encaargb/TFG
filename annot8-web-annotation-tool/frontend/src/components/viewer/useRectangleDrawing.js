@@ -123,6 +123,7 @@ export function useRectangleDrawing({
       draftRegion = {
         ...region,
         ...clampRectangleToBounds(region, getDocumentBounds()),
+        annotations: [],
       }
     }
 

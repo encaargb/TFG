@@ -25,10 +25,36 @@ function mountCanvas(props = {}) {
       activeTool: 'select',
       zoomLevel: 1,
       nextRegionId: 'region-1',
+      schemaPublications: [],
       ...props,
     },
   })
 }
+
+const sampleSchemaPublications = [
+  {
+    id: '58',
+    name: 'VLT: Morphology: Framing Structure (v.2)',
+    annotations: {
+      children: [
+        {
+          id: 'annotation-class-1',
+          name: 'Attentional Types',
+          type: 'ANNOTATION-CLASS',
+          children: [
+            {
+              id: 'annotation-1',
+              name: 'Macro',
+              type: 'ANNOTATION',
+              'taxonomy-path': '58/annotation-class-1/annotation-1',
+              children: [],
+            },
+          ],
+        },
+      ],
+    },
+  },
+]
 
 function rectangleRegion(overrides = {}) {
   return {
@@ -40,6 +66,7 @@ function rectangleRegion(overrides = {}) {
     right: 500,
     bottom: 300,
     color: '#0d6efd',
+    annotations: [],
     ...overrides,
   }
 }
@@ -69,6 +96,7 @@ function polygonRegion(overrides = {}) {
       { x: 400, y: 300 },
     ],
     color: '#0d6efd',
+    annotations: [],
     ...overrides,
   }
 }
@@ -95,6 +123,7 @@ function polylineRegion(overrides = {}) {
       { x: 500, y: 100 },
     ],
     color: '#0d6efd',
+    annotations: [],
     ...overrides,
   }
 }
@@ -1449,6 +1478,7 @@ describe('AnnotationCanvas', () => {
         top: 100,
         right: 500,
         bottom: 300,
+        annotations: [],
       })
     )
     expect(wrapper.emitted('add-region')[0][0]).not.toHaveProperty('x')
@@ -3398,6 +3428,92 @@ describe('AnnotationCanvas', () => {
     expect(wrapper.find('.annotation-context-menu').exists()).toBe(false)
   })
 
+  it('shows loaded schema publications in the region context menu', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [rectangleRegion()],
+      schemaPublications: sampleSchemaPublications,
+    })
+    await flushImageLoad()
+
+    const rectangle = getRectInstances().find((rect) => rect.config.id === 'region-1')
+
+    rectangle.trigger('contextmenu', createContextMenuEvent())
+    await wrapper.vm.$nextTick()
+
+    const menu = wrapper.find('.annotation-context-menu')
+    expect(menu.text()).toContain('Add annotation')
+
+    await wrapper.findAll('.annotation-context-menu__item').find((button) => {
+      return button.text() === 'Add annotation'
+    }).trigger('click')
+
+    expect(wrapper.find('.annotation-taxonomy-panel').text()).toContain(
+      'VLT: Morphology: Framing Structure (v.2)'
+    )
+  })
+
+  it('keeps annotation class nodes as navigation items without assigning them', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [rectangleRegion()],
+      schemaPublications: sampleSchemaPublications,
+    })
+    await flushImageLoad()
+
+    const rectangle = getRectInstances().find((rect) => rect.config.id === 'region-1')
+
+    rectangle.trigger('contextmenu', createContextMenuEvent())
+    await wrapper.vm.$nextTick()
+    await wrapper.findAll('.annotation-context-menu__item').find((button) => {
+      return button.text() === 'Add annotation'
+    }).trigger('click')
+    await wrapper.findAll('.annotation-taxonomy__item').find((button) => {
+      return button.text().includes('Attentional Types')
+    }).trigger('click')
+
+    expect(wrapper.emitted('update-region')).toBeUndefined()
+    expect(wrapper.find('.annotation-context-menu').exists()).toBe(true)
+    expect(wrapper.find('.annotation-taxonomy-panel').text()).toContain('Macro')
+  })
+
+  it('assigns an annotation to the context-menu region and closes the menu', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [rectangleRegion()],
+      schemaPublications: sampleSchemaPublications,
+    })
+    await flushImageLoad()
+
+    const rectangle = getRectInstances().find((rect) => rect.config.id === 'region-1')
+
+    rectangle.trigger('contextmenu', createContextMenuEvent())
+    await wrapper.vm.$nextTick()
+    await wrapper.findAll('.annotation-context-menu__item').find((button) => {
+      return button.text() === 'Add annotation'
+    }).trigger('click')
+    await wrapper.findAll('.annotation-taxonomy__item').find((button) => {
+      return button.text().includes('Attentional Types')
+    }).trigger('click')
+    await wrapper.findAll('.annotation-taxonomy__item').find((button) => {
+      return button.text() === 'Macro'
+    }).trigger('click')
+
+    expect(wrapper.emitted('update-region')[0][0]).toEqual({
+      id: 'region-1',
+      changes: {
+        annotations: [
+          {
+            schemaPublicationId: '58',
+            annotationId: 'annotation-1',
+            taxonomyPath: '58/annotation-class-1/annotation-1',
+          },
+        ],
+      },
+    })
+    expect(wrapper.find('.annotation-context-menu').exists()).toBe(false)
+  })
+
   it('does not block the native context menu outside a region', async () => {
     const wrapper = mountCanvas({
       selectedRegionId: 'region-1',
@@ -4687,6 +4803,7 @@ describe('AnnotationCanvas', () => {
     expect(polygonWrapper.emitted('add-region')[0][0]).toEqual(
       expect.objectContaining({ type: 'polygon' })
     )
+    expect(polygonWrapper.emitted('add-region')[0][0].annotations).toEqual([])
     expect(polygonWrapper.emitted('select-region')).toBeUndefined()
 
     polygonWrapper.unmount()
@@ -4711,6 +4828,7 @@ describe('AnnotationCanvas', () => {
     expect(polylineWrapper.emitted('add-region')[0][0]).toEqual(
       expect.objectContaining({ type: 'polyline' })
     )
+    expect(polylineWrapper.emitted('add-region')[0][0].annotations).toEqual([])
     expect(polylineWrapper.emitted('select-region')).toBeUndefined()
   })
 
