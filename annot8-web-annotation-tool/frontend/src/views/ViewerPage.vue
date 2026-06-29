@@ -332,7 +332,10 @@ onBeforeUnmount(() => {
       />
     </main>
 
-    <AnnotationSidebar :selected-region="selectedRegion" />
+    <AnnotationSidebar
+      :selected-region="selectedRegion"
+      :schema-publications="schemaPublications"
+    />
   </div>
 </template>
 

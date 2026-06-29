@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import ViewerPage from '../../src/views/ViewerPage.vue'
+import AnnotationSidebar from '../../src/components/viewer/AnnotationSidebar.vue'
 import * as projectDocumentModel from '../../src/models/ProjectDocumentModel'
 import * as documentApi from '../../src/services/documentApi'
 
@@ -367,6 +368,9 @@ describe('ViewerPage', () => {
     expect(wrapper.text()).toContain('No region selected')
     expect(wrapper.text()).toContain(
       'Select a region on the document to view and manage its annotations.'
+    )
+    expect(wrapper.findComponent(AnnotationSidebar).props('schemaPublications')).toEqual(
+      sampleSchemaPublications
     )
     expect(statusBar.props()).toEqual(
       expect.objectContaining({
