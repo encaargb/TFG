@@ -194,7 +194,6 @@ function addRegion(region) {
   regionSequence.value += 1
   regions.value.push(regionWithZIndex)
   persistRegions()
-  activeTool.value = 'select'
   selectedRegionId.value = null
   overlappingRegionCount.value = 0
 }
