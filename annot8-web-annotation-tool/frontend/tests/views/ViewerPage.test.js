@@ -351,6 +351,11 @@ describe('ViewerPage', () => {
     expect(statusBar.text()).toContain('Page 1 / 15')
     expect(statusBar.text()).toContain('Zoom 100%')
     expect(statusBar.text()).toContain('Tool select')
+    expect(wrapper.text()).toContain('Annotations')
+    expect(wrapper.text()).toContain('No region selected')
+    expect(wrapper.text()).toContain(
+      'Select a region on the document to view and manage its annotations.'
+    )
     expect(statusBar.props()).toEqual(
       expect.objectContaining({
         selectedRegion: null,
@@ -707,6 +712,8 @@ describe('ViewerPage', () => {
         type: 'rectangle',
       })
     )
+    expect(wrapper.text()).toContain('No annotations yet')
+    expect(wrapper.text()).toContain('Add an annotation to start describing this region.')
 
     await wrapper.find('[data-testid="clear-region"]').trigger('click')
 

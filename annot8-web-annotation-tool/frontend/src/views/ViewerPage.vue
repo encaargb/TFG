@@ -1,6 +1,7 @@
 <script setup>
 import { computed, nextTick, ref, onBeforeUnmount, onMounted } from 'vue'
 import AnnotationCanvas from '../components/viewer/AnnotationCanvas.vue'
+import AnnotationSidebar from '../components/viewer/AnnotationSidebar.vue'
 import PageSidebar from '../components/viewer/PageSidebar.vue'
 import ViewerStatusBar from '../components/viewer/ViewerStatusBar.vue'
 import ViewerToolbar from '../components/viewer/ViewerToolbar.vue'
@@ -327,6 +328,8 @@ onBeforeUnmount(() => {
         @update-zoom-level="setZoomLevel"
       />
     </main>
+
+    <AnnotationSidebar :selected-region="selectedRegion" />
   </div>
 </template>
 
