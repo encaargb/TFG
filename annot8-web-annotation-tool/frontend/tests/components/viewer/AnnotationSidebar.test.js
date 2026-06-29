@@ -1,5 +1,15 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
+
+const contextMenuMock = vi.hoisted(() => ({
+  showContextMenu: vi.fn(),
+  closeContextMenu: vi.fn(),
+}))
+
+vi.mock('@imengyu/vue3-context-menu', () => ({
+  default: contextMenuMock,
+}))
+
 import AnnotationSidebar from '../../../src/components/viewer/AnnotationSidebar.vue'
 
 const sampleSchemaPublications = [
@@ -72,7 +82,49 @@ function mountSidebar(props = {}) {
   })
 }
 
+function latestContextMenuItems() {
+  return contextMenuMock.showContextMenu.mock.calls.at(-1)?.[0]?.items ?? []
+}
+
 describe('AnnotationSidebar', () => {
+  it('selects an annotation and opens a Delete annotation context menu on leaf right-click', async () => {
+    const wrapper = mountSidebar({
+      selectedRegion: {
+        id: 'region-1',
+        annotations: [
+          {
+            schemaPublicationId: '58',
+            annotationId: '434',
+            taxonomyPath: '58/422/424/434',
+          },
+        ],
+      },
+    })
+
+    await wrapper.find('button.annotation-tree-leaf').trigger('contextmenu', {
+      clientX: 120,
+      clientY: 48,
+    })
+
+    expect(wrapper.emitted('select-annotation')[0][0]).toEqual({
+      regionId: 'region-1',
+      schemaPublicationId: '58',
+      annotationId: '434',
+      annotationName: 'Active entity',
+    })
+    expect(contextMenuMock.showContextMenu).toHaveBeenCalledTimes(1)
+    expect(latestContextMenuItems().map((item) => item.label)).toEqual(['Delete annotation'])
+
+    latestContextMenuItems()[0].onClick()
+
+    expect(wrapper.emitted('request-delete-annotation')[0][0]).toEqual({
+      regionId: 'region-1',
+      schemaPublicationId: '58',
+      annotationId: '434',
+      annotationName: 'Active entity',
+    })
+  })
+
   it('keeps the no-region state unchanged', () => {
     const wrapper = mountSidebar({ selectedRegion: null })
 

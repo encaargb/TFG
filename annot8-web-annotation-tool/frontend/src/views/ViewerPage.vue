@@ -1,10 +1,12 @@
 <script setup>
 import { computed, nextTick, ref, onBeforeUnmount, onMounted, watch } from 'vue'
+import { BModal } from 'bootstrap-vue-next'
 import AnnotationCanvas from '../components/viewer/AnnotationCanvas.vue'
 import AnnotationSidebar from '../components/viewer/AnnotationSidebar.vue'
 import PageSidebar from '../components/viewer/PageSidebar.vue'
 import ViewerStatusBar from '../components/viewer/ViewerStatusBar.vue'
 import ViewerToolbar from '../components/viewer/ViewerToolbar.vue'
+import { isSameAnnotationAssignment } from '../components/viewer/annotationAssignmentIdentity'
 import { REGION_COLOR } from '../components/viewer/annotationCanvasConstants'
 import { createProjectDocumentModel } from '../models/ProjectDocumentModel'
 import { fetchProjectDocument } from '../services/documentApi'
@@ -40,6 +42,8 @@ const regionSequence = ref(0)
 const regionCreationColor = ref(REGION_COLOR)
 const schemaPublications = ref([])
 const selectedAnnotation = ref(null)
+const pendingAnnotationDeletion = ref(null)
+const showDeleteAnnotationModal = ref(false)
 
 const selectedPage = computed(() => pages.value[selectedIndex.value])
 const zoomPercentage = computed(() => getZoomPercentage(zoomLevel.value))
@@ -240,11 +244,70 @@ function selectAnnotation(annotation) {
   selectedAnnotation.value = annotation
 }
 
+function closeDeleteAnnotationModal() {
+  showDeleteAnnotationModal.value = false
+  pendingAnnotationDeletion.value = null
+}
+
+function requestDeleteAnnotation(annotation = selectedAnnotation.value) {
+  if (!annotation) return
+
+  selectedAnnotation.value = annotation
+  pendingAnnotationDeletion.value = annotation
+  showDeleteAnnotationModal.value = true
+}
+
+function confirmDeleteAnnotation() {
+  const annotation = pendingAnnotationDeletion.value
+
+  if (!annotation) return
+
+  const region = regions.value.find((candidate) => candidate.id === annotation.regionId)
+
+  if (!region) {
+    selectedAnnotation.value = null
+    closeDeleteAnnotationModal()
+    return
+  }
+
+  updateRegion({
+    id: region.id,
+    changes: {
+      annotations: region.annotations.filter(
+        (assignment) => !isSameAnnotationAssignment(assignment, annotation)
+      ),
+    },
+  })
+
+  selectedAnnotation.value = null
+  closeDeleteAnnotationModal()
+}
+
+function handleAnnotationDeletionKeydown(event) {
+  if (!selectedAnnotation.value) return
+  if (event.key !== 'Delete' && event.key !== 'Backspace') return
+
+  if (event.key === 'Backspace') {
+    event.preventDefault()
+  }
+
+  requestDeleteAnnotation(selectedAnnotation.value)
+}
+
 watch(selectedRegionId, () => {
   selectedAnnotation.value = null
+  closeDeleteAnnotationModal()
+})
+
+watch(showDeleteAnnotationModal, (isOpen) => {
+  if (!isOpen) {
+    pendingAnnotationDeletion.value = null
+  }
 })
 
 onMounted(() => {
+  window.addEventListener('keydown', handleAnnotationDeletionKeydown)
+
   fetchProjectDocument()
     .then((document) => {
       projectDocument = createProjectDocumentModel(document)
@@ -260,6 +323,8 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleAnnotationDeletionKeydown)
+
   // Vue cleanup normally flushes the debounce; abrupt browser shutdown can still bypass it.
   if (saveTimeout === null || !projectDocument) return
 
@@ -346,7 +411,35 @@ onBeforeUnmount(() => {
       :schema-publications="schemaPublications"
       :selected-annotation="selectedAnnotation"
       @select-annotation="selectAnnotation"
+      @request-delete-annotation="requestDeleteAnnotation"
     />
+
+    <BModal
+      v-model="showDeleteAnnotationModal"
+      title="Delete annotation"
+      centered
+    >
+      <p class="mb-0">
+        Are you sure you want to delete the annotation “{{ pendingAnnotationDeletion?.annotationName }}”?
+      </p>
+
+      <template #footer>
+        <button
+          type="button"
+          class="btn btn-secondary"
+          @click="closeDeleteAnnotationModal"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          class="btn btn-danger"
+          @click="confirmDeleteAnnotation"
+        >
+          Delete
+        </button>
+      </template>
+    </BModal>
   </div>
 </template>
 

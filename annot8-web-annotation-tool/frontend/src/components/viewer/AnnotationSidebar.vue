@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue'
+import ContextMenu from '@imengyu/vue3-context-menu'
 import AnnotationTreeNode from './AnnotationTreeNode.vue'
 
 const props = defineProps({
@@ -17,7 +18,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['select-annotation'])
+const emit = defineEmits(['select-annotation', 'request-delete-annotation'])
 
 function getSelectedAnnotationIdentity(regionId, schemaPublicationId, annotationId) {
   return `${String(regionId)}:${String(schemaPublicationId)}:${String(annotationId)}`
@@ -148,6 +149,25 @@ const selectedAnnotationIdentity = computed(() => {
     props.selectedAnnotation.annotationId
   )
 })
+
+function openAnnotationContextMenu({ event, annotation }) {
+  emit('select-annotation', annotation)
+
+  ContextMenu.showContextMenu({
+    x: event?.clientX ?? 0,
+    y: event?.clientY ?? 0,
+    theme: 'annot8',
+    minWidth: 180,
+    items: [
+      {
+        label: 'Delete annotation',
+        onClick: () => {
+          emit('request-delete-annotation', annotation)
+        },
+      },
+    ],
+  })
+}
 </script>
 
 <template>
@@ -170,6 +190,7 @@ const selectedAnnotationIdentity = computed(() => {
           :node="node"
           :selected-annotation-identity="selectedAnnotationIdentity"
           @select-annotation="emit('select-annotation', $event)"
+          @open-annotation-context-menu="openAnnotationContextMenu"
         />
       </div>
     </div>

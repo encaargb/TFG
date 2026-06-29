@@ -1,5 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
+
+const contextMenuMock = vi.hoisted(() => ({
+  showContextMenu: vi.fn(),
+  closeContextMenu: vi.fn(),
+}))
+
+vi.mock('@imengyu/vue3-context-menu', () => ({
+  default: contextMenuMock,
+}))
+
 import ViewerPage from '../../src/views/ViewerPage.vue'
 import AnnotationSidebar from '../../src/components/viewer/AnnotationSidebar.vue'
 import * as projectDocumentModel from '../../src/models/ProjectDocumentModel'
@@ -140,6 +150,19 @@ const ViewerStatusBarStub = {
   `,
 }
 
+const BModalStub = {
+  name: 'BModal',
+  props: ['modelValue', 'title'],
+  emits: ['update:modelValue'],
+  template: `
+    <section v-if="modelValue" class="b-modal-stub">
+      <h2 data-testid="modal-title">{{ title }}</h2>
+      <div data-testid="modal-body"><slot /></div>
+      <div data-testid="modal-footer"><slot name="footer" /></div>
+    </section>
+  `,
+}
+
 const AnnotationCanvasStub = {
   name: 'AnnotationCanvas',
   props: [
@@ -275,6 +298,7 @@ function mountViewerPage() {
         ViewerToolbar: ViewerToolbarStub,
         ViewerStatusBar: ViewerStatusBarStub,
         AnnotationCanvas: AnnotationCanvasStub,
+        BModal: BModalStub,
       },
     },
   })
@@ -291,6 +315,10 @@ function getStub(wrapper, component) {
 
 function currentRegions(wrapper) {
   return getStub(wrapper, AnnotationCanvasStub).props('regions')
+}
+
+function latestContextMenuItems() {
+  return contextMenuMock.showContextMenu.mock.calls.at(-1)?.[0]?.items ?? []
 }
 
 async function advanceSaveDelay(wrapper) {
@@ -336,6 +364,8 @@ describe('ViewerPage', () => {
     vi.useFakeTimers()
     vi.restoreAllMocks()
     updateZoomSpy.mockClear()
+    contextMenuMock.showContextMenu.mockClear()
+    contextMenuMock.closeContextMenu.mockClear()
     fetchProjectDocumentSpy = vi.spyOn(documentApi, 'fetchProjectDocument').mockResolvedValue({
       id: 'doc1',
       title: 'Sample document',
@@ -811,6 +841,192 @@ describe('ViewerPage', () => {
     expect(sidebar.findAll('.annotation-tree-leaf-selected')).toHaveLength(1)
     expect(currentRegions(wrapper)).toEqual([annotatedStoredRegion({ id: 'region-1', zIndex: 0 })])
     expect(saveRegionsSpy).not.toHaveBeenCalled()
+  })
+
+  it('right-clicks a selected annotation leaf, keeps it selected, and opens a Delete annotation context menu that opens the confirmation modal', async () => {
+    loadRegionsSpy.mockReturnValue([annotatedStoredRegion({ id: 'region-1' })])
+
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
+    await wrapper.find('[data-testid="select-region"]').trigger('click')
+
+    const sidebar = wrapper.findComponent(AnnotationSidebar)
+
+    await sidebar.findAll('button.annotation-tree-leaf')[0].trigger('contextmenu', {
+      clientX: 120,
+      clientY: 48,
+    })
+
+    expect(sidebar.props('selectedAnnotation')).toEqual({
+      regionId: 'region-1',
+      schemaPublicationId: '58',
+      annotationId: 'annotation-1',
+      annotationName: 'Active entity',
+    })
+    expect(latestContextMenuItems().map((item) => item.label)).toEqual(['Delete annotation'])
+
+    latestContextMenuItems()[0].onClick()
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('.b-modal-stub').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="modal-title"]').text()).toBe('Delete annotation')
+    expect(wrapper.text()).toContain('Are you sure you want to delete the annotation “Active entity”?')
+  })
+
+  it('opens the same confirmation modal from Delete and Backspace, and Backspace prevents its default action', async () => {
+    loadRegionsSpy.mockReturnValue([annotatedStoredRegion({ id: 'region-1' })])
+
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }))
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.b-modal-stub').exists()).toBe(false)
+
+    await wrapper.find('[data-testid="select-region"]').trigger('click')
+    const sidebar = wrapper.findComponent(AnnotationSidebar)
+    await sidebar.findAll('button.annotation-tree-leaf')[0].trigger('click')
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }))
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.b-modal-stub').exists()).toBe(true)
+
+    getStub(wrapper, BModalStub).vm.$emit('update:modelValue', false)
+    await wrapper.vm.$nextTick()
+
+    const backspaceEvent = new KeyboardEvent('keydown', { key: 'Backspace', cancelable: true })
+    const preventDefaultSpy = vi.spyOn(backspaceEvent, 'preventDefault')
+
+    window.dispatchEvent(backspaceEvent)
+    await wrapper.vm.$nextTick()
+
+    expect(preventDefaultSpy).toHaveBeenCalled()
+    expect(backspaceEvent.defaultPrevented).toBe(true)
+    expect(wrapper.find('.b-modal-stub').exists()).toBe(true)
+  })
+
+  it('canceling or closing the deletion modal keeps the assignment and selection', async () => {
+    loadRegionsSpy.mockReturnValue([annotatedStoredRegion({ id: 'region-1' })])
+
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
+    await wrapper.find('[data-testid="select-region"]').trigger('click')
+
+    let sidebar = wrapper.findComponent(AnnotationSidebar)
+    await sidebar.findAll('button.annotation-tree-leaf')[0].trigger('click')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }))
+    await wrapper.vm.$nextTick()
+
+    await wrapper.find('button.btn-secondary').trigger('click')
+    await wrapper.vm.$nextTick()
+
+    sidebar = wrapper.findComponent(AnnotationSidebar)
+    expect(wrapper.find('.b-modal-stub').exists()).toBe(false)
+    expect(sidebar.props('selectedAnnotation')).toEqual({
+      regionId: 'region-1',
+      schemaPublicationId: '58',
+      annotationId: 'annotation-1',
+      annotationName: 'Active entity',
+    })
+    expect(currentRegions(wrapper)).toEqual([annotatedStoredRegion({ id: 'region-1', zIndex: 0 })])
+    expect(saveRegionsSpy).not.toHaveBeenCalled()
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }))
+    await wrapper.vm.$nextTick()
+
+    getStub(wrapper, BModalStub).vm.$emit('update:modelValue', false)
+    await wrapper.vm.$nextTick()
+
+    sidebar = wrapper.findComponent(AnnotationSidebar)
+    expect(wrapper.find('.b-modal-stub').exists()).toBe(false)
+    expect(sidebar.props('selectedAnnotation')).toEqual({
+      regionId: 'region-1',
+      schemaPublicationId: '58',
+      annotationId: 'annotation-1',
+      annotationName: 'Active entity',
+    })
+    expect(currentRegions(wrapper)).toEqual([annotatedStoredRegion({ id: 'region-1', zIndex: 0 })])
+  })
+
+  it('confirms annotation deletion through the existing region update and persistence flow, clearing selection', async () => {
+    loadRegionsSpy.mockReturnValue([annotatedStoredRegion({ id: 'region-1' })])
+
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
+    await wrapper.find('[data-testid="select-region"]').trigger('click')
+
+    let sidebar = wrapper.findComponent(AnnotationSidebar)
+    await sidebar.findAll('button.annotation-tree-leaf')[0].trigger('click')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }))
+    await wrapper.vm.$nextTick()
+    await wrapper.find('button.btn-danger').trigger('click')
+
+    sidebar = wrapper.findComponent(AnnotationSidebar)
+    expect(currentRegions(wrapper)).toEqual([
+      annotatedStoredRegion({
+        id: 'region-1',
+        zIndex: 0,
+        annotations: [
+          {
+            schemaPublicationId: '58',
+            annotationId: 'annotation-2',
+            taxonomyPath: '58/annotation-class-1/annotation-2',
+          },
+        ],
+      }),
+    ])
+    expect(sidebar.props('selectedAnnotation')).toBe(null)
+    expect(wrapper.find('.b-modal-stub').exists()).toBe(false)
+    expect(getStub(wrapper, ViewerStatusBarStub).props('saveStatus')).toBe('saving')
+    await advanceSaveDelay(wrapper)
+    expect(saveRegionsSpy).toHaveBeenLastCalledWith(currentRegions(wrapper))
+  })
+
+  it('shows the existing empty state after deleting the final annotation', async () => {
+    loadRegionsSpy.mockReturnValue([
+      annotatedStoredRegion({
+        id: 'region-1',
+        annotations: [
+          {
+            schemaPublicationId: '58',
+            annotationId: 'annotation-1',
+            taxonomyPath: '58/annotation-class-1/annotation-1',
+          },
+        ],
+      }),
+    ])
+
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
+    await wrapper.find('[data-testid="select-region"]').trigger('click')
+
+    const sidebar = wrapper.findComponent(AnnotationSidebar)
+    await sidebar.find('button.annotation-tree-leaf').trigger('click')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }))
+    await wrapper.vm.$nextTick()
+    await wrapper.find('button.btn-danger').trigger('click')
+
+    expect(wrapper.text()).toContain('No annotations yet')
+    expect(wrapper.text()).toContain('Add an annotation to start describing this region.')
+  })
+
+  it('registers and removes the annotation deletion keyboard listener on mount and unmount', async () => {
+    const addEventListenerSpy = vi.spyOn(window, 'addEventListener')
+    const removeEventListenerSpy = vi.spyOn(window, 'removeEventListener')
+
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
+
+    const addedKeydownCall = addEventListenerSpy.mock.calls.find((call) => call[0] === 'keydown')
+
+    expect(addedKeydownCall).toBeTruthy()
+
+    wrapper.unmount()
+
+    const removedKeydownCall = removeEventListenerSpy.mock.calls.find((call) => call[0] === 'keydown')
+
+    expect(removedKeydownCall).toBeTruthy()
+    expect(removedKeydownCall[1]).toBe(addedKeydownCall[1])
   })
 
   it('clears selected annotation when the selected region changes or is cleared', async () => {

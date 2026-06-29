@@ -16,7 +16,7 @@ const props = defineProps({
   },
 })
 
-defineEmits(['select-annotation'])
+defineEmits(['select-annotation', 'open-annotation-context-menu'])
 
 const hasChildren = Array.isArray(props.node.children) && props.node.children.length > 0
 const isSelected = computed(() => props.node.selectionIdentity === props.selectedAnnotationIdentity)
@@ -33,6 +33,7 @@ const isSelected = computed(() => props.node.selectionIdentity === props.selecte
         :node="child"
         :selected-annotation-identity="selectedAnnotationIdentity"
         @select-annotation="$emit('select-annotation', $event)"
+        @open-annotation-context-menu="$emit('open-annotation-context-menu', $event)"
       />
     </div>
   </details>
@@ -42,6 +43,7 @@ const isSelected = computed(() => props.node.selectionIdentity === props.selecte
     class="annotation-tree-leaf mb-0"
     :class="{ 'annotation-tree-leaf-selected': isSelected }"
     @click="$emit('select-annotation', node.selection)"
+    @contextmenu.prevent="$emit('open-annotation-context-menu', { event: $event, annotation: node.selection })"
   >
     {{ node.name }}
   </button>
