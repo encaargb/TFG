@@ -10,6 +10,6 @@
     "test": "npm --prefix frontend test -- --run && npm --prefix backend-mock test"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22.12.0"
   }
 }
