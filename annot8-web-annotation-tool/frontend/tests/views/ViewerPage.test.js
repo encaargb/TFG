@@ -175,6 +175,7 @@ const AnnotationCanvasStub = {
     'nextRegionId',
     'regionCreationColor',
     'schemaPublications',
+    'annotationDeletionActive',
   ],
   emits: [
     'add-region',
@@ -182,6 +183,7 @@ const AnnotationCanvasStub = {
     'select-region',
     'selection-overlap-change',
     'clear-selected-region',
+    'clear-selected-annotation',
     'delete-selected-region',
     'mouse-position-change',
   ],
@@ -199,7 +201,7 @@ const AnnotationCanvasStub = {
       <span data-testid="canvas-state">
         {{ selectedPage }} {{ pageIndex }} {{ regions.length }}
         {{ selectedRegionId }} {{ activeTool }} {{ zoomLevel }} {{ nextRegionId }}
-        {{ regionCreationColor }} {{ schemaPublications.length }}
+        {{ regionCreationColor }} {{ schemaPublications.length }} {{ annotationDeletionActive }}
       </span>
       <button
         type="button"
@@ -271,6 +273,7 @@ const AnnotationCanvasStub = {
       <button type="button" data-testid="select-region" @click="$emit('select-region', 'region-1')">Select region</button>
       <button type="button" data-testid="select-overlap-region" @click="emitOverlapSelection">Select overlap region</button>
       <button type="button" data-testid="clear-region" @click="$emit('clear-selected-region')">Clear region</button>
+      <button type="button" data-testid="clear-annotation" @click="$emit('clear-selected-annotation')">Clear annotation</button>
       <button type="button" data-testid="delete-selected" @click="$emit('delete-selected-region')">Delete selected</button>
       <button
         type="button"
@@ -903,6 +906,14 @@ describe('ViewerPage', () => {
     expect(preventDefaultSpy).toHaveBeenCalled()
     expect(backspaceEvent.defaultPrevented).toBe(true)
     expect(wrapper.find('.b-modal-stub').exists()).toBe(true)
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }))
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', cancelable: true }))
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.findAll('.b-modal-stub')).toHaveLength(1)
+    expect(currentRegions(wrapper)).toEqual([annotatedStoredRegion({ id: 'region-1', zIndex: 0 })])
+    expect(saveRegionsSpy).not.toHaveBeenCalled()
   })
 
   it('canceling or closing the deletion modal keeps the assignment and selection', async () => {
@@ -1066,6 +1077,35 @@ describe('ViewerPage', () => {
 
     await wrapper.find('[data-testid="clear-region"]').trigger('click')
 
+    sidebar = wrapper.findComponent(AnnotationSidebar)
+    expect(sidebar.props('selectedAnnotation')).toBe(null)
+  })
+
+  it('clears selected annotation when the canvas targets another selection, the page changes, or the tool changes', async () => {
+    loadRegionsSpy.mockReturnValue([annotatedStoredRegion({ id: 'region-1' })])
+
+    const wrapper = mountViewerPage()
+    await flushMountedFetch()
+    await wrapper.find('[data-testid="select-region"]').trigger('click')
+
+    let sidebar = wrapper.findComponent(AnnotationSidebar)
+    await sidebar.findAll('button.annotation-tree-leaf')[0].trigger('click')
+    expect(sidebar.props('selectedAnnotation')).not.toBe(null)
+
+    await wrapper.find('[data-testid="clear-annotation"]').trigger('click')
+    sidebar = wrapper.findComponent(AnnotationSidebar)
+    expect(sidebar.props('selectedAnnotation')).toBe(null)
+
+    await sidebar.findAll('button.annotation-tree-leaf')[0].trigger('click')
+    await wrapper.find('[data-testid="select-page-5"]').trigger('click')
+    sidebar = wrapper.findComponent(AnnotationSidebar)
+    expect(sidebar.props('selectedAnnotation')).toBe(null)
+
+    await wrapper.find('[data-testid="previous-page"]').trigger('click')
+    await wrapper.find('[data-testid="select-region"]').trigger('click')
+    sidebar = wrapper.findComponent(AnnotationSidebar)
+    await sidebar.findAll('button.annotation-tree-leaf')[0].trigger('click')
+    await wrapper.find('[data-testid="tool-rectangle"]').trigger('click')
     sidebar = wrapper.findComponent(AnnotationSidebar)
     expect(sidebar.props('selectedAnnotation')).toBe(null)
   })

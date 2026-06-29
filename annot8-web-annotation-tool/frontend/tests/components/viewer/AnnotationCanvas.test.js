@@ -40,6 +40,7 @@ function mountCanvas(props = {}) {
       zoomLevel: 1,
       nextRegionId: 'region-1',
       schemaPublications: [],
+      annotationDeletionActive: false,
       ...props,
     },
   })
@@ -577,6 +578,35 @@ describe('AnnotationCanvas', () => {
     stage.trigger('click')
 
     expect(polylineWrapper.emitted('select-region')).toEqual([['polyline-1']])
+  })
+
+  it('emits clear-selected-annotation when selecting a region in the canvas', async () => {
+    const wrapper = mountCanvas({
+      regions: [rectangleRegion({ id: 'region-1', zIndex: 1 })],
+    })
+    await flushImageLoad()
+
+    const rectangle = getRectInstances().find((rect) => rect.config.id === 'region-1')
+
+    rectangle.trigger('click')
+
+    expect(wrapper.emitted('clear-selected-annotation')).toEqual([[]])
+    expect(wrapper.emitted('select-region')).toEqual([['region-1']])
+  })
+
+  it('emits clear-selected-annotation when selecting a vertex in the canvas', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [fourPointPolygonRegion()],
+    })
+    await flushImageLoad()
+
+    const firstVertexHandle = getCircleInstances().slice(-4)[0]
+
+    firstVertexHandle.trigger('click')
+
+    expect(wrapper.emitted('clear-selected-annotation')).toEqual([[]])
+    expect(wrapper.emitted('select-region')).toEqual([['region-1']])
   })
 
   it('returns a large cross-quadrant candidate only once in the selection set', async () => {
@@ -4979,6 +5009,55 @@ describe('AnnotationCanvas', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace' }))
 
     expect(wrapper.emitted('delete-selected-region')).toEqual([[]])
+  })
+
+  it('does not delete a selected region while annotation deletion is active, then resumes region deletion once cleared', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [rectangleRegion()],
+      annotationDeletionActive: true,
+    })
+    await flushImageLoad()
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }))
+
+    expect(wrapper.emitted('delete-selected-region')).toBeUndefined()
+
+    await wrapper.setProps({ annotationDeletionActive: false })
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }))
+
+    expect(wrapper.emitted('delete-selected-region')).toEqual([[]])
+  })
+
+  it('does not delete a selected vertex while annotation deletion is active, then resumes vertex deletion once cleared', async () => {
+    const wrapper = mountCanvas({
+      selectedRegionId: 'region-1',
+      regions: [threePointPolylineRegion()],
+      annotationDeletionActive: true,
+    })
+    await flushImageLoad()
+
+    const middleVertexHandle = getCircleInstances().slice(-3)[1]
+
+    middleVertexHandle.trigger('click')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace' }))
+
+    expect(wrapper.emitted('update-region')).toBeUndefined()
+    expect(wrapper.emitted('delete-selected-region')).toBeUndefined()
+
+    await wrapper.setProps({ annotationDeletionActive: false })
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace' }))
+
+    expect(wrapper.emitted('update-region')[0][0]).toEqual({
+      id: 'region-1',
+      changes: {
+        points: [
+          { x: 200, y: 100 },
+          { x: 400, y: 300 },
+        ],
+      },
+    })
+    expect(wrapper.emitted('delete-selected-region')).toBeUndefined()
   })
 
   it('warns when activeTool is outside the supported viewer tools', () => {

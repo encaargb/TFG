@@ -44,6 +44,9 @@ const schemaPublications = ref([])
 const selectedAnnotation = ref(null)
 const pendingAnnotationDeletion = ref(null)
 const showDeleteAnnotationModal = ref(false)
+const annotationDeletionActive = computed(
+  () => Boolean(selectedAnnotation.value) || showDeleteAnnotationModal.value
+)
 
 const selectedPage = computed(() => pages.value[selectedIndex.value])
 const zoomPercentage = computed(() => getZoomPercentage(zoomLevel.value))
@@ -80,6 +83,7 @@ function navigateToPage(index) {
   selectedRegionId.value = null
   overlappingRegionCount.value = 0
   mousePos.value = null
+  clearSelectedAnnotation()
   resetZoom()
 }
 
@@ -103,6 +107,7 @@ async function toggleSidebar() {
 
 function setActiveTool(tool) {
   activeTool.value = tool
+  clearSelectedAnnotation()
 
   if (tool !== 'select') {
     selectedRegionId.value = null
@@ -122,9 +127,11 @@ function deleteSelectedRegion() {
 function clearSelectedRegion() {
   selectedRegionId.value = null
   overlappingRegionCount.value = 0
+  clearSelectedAnnotation()
 }
 
 function selectRegion(regionId) {
+  clearSelectedAnnotation()
   selectedRegionId.value = regionId
   overlappingRegionCount.value = 0
 }
@@ -240,6 +247,10 @@ function setMousePosition(position) {
   mousePos.value = position
 }
 
+function clearSelectedAnnotation() {
+  selectedAnnotation.value = null
+}
+
 function selectAnnotation(annotation) {
   selectedAnnotation.value = annotation
 }
@@ -284,18 +295,19 @@ function confirmDeleteAnnotation() {
 }
 
 function handleAnnotationDeletionKeydown(event) {
-  if (!selectedAnnotation.value) return
   if (event.key !== 'Delete' && event.key !== 'Backspace') return
 
-  if (event.key === 'Backspace') {
-    event.preventDefault()
-  }
+  if (!annotationDeletionActive.value) return
+
+  event.preventDefault()
+
+  if (showDeleteAnnotationModal.value || !selectedAnnotation.value) return
 
   requestDeleteAnnotation(selectedAnnotation.value)
 }
 
 watch(selectedRegionId, () => {
-  selectedAnnotation.value = null
+  clearSelectedAnnotation()
   closeDeleteAnnotationModal()
 })
 
@@ -377,11 +389,13 @@ onBeforeUnmount(() => {
         :next-region-id="nextRegionId"
         :region-creation-color="regionCreationColor"
         :schema-publications="schemaPublications"
+        :annotation-deletion-active="annotationDeletionActive"
         @add-region="addRegion"
         @update-region="updateRegion"
         @select-region="selectRegion"
         @selection-overlap-change="setOverlappingRegionCount"
         @clear-selected-region="clearSelectedRegion"
+        @clear-selected-annotation="clearSelectedAnnotation"
         @delete-selected-region="deleteSelectedRegion"
         @mouse-position-change="setMousePosition"
       />

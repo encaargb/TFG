@@ -68,6 +68,10 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  annotationDeletionActive: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const emit = defineEmits([
@@ -76,6 +80,7 @@ const emit = defineEmits([
   'select-region',
   'selection-overlap-change',
   'clear-selected-region',
+  'clear-selected-annotation',
   'delete-selected-region',
   'mouse-position-change',
 ])
@@ -196,6 +201,7 @@ function hasActiveCanvasInteraction() {
 }
 
 function emitSelectionContext({ regionId, overlappingRegionCount = 0 }) {
+  emit('clear-selected-annotation')
   emit('select-region', regionId)
   emit('selection-overlap-change', overlappingRegionCount)
 }
@@ -721,6 +727,7 @@ function handleMouseLeave() {
 
 useCanvasKeyboardShortcuts({
   getActiveTool: () => props.activeTool,
+  shouldBlockDeletionShortcuts: () => props.annotationDeletionActive,
   commitDraftPointRegion,
   cancelDraftPointRegion,
   cancelDraftRectangleRegion,

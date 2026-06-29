@@ -2,6 +2,7 @@ import { onBeforeUnmount, onMounted } from 'vue'
 
 export function useCanvasKeyboardShortcuts({
   getActiveTool,
+  shouldBlockDeletionShortcuts = () => false,
   commitDraftPointRegion,
   cancelDraftPointRegion,
   cancelDraftRectangleRegion,
@@ -38,6 +39,8 @@ export function useCanvasKeyboardShortcuts({
     }
 
     if (event.key !== 'Delete' && event.key !== 'Backspace') return
+
+  if (shouldBlockDeletionShortcuts()) return
 
     if (deleteSelectedPointRegionPoint()) return
 
