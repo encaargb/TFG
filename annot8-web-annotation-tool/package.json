@@ -7,7 +7,9 @@
     "start": "node scripts/start-dev.js",
     "dev": "node scripts/start-dev.js",
     "build": "npm --prefix frontend run build",
-    "test": "npm --prefix frontend test -- --run && npm --prefix backend-mock test"
+    "test": "npm --prefix frontend test -- --run && npm --prefix backend-mock test",
+    "test:details": "npm --prefix frontend run test:details && npm --prefix backend-mock test",
+    "test:ui": "npm --prefix frontend run test:ui"
   },
   "engines": {
     "node": ">=22.12.0"
