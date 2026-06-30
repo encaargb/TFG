@@ -143,7 +143,7 @@ describe('AnnotationSidebar', () => {
     })
 
     expect(wrapper.text()).toContain('No annotations yet')
-    expect(wrapper.text()).toContain('Add an annotation to start describing this region.')
+    expect(wrapper.text()).toContain('Right-click the selected region and choose an annotation to start describing it.')
   })
 
   it('shows a single schema branch and renders assigned annotations under class branches', () => {

@@ -181,7 +181,7 @@ function openAnnotationContextMenu({ event, annotation }) {
       </div>
       <div v-else-if="resolvedAnnotations.length === 0" class="text-body-secondary">
         <p class="fw-semibold text-body mb-1">No annotations yet</p>
-        <p class="mb-0">Add an annotation to start describing this region.</p>
+        <p class="mb-0">Right-click the selected region and choose an annotation to start describing it.</p>
       </div>
       <div v-else class="annotation-tree d-grid gap-1 text-body">
         <AnnotationTreeNode

@@ -803,7 +803,7 @@ describe('ViewerPage', () => {
       })
     )
     expect(wrapper.text()).toContain('No annotations yet')
-    expect(wrapper.text()).toContain('Add an annotation to start describing this region.')
+    expect(wrapper.text()).toContain('Right-click the selected region and choose an annotation to start describing it.')
 
     await wrapper.find('[data-testid="clear-region"]').trigger('click')
 
@@ -1018,7 +1018,7 @@ describe('ViewerPage', () => {
     await wrapper.find('button.btn-danger').trigger('click')
 
     expect(wrapper.text()).toContain('No annotations yet')
-    expect(wrapper.text()).toContain('Add an annotation to start describing this region.')
+    expect(wrapper.text()).toContain('Right-click the selected region and choose an annotation to start describing it.')
   })
 
   it('registers and removes the annotation deletion keyboard listener on mount and unmount', async () => {
