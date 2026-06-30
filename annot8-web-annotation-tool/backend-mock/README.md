@@ -1,141 +1,79 @@
 # Annot8 Mock Backend
 
-This directory contains the mock HTTP backend used by the Annot8 frontend during development and demonstrations. It serves sample document metadata, static page images and an in-memory region list.
+This directory contains the read-only Node.js mock backend used by Annot8.
 
-The mock backend is intentionally small. It is not a production API and does not provide authentication, user management or durable database storage.
+For installation, execution and testing instructions, see the [main repository README](../../README.md).
 
 ## Purpose
 
-The mock backend supports frontend development by providing:
+The mock backend provides the resources required by the frontend without requiring a production backend or database.
 
-- a document metadata endpoint
-- static document page assets
-- region persistence for the current server process
-- a simple API shape for loading and saving annotations
-- a production-build fallback that can serve `frontend/dist` in the Docker demo
+It is responsible for:
 
-## Technology Stack
+* returning sample document metadata
+* returning predefined annotation schemas
+* serving document page images
+* exposing a health endpoint
+* serving the compiled frontend when available
 
-- Node.js
-- Built-in `node:http` server
-- Built-in filesystem APIs for static assets
-- Node.js test runner for backend tests
+It does not receive or store region changes.
 
-## Run Locally
+## Available Endpoints
 
-Install dependencies:
+| Method | Route                                 | Purpose                             |
+| ------ | ------------------------------------- | ----------------------------------- |
+| `GET`  | `/health`                             | Return the server status            |
+| `GET`  | `/api/documents/doc1`                 | Return the sample document metadata |
+| `GET`  | `/api/project-documents/doc1/schemas` | Return the annotation schemas       |
+| `GET`  | `/documents/doc1/pages/pg1.jpeg`      | Return a sample document page       |
 
-```bash
-npm install
-```
+Unknown document identifiers return `404`.
 
-Start the server:
+Unsupported methods return `405`.
 
-```bash
-npm start
-```
+## Sample Document
 
-The default local URL is:
-
-```text
-http://localhost:3001
-```
-
-## Available Scripts
-
-Start the mock backend:
-
-```bash
-npm start
-```
-
-Start the mock backend with the development alias:
-
-```bash
-npm run dev
-```
-
-Run backend tests:
-
-```bash
-npm test
-```
-
-## Environment
-
-```text
-PORT=3001
-FRONTEND_ORIGIN=http://localhost:5173
-```
-
-If `FRONTEND_ORIGIN` is not set, the server allows all origins for the development/demo workflow.
-
-## Main API Endpoints
-
-```text
-GET /health
-GET /api/documents/doc1
-PUT /api/documents/doc1/regions
-GET /documents/doc1/pages/pg1.jpeg
-```
-
-Unsupported document ids return `404`.
-
-## Data Provided
-
-The mock backend currently exposes one API document:
+The mock backend exposes one sample document:
 
 ```text
 doc1
 ```
 
-The document response includes:
-
-- document id
-- document title
-- page image URLs
-- current regions array
-
-Sample document files are served from:
+Its page images are stored in:
 
 ```text
-backend-mock/public/documents
+backend-mock/public/documents/doc1/pages
 ```
 
-The repository may contain additional sample assets under `public/documents`, but the current API store exposes `doc1`.
+## Region Storage
 
-## Region Persistence
+The mock backend does not store regions.
 
-Regions are stored in memory inside the Node.js process.
+Regions and assigned annotations are managed by the frontend and stored in the browser using `localStorage`.
 
-Saving regions uses:
+The current mock API does not provide region creation, update or deletion endpoints.
 
-```text
-PUT /api/documents/doc1/regions
-```
+## Production Frontend
 
-Expected request body:
+When `frontend/dist` is available, the backend also serves the compiled Vue application.
 
-```json
-{
-  "regions": []
-}
-```
+This allows the frontend, mock API and sample assets to be served from the same address in Docker and the deployed demo.
 
-The mock backend replaces the full regions array with the submitted array. It does not apply partial updates, patches or conflict resolution.
+## Technology
 
-Restarting the backend resets the regions to the initial in-memory state.
+The backend uses built-in Node.js functionality:
+
+* Node.js HTTP server
+* Node.js filesystem APIs
+* Node.js test runner
+
+It has no external runtime dependencies.
 
 ## Limitations
 
-- In-memory storage only
-- No authentication or authorization
-- No production database
-- No multi-user synchronization
-- No partial region update endpoint
-- Saving regions replaces the full regions array
-- Intended for frontend development and demonstrations only
-
-## Static Frontend Fallback
-
-When a production frontend build exists in `../frontend/dist`, the mock backend can serve it for the single-container demo. API routes and document asset routes are handled first; other GET requests fall back to the frontend build.
+* one sample document
+* read-only API
+* no authentication
+* no database
+* no server-side region persistence
+* no multi-user synchronisation
