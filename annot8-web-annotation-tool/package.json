@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "setup": "npm --prefix frontend ci",
     "start": "node scripts/start-dev.js",
     "dev": "node scripts/start-dev.js",
     "build": "npm --prefix frontend run build",
