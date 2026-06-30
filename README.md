@@ -29,7 +29,7 @@ cd TFG/annot8-web-annotation-tool
 
 ### Option A — Docker
 
-This option runs the compiled frontend, mock backend and sample document in one container.
+This option runs the compiled frontend, mock backend, sample document, page images and example annotation schemas in one container.
 
 Install [Docker Desktop](https://www.docker.com/products/docker-desktop/), open it and wait until the Docker engine is running.
 
